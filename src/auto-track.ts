@@ -1,7 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import type { LiveData } from "./view-props.js";
 import type { Repository } from "./repository.js";
-import { scanProjectClimbs, type ScannedClimb, type ScannedProjectClimbs } from "./repo-ops.js";
+import { redactSecrets, scanProjectClimbs, type ScannedClimb, type ScannedProjectClimbs } from "./repo-ops.js";
 
 export interface TrackedScannedClimb extends ScannedClimb {
   outcomeKey: string | null;
@@ -81,7 +81,7 @@ function buildOutcomeContract(climb: ScannedClimb) {
         ? `Preparing benchmark inputs (${climb.preparedFiles} staged file${climb.preparedFiles === 1 ? "" : "s"}) before running climb.py in ${workerNote}.`
         : `Tracked from .hill-climb/${climb.name} in ${workerNote}.`;
 
-  const checkCmd = climb.check.join(" ; ").trim();
+  const checkCmd = redactSecrets(climb.check.join(" ; ").trim());
   const targetLabel = climb.targetText ?? (climb.target !== null ? fmtNum(climb.target) : "the climb target");
   const dirLabel = climb.direction === "min" ? "lower is better" : "higher is better";
 
@@ -138,18 +138,43 @@ function lastKeptCommit(climb: ScannedClimb): string | null {
 
 export function climbToLiveData(climb: ScannedClimb): LiveData {
   const rows: LiveData["rows"] = [];
+  let incumbentId: string | null = null;
   let stepIdx = 0;
+
+  const baselineRow = climb.rows.find((r) => r.kind === "baseline");
+  if (climb.baseline !== null) {
+    rows.push({
+      id: "baseline",
+      parent: null,
+      score: climb.baseline,
+      label: "baseline",
+      at: baselineRow?.time ?? climb.updatedAt ?? new Date().toISOString(),
+    });
+    incumbentId = "baseline";
+  }
+
   for (const r of climb.rows) {
     if (r.kind !== "step") continue;
     stepIdx += 1;
+    const stepNum = r.step ?? stepIdx;
+    const id = `step-${stepNum}`;
     rows.push({
-      id: r.commit ? `${r.commit}#${stepIdx}` : `step-${stepIdx}`,
-      parent: null,
+      id,
+      parent: incumbentId,
       score: r.score,
-      label: r.idea ?? r.why ?? (r.result ? `Step ${stepIdx} (${r.result})` : `Step ${stepIdx}`),
+      label: r.idea ?? r.why ?? (r.result ? `Step ${stepNum} (${r.result})` : `Step ${stepNum}`),
       at: r.time ?? climb.updatedAt ?? new Date().toISOString(),
     });
+    if (r.result === "kept") {
+      incumbentId = id;
+    }
   }
+
+  // Extract latest measured numeric holdout score (never expose raw shell command as holdout readout)
+  const holdoutScores = climb.rows.filter(
+    (r) => r.kind === "holdout" && typeof r.score === "number" && Number.isFinite(r.score),
+  );
+  const latestHoldout = holdoutScores.length > 0 ? holdoutScores[holdoutScores.length - 1]!.score! : null;
 
   const nextAction =
     climb.status === "prepared"
@@ -168,7 +193,7 @@ export function climbToLiveData(climb: ScannedClimb): LiveData {
     best: climb.best,
     target: climb.target,
     rows,
-    holdout: climb.holdout,
+    holdout: latestHoldout === null ? null : fmtNum(latestHoldout),
     worker: {
       phase: climb.status === "prepared" ? "preparing" : climb.verdict,
       liveness: climb.isLive ? "active" : "idle",

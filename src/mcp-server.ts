@@ -159,13 +159,36 @@ function defaultSessionActor(): string {
 
 export function createHillClimbServer(repo: Repository, runtime: Runtime): McpServer {
   const autoTracker = createAutoTracker(repo);
-  const scanAndSync = (projectId: string) => {
+  const scanAndSync = (projectId: string, opts?: { force?: boolean }) => {
     const dir = repo.getProject(projectId)?.directory ?? null;
-    const scanned = scanProjectClimbs(dir);
+    const scanned = scanProjectClimbs(dir, opts);
     return autoTracker.syncScannedClimbs(projectId, scanned);
   };
+  const pickDefaultProject = (projects: ReturnType<Repository["listProjects"]>): string => {
+    const envId = process.env.ANTIGRAVITY_PROJECT_ID;
+    if (envId && envId !== "outside-of-project" && projects.some((p) => p.id === envId)) {
+      return envId;
+    }
+    // Prefer a project that already has outcomes (most recently active first)
+    let bestPopulated: { id: string; score: number } | null = null;
+    for (const p of projects) {
+      const t = repo.read(p.id);
+      if (t.outcomes.length > 0 || t.goals.length > 0) {
+        const lastAt = t.activity.length > 0 ? Date.parse(t.activity[t.activity.length - 1]!.at) || 0 : 0;
+        const score = lastAt > 0 ? lastAt : t.outcomes.length;
+        if (!bestPopulated || score > bestPopulated.score) {
+          bestPopulated = { id: p.id, score };
+        }
+      }
+    }
+    if (bestPopulated) return bestPopulated.id;
+    // Otherwise prefer a project with an actual linked repository directory
+    const withDir = projects.find((p) => Boolean(p.directory));
+    if (withDir) return withDir.id;
+    return projects[0]?.id ?? repo.resolveProjectId();
+  };
   const server = new McpServer(
-    { name: "hillclimb", version: "0.3.0" },
+    { name: "hillclimb", version: "0.3.1" },
     {
       capabilities: {
         tools: {},
@@ -231,7 +254,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
         const projects = repo.listProjects();
         const chosen = args.projectId
           ? repo.resolveProjectId(args.projectId)
-          : projects[0]?.id ?? repo.resolveProjectId();
+          : pickDefaultProject(projects);
         const track = args.track ?? "main";
         const repoClimbs = scanAndSync(chosen);
         const tree = repo.view(chosen, track);
@@ -1517,12 +1540,12 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     "app_tree",
     {
       description: "Read tree snapshot and scanned repo climbs for UI",
-      inputSchema: { projectId: z.string().min(1), track: z.string().optional() },
+      inputSchema: { projectId: z.string().min(1), track: z.string().optional(), force: z.boolean().optional() },
       _meta: APP_ONLY,
     },
-    async ({ projectId, track }) => {
+    async ({ projectId, track, force }) => {
       try {
-        const repoClimbs = scanAndSync(projectId);
+        const repoClimbs = scanAndSync(projectId, { force });
         const tree = repo.view(projectId, track ?? "main");
         const inboxCount = repo.projects().reduce((n, id) => n + repo.view(id).inbox, 0);
         return jsonResult({ tree, repoClimbs, inboxCount });
@@ -1537,12 +1560,12 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     "app_repo_climbs",
     {
       description: "Scan project repository and linked git worktrees for active/prepared climb.py runs",
-      inputSchema: { projectId: z.string().min(1) },
+      inputSchema: { projectId: z.string().min(1), force: z.boolean().optional() },
       _meta: APP_ONLY,
     },
-    async ({ projectId }) => {
+    async ({ projectId, force }) => {
       try {
-        const repoClimbs = scanAndSync(projectId);
+        const repoClimbs = scanAndSync(projectId, { force: force ?? true });
         return jsonResult(repoClimbs as unknown as Record<string, unknown>);
       } catch (error) {
         return errorResult(error);

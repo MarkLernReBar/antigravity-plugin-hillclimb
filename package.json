@@ -1,6 +1,6 @@
 {
   "name": "antigravity-plugin-hillclimb",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -25,7 +25,7 @@
     "node": ">=22.5.0"
   },
   "bin": {
-    "hillclimb": "./bin/hillclimb"
+    "hillclimb": "./dist/cli.mjs"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

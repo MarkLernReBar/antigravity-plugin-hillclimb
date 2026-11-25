@@ -23680,6 +23680,33 @@ function resolveRepoDirectory(directory) {
   }
   return target;
 }
+var IGNORED_STATE_DIRS = /* @__PURE__ */ new Set(["engine", "bridge", "node_modules", "venv", "tmp", "cache"]);
+var CACHE_ONLY_EXTS = /\.(?:pyc|pyo|pyd|class|o|so|dylib|swp|swo)$/i;
+function isIgnoredStateDir(name) {
+  if (!name || name.startsWith(".") || name.startsWith("__")) return true;
+  return IGNORED_STATE_DIRS.has(name.toLowerCase());
+}
+function hasRealClimbContent(dir) {
+  try {
+    const stack = [dir];
+    let checked = 0;
+    while (stack.length > 0 && checked < 64) {
+      const current = stack.pop();
+      for (const entry of readdirSync4(current, { withFileTypes: true })) {
+        if (entry.name.startsWith(".") || entry.name === "__pycache__" || entry.name === "node_modules") continue;
+        checked += 1;
+        if (entry.isDirectory()) {
+          stack.push(join5(current, entry.name));
+        } else if (entry.isFile() && !CACHE_ONLY_EXTS.test(entry.name)) {
+          return true;
+        }
+      }
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
 function discoverClimbs(repoPath) {
   const base = stateDir(repoPath);
   if (!existsSync3(base)) return { climbs: [], prepared: [] };
@@ -23687,10 +23714,14 @@ function discoverClimbs(repoPath) {
   const climbs = [];
   const prepared = [];
   for (const entry of entries) {
-    if (!entry.isDirectory() || entry.name === "engine") continue;
+    if (!entry.isDirectory() || isIgnoredStateDir(entry.name)) continue;
     const card = readCardFile(repoPath, entry.name);
     if (entry.name === "kits" && card.text === null) continue;
-    (card.text === null ? prepared : climbs).push(entry.name);
+    if (card.text !== null) {
+      climbs.push(entry.name);
+    } else if (hasRealClimbContent(join5(base, entry.name))) {
+      prepared.push(entry.name);
+    }
   }
   return { climbs: climbs.sort(), prepared: prepared.sort() };
 }

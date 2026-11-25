@@ -510,7 +510,8 @@ function CoverageBar({ coverage, replaying }: { coverage: Coverage; replaying: b
         {coverage.total === 0 ? <span className="hc-seg hc-seg-empty" style={{ flexGrow: 1 }} /> : null}
       </div>
       <p className="hc-coverage-text">
-        <strong>{coverage.pct}%</strong> proven · {coverage.proven}/{coverage.total} outcomes
+        <strong>{coverage.pct}%</strong> proven · {coverage.proven}/{coverage.total}{' '}
+        {coverage.total === 1 ? 'outcome' : 'outcomes'}
         {coverage.blocked > 0 ? ` · ${coverage.blocked} blocked` : ''}
         {coverage.broken > 0 ? ` · ${coverage.broken} broken` : ''}
         {coverage.stale > 0 ? ` · ${coverage.stale} stale` : ''}
@@ -524,6 +525,8 @@ function CoverageBar({ coverage, replaying }: { coverage: Coverage; replaying: b
 interface NodeMeta {
   signal: Signal
   rank: number | null
+  ordinal: number | null
+  goalProgress: { proven: number; total: number } | null
   blocked: boolean
   proposed: boolean
   claim: string | null
@@ -534,6 +537,7 @@ interface NodeMeta {
 
 function metaFor(data: Snapshot, track: string): Map<string, NodeMeta> {
   const ranked = new Map(data.ranked.map((row) => [row.key, row]))
+  const ordinalByKey = new Map<string, number>(data.ranked.map((row, idx) => [row.key, idx + 1]))
   const evidence = new Map<string, number>()
   // The badge counts this track's evidence; another track's checks are not a
   // reason to say an outcome has proof here.
@@ -545,11 +549,47 @@ function metaFor(data: Snapshot, track: string): Map<string, NodeMeta> {
   const meta = new Map<string, NodeMeta>()
   const nextIndex = new Map<string, number>(data.next.map((key, index) => [key, index + 1] as [string, number]))
 
+  const childGoalsByParent = new Map<string, string[]>()
+  for (const g of data.goals) {
+    if (g.parentGoalKey) {
+      const list = childGoalsByParent.get(g.parentGoalKey) ?? []
+      list.push(g.key)
+      childGoalsByParent.set(g.parentGoalKey, list)
+    }
+  }
+  const outcomesByGoal = new Map<string, Outcome[]>()
+  for (const o of data.outcomes) {
+    const list = outcomesByGoal.get(o.goalKey) ?? []
+    list.push(o)
+    outcomesByGoal.set(o.goalKey, list)
+  }
+  const countGoal = (goalKey: string, seen = new Set<string>()): { proven: number; total: number } => {
+    if (seen.has(goalKey)) return { proven: 0, total: 0 }
+    seen.add(goalKey)
+    let proven = 0
+    let total = 0
+    for (const o of outcomesByGoal.get(goalKey) ?? []) {
+      total += 1
+      if (ranked.get(o.key)?.signal === 'verified') proven += 1
+    }
+    for (const kid of childGoalsByParent.get(goalKey) ?? []) {
+      const sub = countGoal(kid, seen)
+      proven += sub.proven
+      total += sub.total
+    }
+    return { proven, total }
+  }
+
   for (const goal of data.goals) {
     const row = ranked.get(goal.key)
+    const goalProgress = countGoal(goal.key)
+    const derivedGoalSignal: Signal =
+      goalProgress.total > 0 && goalProgress.proven === goalProgress.total ? 'verified' : 'unverified'
     meta.set(goal.key, {
-      signal: row?.signal ?? 'unverified',
+      signal: row?.signal ?? derivedGoalSignal,
       rank: row?.effectiveRank ?? goal.rank,
+      ordinal: null,
+      goalProgress,
       blocked: (row?.blockedBy.length ?? 0) > 0,
       proposed: proposed.has(goal.key),
       claim: row?.claim?.threadId ?? null,
@@ -563,6 +603,8 @@ function metaFor(data: Snapshot, track: string): Map<string, NodeMeta> {
     meta.set(outcome.key, {
       signal: row?.signal ?? 'unverified',
       rank: row?.effectiveRank ?? outcome.rank,
+      ordinal: ordinalByKey.get(outcome.key) ?? null,
+      goalProgress: null,
       blocked: (row?.blockedBy.length ?? 0) > 0,
       proposed: proposed.has(outcome.key),
       claim: row?.claim?.threadId ?? null,
@@ -660,15 +702,23 @@ function MapCanvas(props: MapProps): JSX.Element {
             <span className="hc-node-head">
               <span className="hc-node-key">{node.key}</span>
               {info?.next !== null && info?.next !== undefined ? (
-                <span className="hc-node-next" title={`Next work, in order: ${info.next}`}>
-                  {info.next}
+                <span className="hc-node-next" title={`Next work, in order: #${info.next}`}>
+                  next #{info.next}
                 </span>
               ) : null}
               {info?.proposed === true ? <span className="hc-node-proposed">proposed</span> : null}
             </span>
             <span className="hc-node-title">{node.title}</span>
             <span className="hc-node-foot">
-              <SignalBadge signal={signal} />
+              {node.kind === 'goal' ? (
+                <span className="hc-chip hc-goal-progress">
+                  {info?.goalProgress && info.goalProgress.total > 0
+                    ? `${info.goalProgress.proven}/${info.goalProgress.total} proven`
+                    : 'goal'}
+                </span>
+              ) : (
+                <SignalBadge signal={signal} />
+              )}
               {info?.blocked === true ? <span className="hc-chip hc-chip-warn">blocked</span> : null}
               {info?.claim !== null && info?.claim !== undefined ? (
                 <span className="hc-chip" title={`Claimed by ${info.claim}`}>
@@ -750,17 +800,30 @@ function OutlineList(props: OutlineProps): JSX.Element {
           aria-pressed={selected === key}
           aria-label={`${kind} ${key}: ${title}. ${signal}`}
         >
-          <span className="hc-outline-rank">{info?.rank === null || info?.rank === undefined ? '–' : info.rank}</span>
+          <span className="hc-outline-rank">
+            {kind === 'outcome' && info?.ordinal !== null && info?.ordinal !== undefined ? `#${info.ordinal}` : '—'}
+          </span>
           <span className="hc-outline-key">{key}</span>
           <span className="hc-outline-title">{title}</span>
           <span className="hc-outline-tags">
-            {info?.next !== null && info?.next !== undefined ? <span className="hc-chip hc-chip-next">next {info.next}</span> : null}
+            {info?.next !== null && info?.next !== undefined ? <span className="hc-chip hc-chip-next">next #{info.next}</span> : null}
             {info?.proposed === true ? <span className="hc-chip">proposed</span> : null}
             {info?.blocked === true ? <span className="hc-chip hc-chip-warn">blocked</span> : null}
-            {info?.claim !== null && info?.claim !== undefined ? <span className="hc-chip">{info.claim.slice(0, 8)}</span> : null}
-            {hasKids ? <span className="hc-chip">{((children.get(key) ?? []).length + (outcomes.get(key) ?? []).length) || 0}</span> : null}
+            {info?.claim !== null && info?.claim !== undefined ? (
+              <span className="hc-chip" title={`Claimed by ${info.claim}`}>
+                {info.claim.slice(0, 12)}
+              </span>
+            ) : null}
           </span>
-          <SignalBadge signal={signal} />
+          {kind === 'goal' ? (
+            <span className="hc-chip hc-goal-progress">
+              {info?.goalProgress && info.goalProgress.total > 0
+                ? `${info.goalProgress.proven}/${info.goalProgress.total} proven`
+                : 'goal'}
+            </span>
+          ) : (
+            <SignalBadge signal={signal} />
+          )}
         </button>
       </div>
     )
@@ -1193,7 +1256,10 @@ function ReplayBar(props: ReplayProps): JSX.Element {
 
 export function TreeView(props: ViewProps): JSX.Element {
   const { data, track, selected, select, act } = props
-  const [mode, setMode] = useState<ViewMode>('map')
+  const [mode, setMode] = useState<ViewMode>(() =>
+    typeof window !== 'undefined' && window.innerWidth < 640 ? 'outline' : 'map',
+  )
+  const autoPickedMode = useRef(false)
   const [query, setQuery] = useState('')
   const [signals, setSignals] = useState<Set<Signal>>(() => new Set())
   const [blockedOnly, setBlockedOnly] = useState(false)
@@ -1236,7 +1302,13 @@ export function TreeView(props: ViewProps): JSX.Element {
       const entry = entries[0]
       if (entry === undefined) return
       const rect = entry.contentRect
-      if (rect.width > 0 && rect.height > 0) setSize({ w: rect.width, h: rect.height })
+      if (rect.width > 0 && rect.height > 0) {
+        setSize({ w: rect.width, h: rect.height })
+        if (!autoPickedMode.current && rect.width < 640) {
+          autoPickedMode.current = true
+          setMode('outline')
+        }
+      }
     })
     observer.observe(element)
     return () => observer.disconnect()
@@ -1246,7 +1318,7 @@ export function TreeView(props: ViewProps): JSX.Element {
     if (size === null) return
     const pad = 40
     const k = Math.min(
-      2.5,
+      1.15,
       Math.max(
         0.15,
         Math.min((size.w - pad * 2) / Math.max(layout.width, 1), (size.h - pad * 2) / Math.max(layout.height, 1)),
@@ -1506,7 +1578,8 @@ export function TreeView(props: ViewProps): JSX.Element {
           <div className="hc-title-block">
             <h2 className="hc-title">Tree</h2>
             <p className="hc-subtitle">
-              {data.goals.length} goals · {totalOutcomes} outcomes · track <code>{track}</code>
+              {data.goals.length} {data.goals.length === 1 ? 'goal' : 'goals'} · {totalOutcomes}{' '}
+              {totalOutcomes === 1 ? 'outcome' : 'outcomes'} · track <code>{track}</code>
               {data.inbox > 0 ? ` · ${data.inbox} in the inbox` : ''}
             </p>
           </div>

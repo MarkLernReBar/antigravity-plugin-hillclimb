@@ -591,8 +591,9 @@
   border: 1px solid var(--pf-line);
   border-radius: 8px;
   display: flex;
-  gap: 10px;
-  padding: 8px 10px;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  padding: 9px 12px;
 }
 
 .pf-key.is-selected {
@@ -604,22 +605,36 @@
   align-items: flex-start;
   cursor: pointer;
   display: flex;
-  flex: 1;
+  flex: 1 1 200px;
   gap: 8px;
   min-width: 0;
 }
 
 .pf-key-label input {
   margin-top: 3px;
+  flex-shrink: 0;
+}
+
+.pf-key-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .pf-key-title {
   font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.pf-key-meta code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11px;
 }
 
 .pf-key-note {
   flex-basis: 100%;
-  order: 3;
+  padding-left: 22px;
 }
 
 .pf-bar {

@@ -41434,6 +41434,39 @@ function resolveRepoDirectory(directory) {
   }
   return target;
 }
+var IGNORED_STATE_DIRS = /* @__PURE__ */ new Set(["engine", "bridge", "node_modules", "venv", "tmp", "cache"]);
+var CACHE_ONLY_EXTS = /\.(?:pyc|pyo|pyd|class|o|so|dylib|swp|swo)$/i;
+function isIgnoredStateDir(name) {
+  if (!name || name.startsWith(".") || name.startsWith("__")) return true;
+  return IGNORED_STATE_DIRS.has(name.toLowerCase());
+}
+function hasRealClimbContent(dir) {
+  try {
+    const stack = [dir];
+    let checked = 0;
+    while (stack.length > 0 && checked < 64) {
+      const current = stack.pop();
+      for (const entry of readdirSync4(current, { withFileTypes: true })) {
+        if (entry.name.startsWith(".") || entry.name === "__pycache__" || entry.name === "node_modules") continue;
+        checked += 1;
+        if (entry.isDirectory()) {
+          stack.push(join5(current, entry.name));
+        } else if (entry.isFile() && !CACHE_ONLY_EXTS.test(entry.name)) {
+          return true;
+        }
+      }
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+function redactSecrets(command2) {
+  return command2.replace(
+    /\b([A-Z0-9_]*(?:TOKEN|SECRET|KEY|PASSWORD|PASS|CREDENTIAL|AUTH)[A-Z0-9_]*)=("[^"]*"|'[^']*'|[^\s]+)/gi,
+    "$1=<redacted>"
+  ).replace(/\b(Bearer\s+)[A-Za-z0-9._~+/=-]{8,}/g, "$1<redacted>");
+}
 function discoverClimbs(repoPath) {
   const base = stateDir(repoPath);
   if (!existsSync3(base)) return { climbs: [], prepared: [] };
@@ -41441,10 +41474,14 @@ function discoverClimbs(repoPath) {
   const climbs = [];
   const prepared = [];
   for (const entry of entries) {
-    if (!entry.isDirectory() || entry.name === "engine") continue;
+    if (!entry.isDirectory() || isIgnoredStateDir(entry.name)) continue;
     const card = readCardFile(repoPath, entry.name);
     if (entry.name === "kits" && card.text === null) continue;
-    (card.text === null ? prepared : climbs).push(entry.name);
+    if (card.text !== null) {
+      climbs.push(entry.name);
+    } else if (hasRealClimbContent(join5(base, entry.name))) {
+      prepared.push(entry.name);
+    }
   }
   return { climbs: climbs.sort(), prepared: prepared.sort() };
 }
@@ -41776,7 +41813,9 @@ function conversationIdFromPath(dir) {
   const m2 = /\/\.gemini\/antigravity\/worktrees\/([0-9a-f-]{36})\//i.exec(norm);
   return m2?.[1] ?? null;
 }
-function scanProjectClimbs(repoPath) {
+var SCAN_CACHE_TTL_MS = 4e3;
+var scanCache = /* @__PURE__ */ new Map();
+function scanProjectClimbs(repoPath, opts) {
   if (!repoPath || !existsSync3(repoPath)) {
     return {
       projectDirectory: repoPath,
@@ -41788,6 +41827,12 @@ function scanProjectClimbs(repoPath) {
     };
   }
   const normalizedMain = resolve4(repoPath);
+  if (!opts?.force) {
+    const cached2 = scanCache.get(normalizedMain);
+    if (cached2 && Date.now() - cached2.at < SCAN_CACHE_TTL_MS) {
+      return cached2.value;
+    }
+  }
   const engineInstalled = existsSync3(engineFile(normalizedMain, "climb.py"));
   const worktrees = linkedWorktreesOf(normalizedMain);
   const roots = [normalizedMain, ...worktrees];
@@ -41837,6 +41882,7 @@ function scanProjectClimbs(repoPath) {
       }
       const rows = state.rows.slice(-50).map((r2) => ({
         kind: r2.kind,
+        step: typeof r2.step === "number" && Number.isFinite(r2.step) ? r2.step : null,
         result: r2.result ?? null,
         score: typeof r2.score === "number" ? r2.score : null,
         idea: r2.idea ?? null,
@@ -41871,9 +41917,9 @@ function scanProjectClimbs(repoPath) {
         sinceGain: summary.sinceGain,
         verdict: summary.verdict,
         sparkline: summary.spark,
-        check: checks,
-        guards: card.guards ?? [],
-        holdout: card.holdout ?? null,
+        check: checks.map(redactSecrets),
+        guards: (card.guards ?? []).map(redactSecrets),
+        holdout: card.holdout ? redactSecrets(card.holdout) : null,
         locked: card.lock ?? [],
         scoreMode: card.score_mode ?? "failure-count",
         rows,
@@ -41937,7 +41983,7 @@ function scanProjectClimbs(repoPath) {
   });
   const currentCount = climbs.filter((c) => c.origin !== "archived" || c.isLive).length;
   const archivedCount = climbs.length - currentCount;
-  return {
+  const result = {
     projectDirectory: normalizedMain,
     engineInstalled,
     worktreesScanned: worktrees.length,
@@ -41945,6 +41991,8 @@ function scanProjectClimbs(repoPath) {
     archivedCount,
     climbs
   };
+  scanCache.set(normalizedMain, { at: Date.now(), value: result });
+  return result;
 }
 
 // src/auto-track.ts
@@ -41968,7 +42016,7 @@ function buildOutcomeContract(climb) {
   const title = rawGoal.length >= 4 && rawGoal.length <= 96 ? rawGoal : humanizeClimbName(climb.name);
   const workerNote = climb.origin === "antigravity" ? `Antigravity worker ${climb.workerLabel}` : climb.origin === "archived" ? `archived worktree ${climb.workerLabel}` : `local checkout`;
   const story = rawGoal.length > 0 ? `${rawGoal} (tracked from .hill-climb/${climb.name} in ${workerNote}).` : climb.status === "prepared" ? `Preparing benchmark inputs (${climb.preparedFiles} staged file${climb.preparedFiles === 1 ? "" : "s"}) before running climb.py in ${workerNote}.` : `Tracked from .hill-climb/${climb.name} in ${workerNote}.`;
-  const checkCmd = climb.check.join(" ; ").trim();
+  const checkCmd = redactSecrets(climb.check.join(" ; ").trim());
   const targetLabel = climb.targetText ?? (climb.target !== null ? fmtNum(climb.target) : "the climb target");
   const dirLabel = climb.direction === "min" ? "lower is better" : "higher is better";
   const criterion3 = climb.status === "active" ? {
@@ -42010,18 +42058,39 @@ function lastKeptCommit(climb) {
 }
 function climbToLiveData(climb) {
   const rows = [];
+  let incumbentId = null;
   let stepIdx = 0;
+  const baselineRow = climb.rows.find((r2) => r2.kind === "baseline");
+  if (climb.baseline !== null) {
+    rows.push({
+      id: "baseline",
+      parent: null,
+      score: climb.baseline,
+      label: "baseline",
+      at: baselineRow?.time ?? climb.updatedAt ?? (/* @__PURE__ */ new Date()).toISOString()
+    });
+    incumbentId = "baseline";
+  }
   for (const r2 of climb.rows) {
     if (r2.kind !== "step") continue;
     stepIdx += 1;
+    const stepNum = r2.step ?? stepIdx;
+    const id = `step-${stepNum}`;
     rows.push({
-      id: r2.commit ? `${r2.commit}#${stepIdx}` : `step-${stepIdx}`,
-      parent: null,
+      id,
+      parent: incumbentId,
       score: r2.score,
-      label: r2.idea ?? r2.why ?? (r2.result ? `Step ${stepIdx} (${r2.result})` : `Step ${stepIdx}`),
+      label: r2.idea ?? r2.why ?? (r2.result ? `Step ${stepNum} (${r2.result})` : `Step ${stepNum}`),
       at: r2.time ?? climb.updatedAt ?? (/* @__PURE__ */ new Date()).toISOString()
     });
+    if (r2.result === "kept") {
+      incumbentId = id;
+    }
   }
+  const holdoutScores = climb.rows.filter(
+    (r2) => r2.kind === "holdout" && typeof r2.score === "number" && Number.isFinite(r2.score)
+  );
+  const latestHoldout = holdoutScores.length > 0 ? holdoutScores[holdoutScores.length - 1].score : null;
   const nextAction = climb.status === "prepared" ? `Staging benchmark inputs (${climb.preparedFiles} file${climb.preparedFiles === 1 ? "" : "s"}); awaiting climb.py init.` : climb.verdict === "bar-reached" ? "Target bar reached." : climb.verdict === "plateau" ? `No gain in the last ${climb.sinceGain} tries \u2014 needs a new approach.` : climb.verdict === "stuck" ? "Stopped after repeated unsuccessful attempts." : "Iterating on candidate edits via climb.py.";
   return {
     engine: "repo",
@@ -42029,7 +42098,7 @@ function climbToLiveData(climb) {
     best: climb.best,
     target: climb.target,
     rows,
-    holdout: climb.holdout,
+    holdout: latestHoldout === null ? null : fmtNum(latestHoldout),
     worker: {
       phase: climb.status === "prepared" ? "preparing" : climb.verdict,
       liveness: climb.isLive ? "active" : "idle",
@@ -45398,13 +45467,34 @@ function defaultSessionActor() {
 }
 function createHillClimbServer(repo, runtime) {
   const autoTracker = createAutoTracker(repo);
-  const scanAndSync = (projectId) => {
+  const scanAndSync = (projectId, opts) => {
     const dir = repo.getProject(projectId)?.directory ?? null;
-    const scanned = scanProjectClimbs(dir);
+    const scanned = scanProjectClimbs(dir, opts);
     return autoTracker.syncScannedClimbs(projectId, scanned);
   };
+  const pickDefaultProject = (projects) => {
+    const envId = process.env.ANTIGRAVITY_PROJECT_ID;
+    if (envId && envId !== "outside-of-project" && projects.some((p2) => p2.id === envId)) {
+      return envId;
+    }
+    let bestPopulated = null;
+    for (const p2 of projects) {
+      const t = repo.read(p2.id);
+      if (t.outcomes.length > 0 || t.goals.length > 0) {
+        const lastAt = t.activity.length > 0 ? Date.parse(t.activity[t.activity.length - 1].at) || 0 : 0;
+        const score = lastAt > 0 ? lastAt : t.outcomes.length;
+        if (!bestPopulated || score > bestPopulated.score) {
+          bestPopulated = { id: p2.id, score };
+        }
+      }
+    }
+    if (bestPopulated) return bestPopulated.id;
+    const withDir = projects.find((p2) => Boolean(p2.directory));
+    if (withDir) return withDir.id;
+    return projects[0]?.id ?? repo.resolveProjectId();
+  };
   const server = new McpServer(
-    { name: "hillclimb", version: "0.3.0" },
+    { name: "hillclimb", version: "0.3.1" },
     {
       capabilities: {
         tools: {},
@@ -45457,7 +45547,7 @@ function createHillClimbServer(repo, runtime) {
     async (args) => {
       try {
         const projects = repo.listProjects();
-        const chosen = args.projectId ? repo.resolveProjectId(args.projectId) : projects[0]?.id ?? repo.resolveProjectId();
+        const chosen = args.projectId ? repo.resolveProjectId(args.projectId) : pickDefaultProject(projects);
         const track2 = args.track ?? "main";
         const repoClimbs = scanAndSync(chosen);
         const tree = repo.view(chosen, track2);
@@ -46640,12 +46730,12 @@ function createHillClimbServer(repo, runtime) {
     "app_tree",
     {
       description: "Read tree snapshot and scanned repo climbs for UI",
-      inputSchema: { projectId: external_exports.string().min(1), track: external_exports.string().optional() },
+      inputSchema: { projectId: external_exports.string().min(1), track: external_exports.string().optional(), force: external_exports.boolean().optional() },
       _meta: APP_ONLY
     },
-    async ({ projectId, track: track2 }) => {
+    async ({ projectId, track: track2, force }) => {
       try {
-        const repoClimbs = scanAndSync(projectId);
+        const repoClimbs = scanAndSync(projectId, { force });
         const tree = repo.view(projectId, track2 ?? "main");
         const inboxCount = repo.projects().reduce((n2, id) => n2 + repo.view(id).inbox, 0);
         return jsonResult({ tree, repoClimbs, inboxCount });
@@ -46659,12 +46749,12 @@ function createHillClimbServer(repo, runtime) {
     "app_repo_climbs",
     {
       description: "Scan project repository and linked git worktrees for active/prepared climb.py runs",
-      inputSchema: { projectId: external_exports.string().min(1) },
+      inputSchema: { projectId: external_exports.string().min(1), force: external_exports.boolean().optional() },
       _meta: APP_ONLY
     },
-    async ({ projectId }) => {
+    async ({ projectId, force }) => {
       try {
-        const repoClimbs = scanAndSync(projectId);
+        const repoClimbs = scanAndSync(projectId, { force: force ?? true });
         return jsonResult(repoClimbs);
       } catch (error62) {
         return errorResult(error62);

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 
 export interface ScannedClimbRow {
   kind: string;
+  step?: number | null;
   result: string | null;
   score: number | null;
   idea: string | null;
@@ -146,10 +147,11 @@ function ScoreChart({ climb }: { climb: ScannedClimb }) {
     for (const r of climb.rows) {
       if (r.kind === "step" && typeof r.score === "number" && Number.isFinite(r.score)) {
         step += 1;
+        const stepLabel = r.step ?? step;
         out.push({
-          idx: step,
+          idx: stepLabel,
           score: r.score,
-          label: r.idea ?? `Step ${step}`,
+          label: r.idea ?? `Step ${stepLabel}`,
           kept: r.result === "kept",
           isBaseline: false,
         });
@@ -160,9 +162,10 @@ function ScoreChart({ climb }: { climb: ScannedClimb }) {
 
   if (points.length === 0) return null;
 
+  const hasDiscardedPoint = points.some((p) => !p.kept);
   const w = 520;
   const h = 158;
-  const l = 50;
+  const l = 54;
   const r = 18;
   const t = 18;
   const b = 26;
@@ -184,6 +187,10 @@ function ScoreChart({ climb }: { climb: ScannedClimb }) {
   const y = (v: number) => t + innerH - ((v - min) / (max - min)) * innerH;
   const x = (i: number) => (points.length <= 1 ? l + innerW / 2 : l + (i / (points.length - 1)) * innerW);
 
+  const targetY = climb.target !== null ? y(climb.target) : null;
+  const showMaxAxis = targetY === null || Math.abs(targetY - (t + 8)) >= 14;
+  const showMinAxis = rawMin !== rawMax && (targetY === null || Math.abs(targetY - (t + innerH)) >= 14);
+
   const keptPoints = points.map((p, pos) => ({ ...p, pos })).filter((p) => p.kept);
   const linePath = keptPoints
     .map((p, idx) => `${idx === 0 ? "M" : "L"} ${x(p.pos).toFixed(1)} ${y(p.score).toFixed(1)}`)
@@ -204,14 +211,14 @@ function ScoreChart({ climb }: { climb: ScannedClimb }) {
           <span>
             <i className="cl-dot cl-dot-kept" /> Kept
           </span>
-          {climb.undone > 0 ? (
+          {hasDiscardedPoint ? (
             <span>
               <i className="cl-dot cl-dot-undone" /> Discarded
             </span>
           ) : null}
           {climb.target !== null ? (
             <span>
-              <i className="cl-dash cl-dash-target" /> Target ({fmtNum(climb.target)})
+              <i className="cl-dash cl-dash-target" /> Target ({climb.targetText ?? fmtNum(climb.target)})
             </span>
           ) : null}
         </div>
@@ -220,19 +227,21 @@ function ScoreChart({ climb }: { climb: ScannedClimb }) {
         <rect className="cl-chart-bg" x={l} y={t} width={innerW} height={innerH} rx={6} />
         <line className="cl-chart-grid" x1={l} x2={w - r} y1={t + innerH / 2} y2={t + innerH / 2} />
 
-        {climb.target !== null ? (
+        {climb.target !== null && targetY !== null ? (
           <g className="cl-rule-target">
-            <line x1={l} x2={w - r} y1={y(climb.target)} y2={y(climb.target)} />
-            <text x={l - 8} y={y(climb.target) + 3} textAnchor="end">
-              {fmtNum(climb.target)}
+            <line x1={l} x2={w - r} y1={targetY} y2={targetY} />
+            <text x={l - 8} y={Math.min(t + innerH, Math.max(t + 8, targetY + 3))} textAnchor="end">
+              {climb.targetText ?? fmtNum(climb.target)}
             </text>
           </g>
         ) : null}
 
-        <text className="cl-axis" x={l - 8} y={t + 8} textAnchor="end">
-          {fmtNum(rawMax)}
-        </text>
-        {climb.target !== rawMin ? (
+        {showMaxAxis ? (
+          <text className="cl-axis" x={l - 8} y={t + 8} textAnchor="end">
+            {fmtNum(rawMax)}
+          </text>
+        ) : null}
+        {showMinAxis ? (
           <text className="cl-axis" x={l - 8} y={t + innerH} textAnchor="end">
             {fmtNum(rawMin)}
           </text>
@@ -298,6 +307,7 @@ function StepTimeline({ climb }: { climb: ScannedClimb }) {
       }
       if (row.kind === "step") {
         stepNum += 1;
+        const displayStep = row.step ?? stepNum;
         const kept = row.result === "kept";
         let delta: string | null = null;
         if (prevScore !== null && row.score !== null) {
@@ -308,7 +318,7 @@ function StepTimeline({ climb }: { climb: ScannedClimb }) {
         list.push({
           index: list.length,
           kind: "step",
-          badge: kept ? `Step ${stepNum} · Kept` : `Step ${stepNum} · Discarded`,
+          badge: kept ? `Step ${displayStep} · Kept` : `Step ${displayStep} · Discarded`,
           tone: kept ? "ok" : "muted",
           score: row.score,
           delta,
@@ -467,7 +477,25 @@ export function RepoClimbsView({
           </p>
         </div>
       ) : (
-        <div className="cl-grid">
+        <>
+          {visible.length > 1 ? (
+            <label className="cl-compact-picker">
+              <span className="cl-muted cl-small">Climb</span>
+              <select
+                value={chosen?.id ?? ""}
+                onChange={(e) => setSelectedId(e.target.value)}
+                aria-label="Select climb"
+              >
+                {visible.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} — {statusOf(c.verdict).label}
+                    {c.status === "active" ? ` (${fmtNum(c.baseline)} → ${fmtNum(c.best)})` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          <div className="cl-grid">
           <div className="cl-list" role="listbox" aria-label="Climbs">
             {visible.map((climb) => {
               const st = statusOf(climb.verdict);
@@ -633,12 +661,10 @@ export function RepoClimbsView({
                       return (
                         <div className="cl-stat">
                           <span className="cl-stat-label">Holdout</span>
-                          <strong className="cl-stat-val">
-                            {fmtNum(latest)}
-                            {holdouts.length > 1 && first !== latest ? (
-                              <span className="cl-muted"> (from {fmtNum(first)})</span>
-                            ) : null}
-                          </strong>
+                          <strong className="cl-stat-val">{fmtNum(latest)}</strong>
+                          {holdouts.length > 1 && first !== latest ? (
+                            <span className="cl-stat-sub">from {fmtNum(first)}</span>
+                          ) : null}
                         </div>
                       );
                     })()}
@@ -675,7 +701,8 @@ export function RepoClimbsView({
               )}
             </article>
           ) : null}
-        </div>
+          </div>
+        </>
       )}
     </section>
   );

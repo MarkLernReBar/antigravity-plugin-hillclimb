@@ -76,6 +76,46 @@ export function resolveRepoDirectory(directory?: string): string {
   return target;
 }
 
+const IGNORED_STATE_DIRS = new Set(["engine", "bridge", "node_modules", "venv", "tmp", "cache"]);
+const CACHE_ONLY_EXTS = /\.(?:pyc|pyo|pyd|class|o|so|dylib|swp|swo)$/i;
+
+function isIgnoredStateDir(name: string): boolean {
+  if (!name || name.startsWith(".") || name.startsWith("__")) return true;
+  return IGNORED_STATE_DIRS.has(name.toLowerCase());
+}
+
+function hasRealClimbContent(dir: string): boolean {
+  try {
+    const stack = [dir];
+    let checked = 0;
+    while (stack.length > 0 && checked < 64) {
+      const current = stack.pop()!;
+      for (const entry of readdirSync(current, { withFileTypes: true })) {
+        if (entry.name.startsWith(".") || entry.name === "__pycache__" || entry.name === "node_modules") continue;
+        checked += 1;
+        if (entry.isDirectory()) {
+          stack.push(join(current, entry.name));
+        } else if (entry.isFile() && !CACHE_ONLY_EXTS.test(entry.name)) {
+          return true;
+        }
+      }
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
+/** Mask inline environment secrets (e.g. FOO_TOKEN=abc, API_KEY=xyz) before storing or rendering commands. */
+export function redactSecrets(command: string): string {
+  return command
+    .replace(
+      /\b([A-Z0-9_]*(?:TOKEN|SECRET|KEY|PASSWORD|PASS|CREDENTIAL|AUTH)[A-Z0-9_]*)=("[^"]*"|'[^']*'|[^\s]+)/gi,
+      "$1=<redacted>",
+    )
+    .replace(/\b(Bearer\s+)[A-Za-z0-9._~+/=-]{8,}/g, "$1<redacted>");
+}
+
 export function discoverClimbs(repoPath: string): { climbs: string[]; prepared: string[] } {
   const base = stateDir(repoPath);
   if (!existsSync(base)) return { climbs: [], prepared: [] };
@@ -83,10 +123,14 @@ export function discoverClimbs(repoPath: string): { climbs: string[]; prepared: 
   const climbs: string[] = [];
   const prepared: string[] = [];
   for (const entry of entries) {
-    if (!entry.isDirectory() || entry.name === "engine") continue;
+    if (!entry.isDirectory() || isIgnoredStateDir(entry.name)) continue;
     const card = readCardFile(repoPath, entry.name);
     if (entry.name === "kits" && card.text === null) continue;
-    (card.text === null ? prepared : climbs).push(entry.name);
+    if (card.text !== null) {
+      climbs.push(entry.name);
+    } else if (hasRealClimbContent(join(base, entry.name))) {
+      prepared.push(entry.name);
+    }
   }
   return { climbs: climbs.sort(), prepared: prepared.sort() };
 }
@@ -347,6 +391,7 @@ export function getClimbVerdict(repoPath: string, name?: string): string {
 
 export interface ScannedClimbRow {
   kind: string;
+  step: number | null;
   result: string | null;
   score: number | null;
   idea: string | null;
@@ -529,11 +574,19 @@ function conversationIdFromPath(dir: string): string | null {
   return m?.[1] ?? null;
 }
 
+const SCAN_CACHE_TTL_MS = 4_000;
+const scanCache = new Map<string, { at: number; value: ScannedProjectClimbs }>();
+
+export function clearScanCache(repoPath?: string): void {
+  if (!repoPath) scanCache.clear();
+  else scanCache.delete(resolve(repoPath));
+}
+
 /**
  * Scan the project's main checkout AND all linked git worktrees (including Antigravity swarm worktrees)
- * for active and prepared `.hill-climb/` runs.
+ * for active and prepared `.hill-climb/` runs. Uses a short TTL cache unless `force: true`.
  */
-export function scanProjectClimbs(repoPath: string | null): ScannedProjectClimbs {
+export function scanProjectClimbs(repoPath: string | null, opts?: { force?: boolean }): ScannedProjectClimbs {
   if (!repoPath || !existsSync(repoPath)) {
     return {
       projectDirectory: repoPath,
@@ -545,6 +598,12 @@ export function scanProjectClimbs(repoPath: string | null): ScannedProjectClimbs
     };
   }
   const normalizedMain = resolve(repoPath);
+  if (!opts?.force) {
+    const cached = scanCache.get(normalizedMain);
+    if (cached && Date.now() - cached.at < SCAN_CACHE_TTL_MS) {
+      return cached.value;
+    }
+  }
   const engineInstalled = existsSync(engineFile(normalizedMain, "climb.py"));
   const worktrees = linkedWorktreesOf(normalizedMain);
   const roots = [normalizedMain, ...worktrees];
@@ -610,6 +669,7 @@ export function scanProjectClimbs(repoPath: string | null): ScannedProjectClimbs
       }
       const rows: ScannedClimbRow[] = state.rows.slice(-50).map((r) => ({
         kind: r.kind,
+        step: typeof r.step === "number" && Number.isFinite(r.step) ? r.step : null,
         result: r.result ?? null,
         score: typeof r.score === "number" ? r.score : null,
         idea: r.idea ?? null,
@@ -647,9 +707,9 @@ export function scanProjectClimbs(repoPath: string | null): ScannedProjectClimbs
         sinceGain: summary.sinceGain,
         verdict: summary.verdict,
         sparkline: summary.spark,
-        check: checks,
-        guards: card.guards ?? [],
-        holdout: card.holdout ?? null,
+        check: checks.map(redactSecrets),
+        guards: (card.guards ?? []).map(redactSecrets),
+        holdout: card.holdout ? redactSecrets(card.holdout) : null,
         locked: card.lock ?? [],
         scoreMode: card.score_mode ?? "failure-count",
         rows,
@@ -718,7 +778,7 @@ export function scanProjectClimbs(repoPath: string | null): ScannedProjectClimbs
   const currentCount = climbs.filter((c) => c.origin !== "archived" || c.isLive).length;
   const archivedCount = climbs.length - currentCount;
 
-  return {
+  const result: ScannedProjectClimbs = {
     projectDirectory: normalizedMain,
     engineInstalled,
     worktreesScanned: worktrees.length,
@@ -726,4 +786,6 @@ export function scanProjectClimbs(repoPath: string | null): ScannedProjectClimbs
     archivedCount,
     climbs,
   };
+  scanCache.set(normalizedMain, { at: Date.now(), value: result });
+  return result;
 }

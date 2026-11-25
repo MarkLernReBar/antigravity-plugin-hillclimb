@@ -10,7 +10,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { createRepository, openDatabase } from "../src/repository.js";
 import { createRuntime } from "../src/runtime.js";
 import { createAutoTracker } from "../src/auto-track.js";
-import { getClimbCard, getClimbList, getClimbStatus, getClimbVerdict, installEngine, scanProjectClimbs } from "../src/repo-ops.js";
+import { clearScanCache, getClimbCard, getClimbList, getClimbStatus, getClimbVerdict, installEngine, redactSecrets, scanProjectClimbs } from "../src/repo-ops.js";
 import { actionSchema } from "../src/actions.js";
 import { lintTree } from "../src/linter.js";
 import { writeMirror } from "../src/mirror.js";
@@ -491,7 +491,7 @@ experiments:
       writeFileSync(join(repoDir, "app.py"), "def value():\n    return 0\n", "utf8");
       execFileSync("python3", [climbPy, "try", "reach zero"], { cwd: repoDir, encoding: "utf8" });
 
-      tracker.syncScannedClimbs("auto-proj", scanProjectClimbs(repoDir));
+      tracker.syncScannedClimbs("auto-proj", scanProjectClimbs(repoDir, { force: true }));
       view = repo.view("auto-proj");
       assert.equal(view.ranked.find((r) => r.key === "LATENCY-DROP")?.signal, "verified");
       assert.equal(view.ranked.find((r) => r.key === "LATENCY-DROP")?.claim, null);
@@ -501,7 +501,12 @@ experiments:
       assert.equal(live?.baseline, 2);
       assert.equal(live?.best, 0);
       assert.equal(live?.target, 0);
-      assert.equal(live?.rows.length, 1);
+      // Includes baseline root row + chained step-1 row
+      assert.equal(live?.rows.length, 2);
+      assert.equal(live?.rows[0]?.id, "baseline");
+      assert.equal(live?.rows[1]?.parent, "baseline");
+      // Holdout must be numeric score or null, never a raw shell command
+      assert.equal(live?.holdout, null);
 
       // Disabling auto-track prevents new climbs from being auto-added while preserving existing outcomes
       tracker.setAutoTrackEnabled("auto-proj", false);
@@ -547,17 +552,25 @@ experiments:
         JSON.stringify({ ...origCard, best: { score: 2, commit: "abc", step: 0 } }),
         "utf8",
       );
+      // Ignore __pycache__, dot-dirs, and bytecode-only directories inside .hill-climb/
+      execFileSync("mkdir", ["-p", join(repoDir, ".hill-climb", "__pycache__"), join(repoDir, ".hill-climb", ".pytest_cache"), join(repoDir, ".hill-climb", "empty-dir")]);
+      writeFileSync(join(repoDir, ".hill-climb", "__pycache__", "check.cpython-312.pyc"), "bytecode", "utf8");
+      writeFileSync(join(repoDir, ".hill-climb", ".pytest_cache", "README.md"), "cache", "utf8");
+
       // Simulate `climb.py raise` changing numeric target without updating target_text
       writeFileSync(
         join(repoDir, ".hill-climb", "latency-drop", "card.json"),
-        JSON.stringify({ ...origCard, target: -1, target_text: "0" }),
+        JSON.stringify({ ...origCard, target: -1, target_text: "0", check: ["SEARCH_AUTH_TOKEN=super-secret python3 -B check.py"] }),
         "utf8",
       );
-      const rescanned = scanProjectClimbs(repoDir);
-      assert.equal(rescanned.climbs.length, 1, "renamed fixture folder with stale card.json must not appear as a second climb");
+      clearScanCache(repoDir);
+      const rescanned = scanProjectClimbs(repoDir, { force: true });
+      assert.equal(rescanned.climbs.length, 1, "renamed fixture folder and cache dirs must not appear as climbs");
       assert.equal(rescanned.climbs[0]?.name, "latency-drop");
       assert.equal(rescanned.climbs[0]?.target, -1);
       assert.equal(rescanned.climbs[0]?.targetText, null, "stale target_text must not override raised numeric target");
+      assert.equal(rescanned.climbs[0]?.check[0], "SEARCH_AUTH_TOKEN=<redacted> python3 -B check.py");
+      assert.equal(redactSecrets("API_KEY=abc123 Bearer tok_1234567890"), "API_KEY=<redacted> Bearer <redacted>");
 
       db.close();
     } finally {

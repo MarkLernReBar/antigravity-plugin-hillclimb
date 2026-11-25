@@ -1055,24 +1055,23 @@ function Roadmap({
           />
         ) : (
           <ul className="pf-keys">
-            {ranked.map((row) => {
+            {ranked.map((row, idx) => {
               const outcome = outcomes.get(row.key);
               const info = signalInfo(row.signal);
               return (
                 <li key={row.key} className={`pf-key${selected.has(row.key) ? " is-selected" : ""}`}>
                   <label className="pf-key-label">
                     <input type="checkbox" checked={selected.has(row.key)} onChange={() => toggle(row.key)} />
-                    <span>
+                    <span className="pf-key-body">
                       <span className="pf-key-title">{outcome?.title ?? row.key}</span>
-                      <span className="pf-muted pf-small">
-                        {" "}
-                        {row.key} · rank {row.effectiveRank}
+                      <span className="pf-muted pf-small pf-key-meta">
+                        #{idx + 1} · <code>{row.key}</code>
                         {row.blockedBy.length > 0 ? ` · blocked by ${row.blockedBy.join(", ")}` : ""}
                       </span>
                     </span>
                   </label>
                   <SignalBadge signal={row.signal} />
-                  <span className="pf-muted pf-small pf-key-note">{info.ready ? "" : info.note}</span>
+                  {!info.ready ? <span className="pf-muted pf-small pf-key-note">{info.note}</span> : null}
                 </li>
               );
             })}
@@ -1756,7 +1755,7 @@ function Flows({
       <aside className="pf-flow-list" aria-label="Flows">
         <h3 className="pf-section-title">Flows</h3>
         {data.flows.length === 0 ? (
-          <p className="pf-muted pf-small">No flows yet. The editor below creates the first one.</p>
+          <p className="pf-muted pf-small">No flows yet. Use New flow to create the first one.</p>
         ) : (
           <ul>
             {data.flows.map((entry, index) => (
@@ -1967,7 +1966,7 @@ export function Portfolio({ page, data, act, select, chooseTrack, track, preview
     roadmap: `${data.releases.length} release${data.releases.length === 1 ? "" : "s"} · ${data.ranked.length} ranked outcome${
       data.ranked.length === 1 ? "" : "s"
     }`,
-    flows: `${data.flows.length} flow${data.flows.length === 1 ? "" : "s"} · frames render in a scriptless sandbox`,
+    flows: `${data.flows.length} flow${data.flows.length === 1 ? "" : "s"} · sandboxed HTML previews`,
   } as const;
 
   return (

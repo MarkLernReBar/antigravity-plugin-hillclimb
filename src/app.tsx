@@ -103,7 +103,10 @@ function HillClimbApp() {
     outcome: Outcome;
     existing: Rig | null;
     engine: "repo" | "search";
+    resolve: () => void;
+    reject: (error: Error) => void;
   } | null>(null);
+  const initialLoadedProjectRef = useRef<string | null>(null);
 
   const [confirmDecision, setConfirmDecision] = useState<{
     action: Action;
@@ -133,13 +136,14 @@ function HillClimbApp() {
   }, [callTool]);
 
   const loadTree = useCallback(
-    async (pid: string, trk: string) => {
+    async (pid: string, trk: string, force = false) => {
       if (!pid) return;
       try {
         setTreeError(null);
         const res = await callTool<{ tree: Snapshot; repoClimbs?: RepoClimbsPayload; inboxCount: number }>("app_tree", {
           projectId: pid,
           track: trk,
+          ...(force ? { force: true } : {}),
         });
         setTree(res.tree);
         if (res.repoClimbs) setRepoClimbs(res.repoClimbs);
@@ -156,20 +160,14 @@ function HillClimbApp() {
       if (!pid) return;
       setClimbsLoading(true);
       try {
-        const res = await callTool<{ tree: Snapshot; repoClimbs: RepoClimbsPayload; inboxCount: number }>("app_tree", {
-          projectId: pid,
-          track,
-        });
-        setTree(res.tree);
-        setRepoClimbs(res.repoClimbs);
-        setInboxCount(res.inboxCount);
+        await loadTree(pid, track, true);
       } catch {
         // non-fatal
       } finally {
         setClimbsLoading(false);
       }
     },
-    [callTool, track],
+    [loadTree, track],
   );
 
   const handleToggleAutoTrack = useCallback(
@@ -253,7 +251,10 @@ function HillClimbApp() {
         if (data.page && PAGES.includes(data.page)) setPage(data.page);
         if (data.outcomeKey !== undefined) setSelected(data.outcomeKey);
         if (data.track) setTrack(data.track);
-        if (data.tree) setTree(data.tree);
+        if (data.tree) {
+          setTree(data.tree);
+          if (data.projectId) initialLoadedProjectRef.current = data.projectId;
+        }
         if (data.repoClimbs) setRepoClimbs(data.repoClimbs);
         if (typeof data.inboxCount === "number") setInboxCount(data.inboxCount);
       } catch {
@@ -284,10 +285,20 @@ function HillClimbApp() {
     }
   }, [connected, projects.length, loadProjects]);
 
-  // Reload tree whenever project/track changes + quiet background poll (faster on Climbs tab)
+  // Reload tree whenever project/track changes (skipping redundant double-fetch right after ontoolresult)
   useEffect(() => {
     if (!connected || !project) return;
+    if (initialLoadedProjectRef.current === project && track === "main" && tree !== null) {
+      initialLoadedProjectRef.current = null;
+      return;
+    }
+    initialLoadedProjectRef.current = null;
     void loadTree(project, track);
+  }, [connected, project, track, loadTree]);
+
+  // Quiet background poll without forcing a re-scan on every tab switch
+  useEffect(() => {
+    if (!connected || !project) return;
     const intervalMs = page === "climbs" ? 10_000 : 30_000;
     const timer = setInterval(() => void loadTree(project, track), intervalMs);
     return () => clearInterval(timer);
@@ -370,7 +381,9 @@ function HillClimbApp() {
         key,
         engine,
       });
-      setEditor({ outcome, engine, existing: res.rig });
+      await new Promise<void>((resolve, reject) => {
+        setEditor({ outcome, engine, existing: res.rig, resolve, reject });
+      });
     },
     [tree, project, callTool],
   );
@@ -385,7 +398,9 @@ function HillClimbApp() {
       if (!rigRes.rig) {
         const outcome = tree?.outcomes.find((item) => item.key === key);
         if (!outcome) throw new Error("Refresh the outcome before configuring a verifier.");
-        setEditor({ outcome, engine, existing: null });
+        await new Promise<void>((resolve, reject) => {
+          setEditor({ outcome, engine, existing: null, resolve, reject });
+        }).catch(() => undefined);
         throw new Error("Configure the scoring and holdout checks before starting the first climb.");
       }
 
@@ -529,18 +544,43 @@ function HillClimbApp() {
               ))}
             </select>
           </label>
-          <button type="button" className="hill-action-btn" onClick={() => setAddProjectOpen(true)}>
-            + Project
-          </button>
-          <button type="button" className="hill-action-btn" disabled={busy || !project} onClick={() => void handleSync()}>
-            Sync
-          </button>
-          <button type="button" className="hill-action-btn" disabled={busy || !project} onClick={() => void handleLint()}>
-            Lint
-          </button>
-          <button type="button" className="hill-action-btn" disabled={busy || !project} onClick={() => void handleReconcile()}>
-            Reconcile
-          </button>
+          <div className="hill-header-actions">
+            <button
+              type="button"
+              className="hill-action-btn"
+              title="Link a local git repository to Hill Climb"
+              onClick={() => setAddProjectOpen(true)}
+            >
+              + Project
+            </button>
+            <button
+              type="button"
+              className="hill-action-btn"
+              title="Write the .hillclimb/ markdown mirror into this repository"
+              disabled={busy || !project}
+              onClick={() => void handleSync()}
+            >
+              Sync
+            </button>
+            <button
+              type="button"
+              className="hill-action-btn"
+              title="Lint contract tree against all 22 quality rules"
+              disabled={busy || !project}
+              onClick={() => void handleLint()}
+            >
+              Lint
+            </button>
+            <button
+              type="button"
+              className="hill-action-btn"
+              title="Poll dispatched verifier runs and ingest completed receipts"
+              disabled={busy || !project}
+              onClick={() => void handleReconcile()}
+            >
+              Reconcile
+            </button>
+          </div>
         </div>
       </header>
 
@@ -586,15 +626,21 @@ function HillClimbApp() {
               engine={editor.engine}
               existing={editor.existing}
               outcome={editor.outcome}
-              onClose={() => setEditor(null)}
+              onClose={() => {
+                const pending = editor;
+                setEditor(null);
+                pending.reject(new Error("cancelled"));
+              }}
               onSave={async (rig) => {
+                const pending = editor;
                 await callTool("app_save_rig", {
                   projectId: project,
-                  key: editor.outcome.key,
-                  version: editor.outcome.version,
+                  key: pending.outcome.key,
+                  version: pending.outcome.version,
                   rig,
                 });
                 setEditor(null);
+                pending.resolve();
                 setNotice("Verifier saved. Dispatch when ready.");
               }}
             />
@@ -637,6 +683,7 @@ function HillClimbApp() {
 
           {page === "tree" ? (
             <TreeView
+              key={project}
               data={tree}
               track={track}
               selected={selected}
@@ -648,6 +695,7 @@ function HillClimbApp() {
             />
           ) : page === "climbs" ? (
             <RepoClimbsView
+              key={project}
               payload={repoClimbs}
               loading={climbsLoading}
               onRefresh={() => void loadRepoClimbs(project)}

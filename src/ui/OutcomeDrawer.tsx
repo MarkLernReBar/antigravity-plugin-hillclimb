@@ -350,7 +350,7 @@ function parseTime(value: string): number {
 // Chart
 // ---------------------------------------------------------------------------
 
-const CHART = { w: 560, h: 200, l: 52, r: 14, t: 14, b: 26 }
+const CHART = { w: 560, h: 200, l: 56, r: 48, t: 14, b: 26 }
 
 /** A quiet re-read while the Live tab is open. Live data is cheap; a stale chart is not. */
 const LIVE_POLL_MS = 15_000
@@ -413,13 +413,22 @@ function LiveChart({ live }: { live: LiveData }): JSX.Element {
         })()
       : ordered.map((point, index) => `${index === 0 ? 'M' : 'L'} ${x(points.timed ? point.t : point.index)} ${y(point.score)}`).join(' ')
 
+  const placedRuleYs: number[] = []
   const rule = (value: number | null, className: string, label: string): JSX.Element | null => {
     if (value === null || !Number.isFinite(value)) return null
     const lineY = y(value)
+    let textY = lineY + 3
+    for (const prev of placedRuleYs) {
+      if (Math.abs(textY - prev) < 11) {
+        textY = prev + 11
+      }
+    }
+    textY = Math.min(CHART.t + innerH + 4, Math.max(CHART.t + 8, textY))
+    placedRuleYs.push(textY)
     return (
       <g className={className}>
         <line x1={CHART.l} x2={CHART.w - CHART.r} y1={lineY} y2={lineY} />
-        <text x={CHART.l - 6} y={lineY + 3} textAnchor="end">
+        <text x={CHART.w - CHART.r + 5} y={textY} textAnchor="start">
           {label}
         </text>
       </g>
@@ -435,15 +444,17 @@ function LiveChart({ live }: { live: LiveData }): JSX.Element {
         aria-label={`Score over time. Baseline ${formatScore(live.baseline)}, best ${formatScore(live.best)}, target ${formatScore(live.target)}.`}
       >
         <rect className="hc-chart-bg" x={CHART.l} y={CHART.t} width={innerW} height={innerH} />
-        {rule(live.baseline, 'hc-rule hc-rule-baseline', 'base')}
         {rule(live.target, 'hc-rule hc-rule-target', 'target')}
         {rule(live.best, 'hc-rule hc-rule-best', 'best')}
+        {rule(live.baseline, 'hc-rule hc-rule-baseline', 'base')}
         <text className="hc-axis" x={CHART.l - 6} y={CHART.t + 8} textAnchor="end">
-          {formatScore(max)}
+          {formatScore(rawMax)}
         </text>
-        <text className="hc-axis" x={CHART.l - 6} y={CHART.t + innerH} textAnchor="end">
-          {formatScore(min)}
-        </text>
+        {rawMin !== rawMax ? (
+          <text className="hc-axis" x={CHART.l - 6} y={CHART.t + innerH} textAnchor="end">
+            {formatScore(rawMin)}
+          </text>
+        ) : null}
         {ordered.length > 0 ? <path className="hc-chart-line" d={path} /> : null}
         {ordered.map((point) => {
           const px = x(points.timed ? point.t : point.index)
@@ -745,16 +756,10 @@ interface EditFormProps {
 
 function EditProposal({ outcome, act, onError, onDone }: EditFormProps): JSX.Element {
   const [draft, setDraft] = useState<Contract>(() => contractOf(outcome))
-  const [version, setVersion] = useState(String(outcome.version + 1))
   const [busy, setBusy] = useState(false)
-  const versionValue = Number(version)
 
   const submit = async (event: FormEvent): Promise<void> => {
     event.preventDefault()
-    if (!Number.isInteger(versionValue) || versionValue < 1) {
-      onError('A proposed version must be a whole number, 1 or more.')
-      return
-    }
     if (draft.criteria.length === 0) {
       onError('An outcome needs at least one criterion.')
       return
@@ -768,7 +773,7 @@ function EditProposal({ outcome, act, onError, onDone }: EditFormProps): JSX.Ele
       await act({
         op: 'propose_change',
         key: outcome.key,
-        version: versionValue,
+        version: outcome.version,
         contract: {
           title: draft.title.trim(),
           story: draft.story.trim(),
@@ -910,17 +915,9 @@ function EditProposal({ outcome, act, onError, onDone }: EditFormProps): JSX.Ele
         />
       </div>
       <div className="hc-row-actions">
-        <label className="hc-field-inline" htmlFor="hc-edit-version">
-          Proposed version
-          <input
-            id="hc-edit-version"
-            type="number"
-            min={1}
-            step={1}
-            value={version}
-            onChange={(event) => setVersion(event.target.value)}
-          />
-        </label>
+        <span className="hc-hint">
+          Proposes v{outcome.version + 1} (based on v{outcome.version})
+        </span>
         <button type="submit" className="hc-btn hc-btn-primary" disabled={busy}>
           {busy ? 'Proposing…' : 'Propose change'}
         </button>
@@ -1213,12 +1210,16 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
     if (configure === undefined || outcome === undefined) return
     setConfiguring(true)
     setConfigureError(null)
+    setDispatchNote(null)
     try {
       await configure(outcome.key, engine)
       setDispatchNote(`Verifier for ${outcome.key} saved. Dispatch when ready.`)
       await loadLive(outcome.key)
     } catch (thrown) {
-      setConfigureError(thrown instanceof Error ? thrown.message : String(thrown))
+      const msg = thrown instanceof Error ? thrown.message : String(thrown)
+      if (msg !== 'cancelled') {
+        setConfigureError(msg)
+      }
     } finally {
       setConfiguring(false)
     }
@@ -1240,14 +1241,19 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
     }
   }
 
+  const switchTab = (next: DrawerTab): void => {
+    setError(null)
+    setTab(next)
+  }
+
   const onTabKey = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
     const index = TABS.findIndex((row) => row.id === tab)
     if (event.key === 'ArrowRight') {
       event.preventDefault()
-      setTab(TABS[(index + 1) % TABS.length]?.id ?? 'contract')
+      switchTab(TABS[(index + 1) % TABS.length]?.id ?? 'contract')
     } else if (event.key === 'ArrowLeft') {
       event.preventDefault()
-      setTab(TABS[(index - 1 + TABS.length) % TABS.length]?.id ?? 'contract')
+      switchTab(TABS[(index - 1 + TABS.length) % TABS.length]?.id ?? 'contract')
     }
   }
 
@@ -1278,9 +1284,15 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
           </p>
           <h2>{title}</h2>
           <p className="hc-drawer-meta">
-            <span className={`hc-badge hc-signal-${signal}`}>{signal}</span>
+            {outcome !== undefined ? (
+              <span className={`hc-badge hc-signal-${signal}`}>{signal}</span>
+            ) : (
+              <span className="hc-chip">goal</span>
+            )}
             {version !== null ? <span>v{version}</span> : null}
-            {ranked !== undefined ? <span>rank {ranked.effectiveRank}</span> : null}
+            {ranked !== undefined ? (
+              <span>priority #{data.ranked.findIndex((row) => row.key === selected) + 1}</span>
+            ) : null}
             {claim !== null ? (
               <span className="hc-claim">
                 claimed by <code>{claim.threadId}</code> until {formatWhen(parseTime(claim.expires))}
@@ -1314,7 +1326,7 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
             aria-controls={`hc-panel-${row.id}`}
             tabIndex={tab === row.id ? 0 : -1}
             className={tab === row.id ? 'hc-tab is-active' : 'hc-tab'}
-            onClick={() => setTab(row.id)}
+            onClick={() => switchTab(row.id)}
           >
             {row.label}
             {row.id === 'evidence' && evidence.length > 0 ? <span className="hc-tab-count">{evidence.length}</span> : null}
@@ -1446,7 +1458,11 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
                   {dispatching ? 'Dispatching…' : `Dispatch to ${engine}`}
                 </button>
                 {liveData?.engine !== null && liveData?.engine !== undefined ? (
-                  <span className="hc-hint">running on {liveData.engine}</span>
+                  <span className="hc-hint">
+                    {liveData.worker?.liveness === 'active'
+                      ? `running on ${liveData.engine}`
+                      : `${liveData.engine} · ${liveData.worker?.phase ?? 'idle'}`}
+                  </span>
                 ) : null}
               </div>
               {liveData !== null && liveData.baseline === null ? (
@@ -1499,10 +1515,10 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
                   <LiveChart live={liveData} />
                   {liveData.holdout !== null ? (
                     <p className="hc-hint">
-                      Holdout: <code>{liveData.holdout}</code> — never read it again.
+                      Holdout score: <code>{liveData.holdout}</code>
                     </p>
                   ) : (
-                    <p className="hc-hint">No holdout recorded; nothing catches overfitting to the visible cases.</p>
+                    <p className="hc-hint">No holdout score recorded yet; unseen holdout checks guard against overfitting.</p>
                   )}
                 </section>
 
@@ -1516,10 +1532,12 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
                   <LineageGraph live={liveData} />
                 </section>
 
-                <section className="hc-section" aria-label="MAP-Elites grid">
-                  <h3>Feature grid</h3>
-                  <EliteGrid live={liveData} />
-                </section>
+                {liveData.engine === 'search' || (liveData.elite && liveData.elite.length > 0) ? (
+                  <section className="hc-section" aria-label="MAP-Elites grid">
+                    <h3>Feature grid</h3>
+                    <EliteGrid live={liveData} />
+                  </section>
+                ) : null}
 
                 <section className="hc-section" aria-label="Operator stream">
                   <h3>Operator stream</h3>
@@ -1567,23 +1585,24 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
             </section>
 
             {outcome !== undefined ? (
-              <section className="hc-section" aria-label="Evidence output">
-                <header className="hc-section-head">
-                  <h3>Output</h3>
+              <details className="hc-section hc-output-details">
+                <summary className="hc-section-head">
+                  <span>PR summary export</span>
                   <button
                     type="button"
                     className="hc-btn"
-                    onClick={() => {
+                    onClick={(event) => {
+                      event.preventDefault()
                       void navigator.clipboard?.writeText(evidenceText).catch(() => setError('The clipboard is not available.'))
                     }}
                   >
                     Copy
                   </button>
-                </header>
+                </summary>
                 <pre className="hc-output" tabIndex={0} aria-label="Evidence as text">
                   {evidenceText}
                 </pre>
-              </section>
+              </details>
             ) : null}
 
             <section className="hc-section" aria-label="Evidence list">
@@ -1761,15 +1780,19 @@ function EvidenceForm({ outcome, track, act, onError }: EvidenceFormProps): JSX.
 
   return (
     <form className="hc-evidence-form" onSubmit={(event) => void submit(event)} aria-label="Record evidence">
-      <div className="hc-field hc-field-row">
-        <label htmlFor="hc-evidence-kind">Kind</label>
-        <select id="hc-evidence-kind" value={kind} onChange={(event) => setKind(event.target.value as typeof kind)}>
-          <option value="confirms">confirms</option>
-          <option value="denies">denies</option>
-          <option value="note">note</option>
-        </select>
-        <label htmlFor="hc-evidence-track">Track</label>
-        <input id="hc-evidence-track" value={trackValue} onChange={(event) => setTrackValue(event.target.value)} />
+      <div className="hc-evidence-meta-grid">
+        <div className="hc-field">
+          <label htmlFor="hc-evidence-kind">Kind</label>
+          <select id="hc-evidence-kind" value={kind} onChange={(event) => setKind(event.target.value as typeof kind)}>
+            <option value="confirms">confirms</option>
+            <option value="denies">denies</option>
+            <option value="note">note</option>
+          </select>
+        </div>
+        <div className="hc-field">
+          <label htmlFor="hc-evidence-track">Track</label>
+          <input id="hc-evidence-track" value={trackValue} onChange={(event) => setTrackValue(event.target.value)} />
+        </div>
       </div>
       <fieldset className="hc-criteria-pick">
         <legend>Criteria</legend>
