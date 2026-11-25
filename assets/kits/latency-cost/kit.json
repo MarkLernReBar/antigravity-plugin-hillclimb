@@ -1,0 +1,86 @@
+{
+  "id": "latency-cost",
+  "name": "latency-cost",
+  "version": "1.0.0",
+  "title": "Latency and cost",
+  "summary": "Score the nearest-rank p95 of useful milliseconds per correctly answered business unit, with correctness and workload guards.",
+  "goal": "Lower the p95 useful latency for correct answers without losing correctness, output equivalence or workload coverage.",
+  "metric": "p95_useful_ms",
+  "metricLabel": "p95 useful milliseconds",
+  "unit": "ms",
+  "scoreMode": "percentile",
+  "direction": "min",
+  "targetGuidance": "Set the bar a few percent below the measured baseline; repeat the measurement to see noise before accepting a small win.",
+  "check": "python3 {kit}/score.py --manifest {manifest} --candidate {candidate}",
+  "guards": ["completeness", "success", "equivalence", "load"],
+  "guardDetails": {
+    "completeness": "Every manifest case appears exactly once.",
+    "success": "Every row is marked correct; an incorrect row is a rejected result, not a faster one.",
+    "equivalence": "Every row's output matches the manifest's expected output.",
+    "load": "The workload declares the request count and cache condition."
+  },
+  "holdout": "python3 {kit}/score.py --manifest {manifest} --holdout {holdout} --candidate {candidate}",
+  "data": {
+    "manifest": "cases.json",
+    "holdout": "holdout.json",
+    "sample": true,
+    "label": "SAMPLE FIXTURE — replace with real workload cases and measured outputs",
+    "result": "JSONL rows: {\"case\": \"...\", \"correct\": true, \"useful_ms\": 12.5, \"output\": ...}"
+  },
+  "baseline": {
+    "fixture": "fixtures/sample-good.jsonl",
+    "expected": 29,
+    "valid": true
+  },
+  "knownBad": [
+    {
+      "id": "slow",
+      "fixture": "fixtures/known-bad-slow.jsonl",
+      "expect": "worse",
+      "reason": "Same answers, slower p95; the score must rise."
+    },
+    {
+      "id": "wrong-output",
+      "fixture": "fixtures/known-bad-wrong-output.jsonl",
+      "expect": "guard_fail",
+      "guard": "equivalence",
+      "reason": "The output does not match the expected answer even though the row claims correctness."
+    },
+    {
+      "id": "incorrect",
+      "fixture": "fixtures/known-bad-incorrect.jsonl",
+      "expect": "rejected",
+      "reason": "A row marked incorrect cannot be scored as a fast correct unit."
+    },
+    {
+      "id": "missing",
+      "fixture": "fixtures/known-bad-missing.jsonl",
+      "expect": "rejected",
+      "reason": "One case is absent."
+    },
+    {
+      "id": "duplicate",
+      "fixture": "fixtures/known-bad-duplicate.jsonl",
+      "expect": "rejected",
+      "reason": "One case appears twice."
+    },
+    {
+      "id": "nonfinite",
+      "fixture": "fixtures/known-bad-nonfinite.jsonl",
+      "expect": "rejected",
+      "reason": "Infinity is not a measurement."
+    },
+    {
+      "id": "incomplete",
+      "fixture": "fixtures/known-bad-incomplete.jsonl",
+      "expect": "rejected",
+      "reason": "A row has no useful_ms."
+    }
+  ],
+  "repeats": {
+    "runs": 2,
+    "maxSpread": 0,
+    "why": "The adapter is deterministic; real candidate runs should be repeated to measure noise."
+  },
+  "notes": "For a real run, replace the sample manifest and fixtures. Measure warm and cold paths separately. A microbenchmark win is not an end-to-end win until the user path is also checked."
+}

@@ -1,0 +1,133 @@
+.hill-shell {
+  box-sizing: border-box;
+  height: 100%;
+  overflow: auto;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Inter, system-ui, sans-serif;
+  padding: clamp(12px, 2.6vw, 36px);
+  line-height: 1.45;
+}
+.hill-shell > header,
+.hill-shell > nav,
+.hill-track {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.hill-shell > header {
+  justify-content: space-between;
+}
+.hill-shell > header h1 {
+  font-size: 1.65rem;
+  letter-spacing: -0.04em;
+  margin: 0;
+}
+.hill-shell > header select,
+.hill-track select {
+  max-width: 230px;
+  background: var(--background);
+  color: inherit;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 5px;
+  margin-left: 5px;
+}
+.hill-shell > nav {
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin: 15px 0;
+}
+.hill-shell > nav button {
+  padding: 8px 12px;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+.hill-shell > nav button[aria-current] {
+  font-weight: 650;
+  border-color: currentColor;
+}
+.hill-shell button:focus-visible,
+.hill-shell select:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+.hill-track {
+  justify-content: flex-end;
+  margin: 8px 0;
+}
+.hill-shell pre {
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.hill-thread {
+  padding: 8px;
+}
+.hill-shell label {
+  font-size: 0.9rem;
+}
+.hill-workspace {
+  min-height: 28rem;
+  position: relative;
+  height: calc(100% - 94px);
+  container-type: inline-size;
+}
+.hill-workspace > .hc-tree {
+  min-height: 460px;
+}
+.hill-inspecting > .hc-drawer {
+  position: absolute;
+  inset: 0 0 0 auto;
+  z-index: 3;
+  width: min(480px, 100%);
+  box-shadow: -8px 0 24px #0002;
+}
+.hill-thread .hill-workspace {
+  height: 100%;
+}
+.hill-track,
+.hill-workspace > p[role="status"] {
+  height: auto;
+  position: relative;
+  z-index: 2;
+  margin: 0 0 4px;
+}
+.hill-workspace:has(.hill-track) > .hc-tree {
+  height: calc(100% - 36px);
+}
+.hill-rig {
+  color: var(--foreground);
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  width: min(35rem, 95%);
+  max-height: 85vh;
+  padding: 18px;
+}
+.hill-rig::backdrop {
+  background: #15192070;
+}
+.hill-rig label {
+  display: grid;
+  gap: 4px;
+  margin: 0.6em 0;
+}
+.hill-rig input,
+.hill-rig textarea,
+.hill-rig select {
+  border: 1px solid var(--border);
+  padding: 5px;
+  border-radius: 4px;
+  background: var(--card);
+  color: inherit;
+}
+.hill-rig footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

@@ -1,0 +1,2 @@
+{"query": "holdout-q-billing", "docs": ["holdout-doc-billing"], "latency_ms": 30}
+{"query": "holdout-q-security", "docs": ["holdout-doc-security"], "latency_ms": 35}

@@ -1,0 +1,49 @@
+{
+  "kit": "retrieval",
+  "sample": true,
+  "label": "SAMPLE HOLDOUT \u2014 separate queries for the final check",
+  "project": "acme",
+  "k": 5,
+  "latency_budget_ms": 300,
+  "queries": [
+    {
+      "id": "holdout-q-billing",
+      "text": "billing portal",
+      "company": "Acme",
+      "relevant": [
+        "holdout-doc-billing"
+      ],
+      "hard_negatives": [
+        "holdout-doc-pricing"
+      ]
+    },
+    {
+      "id": "holdout-q-security",
+      "text": "security policy",
+      "company": "Acme",
+      "relevant": [
+        "holdout-doc-security"
+      ],
+      "hard_negatives": [
+        "holdout-doc-billing"
+      ]
+    }
+  ],
+  "documents": {
+    "holdout-doc-billing": {
+      "project": "acme",
+      "company": "Acme",
+      "source": "acme.example/billing"
+    },
+    "holdout-doc-pricing": {
+      "project": "acme",
+      "company": "Acme",
+      "source": "acme.example/pricing"
+    },
+    "holdout-doc-security": {
+      "project": "acme",
+      "company": "Acme",
+      "source": "acme.example/security"
+    }
+  }
+}

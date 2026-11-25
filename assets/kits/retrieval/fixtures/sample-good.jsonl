@@ -1,0 +1,3 @@
+{"query": "q-renewal", "docs": ["doc-renewal", "doc-pricing"], "latency_ms": 40}
+{"query": "q-pricing", "docs": ["doc-pricing", "doc-renewal"], "latency_ms": 50}
+{"query": "q-support", "docs": ["doc-support", "doc-support-blog"], "latency_ms": 60}

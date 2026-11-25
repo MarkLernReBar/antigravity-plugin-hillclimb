@@ -1,0 +1,52 @@
+{
+  "kit": "latency-cost",
+  "sample": true,
+  "label": "SAMPLE HOLDOUT \u2014 separate cases for the final check",
+  "unit": "request",
+  "workload": {
+    "requests": 5,
+    "cache": "warm"
+  },
+  "cases": [
+    {
+      "id": "holdout-lookup-101",
+      "tag": "holdout",
+      "expected": {
+        "found": false,
+        "rows": 101
+      }
+    },
+    {
+      "id": "holdout-lookup-102",
+      "tag": "holdout",
+      "expected": {
+        "found": true,
+        "rows": 102
+      }
+    },
+    {
+      "id": "holdout-lookup-103",
+      "tag": "holdout",
+      "expected": {
+        "found": false,
+        "rows": 103
+      }
+    },
+    {
+      "id": "holdout-lookup-104",
+      "tag": "holdout",
+      "expected": {
+        "found": true,
+        "rows": 104
+      }
+    },
+    {
+      "id": "holdout-lookup-105",
+      "tag": "holdout",
+      "expected": {
+        "found": false,
+        "rows": 105
+      }
+    }
+  ]
+}

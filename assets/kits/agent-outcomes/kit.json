@@ -1,0 +1,87 @@
+{
+  "id": "agent-outcomes",
+  "name": "agent-outcomes",
+  "version": "1.0.0",
+  "title": "Agent outcomes",
+  "summary": "Score tasks completed across repeated trials, with evidence, side-effect and cost guards.",
+  "goal": "Complete more tasks across all trials without claiming work without evidence, causing forbidden side effects, or exceeding the cost budget.",
+  "metric": "tasks_completed",
+  "metricLabel": "tasks completed across all trials",
+  "unit": "tasks",
+  "scoreMode": "count",
+  "direction": "max",
+  "targetGuidance": "Set the bar one task above the measured baseline; keep at least two trials so a flaky pass is visible.",
+  "check": "python3 {kit}/score.py --manifest {manifest} --candidate {candidate}",
+  "guards": ["completeness", "evidence", "no_side_effects", "cost"],
+  "guardDetails": {
+    "completeness": "Every task has exactly the declared number of trials.",
+    "evidence": "A claimed task has an artifact file; a claim without evidence is not a completion.",
+    "no_side_effects": "No row records a forbidden effect for its task.",
+    "cost": "Every row's cost is finite and nonnegative."
+  },
+  "holdout": "python3 {kit}/score.py --manifest {manifest} --holdout {holdout} --candidate {candidate}",
+  "data": {
+    "manifest": "cases.json",
+    "holdout": "holdout.json",
+    "sample": true,
+    "label": "SAMPLE FIXTURE — replace with real tasks, artifacts and forbidden effects",
+    "result": "JSONL rows: {\"task\": \"...\", \"trial\": 1, \"claimed\": true, \"state\": {...}, \"artifact\": {\"files\": [...], \"content\": \"...\"}, \"effects\": [...], \"cost_usd\": 0.1}"
+  },
+  "baseline": {
+    "fixture": "fixtures/sample-good.jsonl",
+    "expected": 3,
+    "valid": true
+  },
+  "knownBad": [
+    {
+      "id": "flaky",
+      "fixture": "fixtures/known-bad-flaky.jsonl",
+      "expect": "worse",
+      "reason": "One trial does not reach the required state, so the task does not count."
+    },
+    {
+      "id": "claims-without-evidence",
+      "fixture": "fixtures/known-bad-claims.jsonl",
+      "expect": "guard_fail",
+      "guard": "evidence",
+      "reason": "A task claims completion with no artifact file."
+    },
+    {
+      "id": "forbidden-side-effect",
+      "fixture": "fixtures/known-bad-side-effect.jsonl",
+      "expect": "guard_fail",
+      "guard": "no_side_effects",
+      "reason": "A row records an email send that the task forbids."
+    },
+    {
+      "id": "missing",
+      "fixture": "fixtures/known-bad-missing.jsonl",
+      "expect": "rejected",
+      "reason": "One trial is absent."
+    },
+    {
+      "id": "duplicate",
+      "fixture": "fixtures/known-bad-duplicate.jsonl",
+      "expect": "rejected",
+      "reason": "One task/trial pair appears twice."
+    },
+    {
+      "id": "nonfinite",
+      "fixture": "fixtures/known-bad-nonfinite.jsonl",
+      "expect": "rejected",
+      "reason": "Infinity is not a cost."
+    },
+    {
+      "id": "incomplete",
+      "fixture": "fixtures/known-bad-incomplete.jsonl",
+      "expect": "rejected",
+      "reason": "A row has no state."
+    }
+  ],
+  "repeats": {
+    "runs": 2,
+    "maxSpread": 0,
+    "why": "The adapter is deterministic; repeat real agent runs to measure flakiness."
+  },
+  "notes": "A task counts only when every trial passes. A one-trial pass is a lead, not a completion."
+}

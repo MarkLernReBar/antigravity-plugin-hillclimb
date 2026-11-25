@@ -1,0 +1,20 @@
+{"case": "lookup-01", "correct": true, "output": {"found": false, "rows": 1}}
+{"case": "lookup-02", "correct": true, "useful_ms": 12, "output": {"found": true, "rows": 2}}
+{"case": "lookup-03", "correct": true, "useful_ms": 13, "output": {"found": false, "rows": 3}}
+{"case": "lookup-04", "correct": true, "useful_ms": 14, "output": {"found": true, "rows": 4}}
+{"case": "lookup-05", "correct": true, "useful_ms": 15, "output": {"found": false, "rows": 5}}
+{"case": "lookup-06", "correct": true, "useful_ms": 16, "output": {"found": true, "rows": 6}}
+{"case": "lookup-07", "correct": true, "useful_ms": 17, "output": {"found": false, "rows": 7}}
+{"case": "lookup-08", "correct": true, "useful_ms": 18, "output": {"found": true, "rows": 8}}
+{"case": "lookup-09", "correct": true, "useful_ms": 19, "output": {"found": false, "rows": 9}}
+{"case": "lookup-10", "correct": true, "useful_ms": 20, "output": {"found": true, "rows": 10}}
+{"case": "lookup-11", "correct": true, "useful_ms": 21, "output": {"found": false, "rows": 11}}
+{"case": "lookup-12", "correct": true, "useful_ms": 22, "output": {"found": true, "rows": 12}}
+{"case": "lookup-13", "correct": true, "useful_ms": 23, "output": {"found": false, "rows": 13}}
+{"case": "lookup-14", "correct": true, "useful_ms": 24, "output": {"found": true, "rows": 14}}
+{"case": "lookup-15", "correct": true, "useful_ms": 25, "output": {"found": false, "rows": 15}}
+{"case": "lookup-16", "correct": true, "useful_ms": 26, "output": {"found": true, "rows": 16}}
+{"case": "lookup-17", "correct": true, "useful_ms": 27, "output": {"found": false, "rows": 17}}
+{"case": "lookup-18", "correct": true, "useful_ms": 28, "output": {"found": true, "rows": 18}}
+{"case": "lookup-19", "correct": true, "useful_ms": 29, "output": {"found": false, "rows": 19}}
+{"case": "lookup-20", "correct": true, "useful_ms": 30, "output": {"found": true, "rows": 20}}

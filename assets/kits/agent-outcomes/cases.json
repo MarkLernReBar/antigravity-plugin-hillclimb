@@ -1,0 +1,52 @@
+{
+  "kit": "agent-outcomes",
+  "sample": true,
+  "label": "SAMPLE FIXTURE \u2014 replace with real tasks, required artifacts and forbidden side effects",
+  "trials": 2,
+  "cost_budget_usd": 2.0,
+  "tasks": [
+    {
+      "id": "task-report",
+      "goal": "Write a renewal summary for Acme.",
+      "expect": {
+        "state": {
+          "status": "done"
+        },
+        "contains": [
+          "Renewal",
+          "Acme"
+        ],
+        "forbidden_effects": [
+          "email_sent"
+        ]
+      }
+    },
+    {
+      "id": "task-update",
+      "goal": "Update the account owner to mark.",
+      "expect": {
+        "state": {
+          "status": "updated",
+          "owner": "mark"
+        },
+        "forbidden_effects": [
+          "delete_record",
+          "email_sent"
+        ]
+      }
+    },
+    {
+      "id": "task-skip",
+      "goal": "Skip an account that is already current.",
+      "expect": {
+        "state": {
+          "status": "skipped"
+        },
+        "forbidden_effects": [
+          "delete_record",
+          "email_sent"
+        ]
+      }
+    }
+  ]
+}

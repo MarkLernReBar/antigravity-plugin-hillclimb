@@ -1,0 +1,40 @@
+{
+  "kit": "correctness",
+  "sample": true,
+  "label": "SAMPLE FIXTURE — replace with your real cases and expected outputs",
+  "oracle": "Independent expected values; the adapter compares each candidate row to the oracle.",
+  "required_tags": ["money", "zero", "error"],
+  "cases": [
+    {
+      "id": "invoice-1001",
+      "tag": "money",
+      "input": "2 lines: 10.00 and 5.50",
+      "expected": {"subtotal": 15.5, "currency": "USD"}
+    },
+    {
+      "id": "invoice-1002",
+      "tag": "money",
+      "input": "rounding at 0.005",
+      "expected": {"subtotal": 0.01, "currency": "USD"},
+      "tolerance": 0.0001
+    },
+    {
+      "id": "invoice-zero",
+      "tag": "zero",
+      "input": "no lines",
+      "expected": {"subtotal": 0, "currency": "USD"}
+    },
+    {
+      "id": "invoice-bad-total",
+      "tag": "error",
+      "input": "declared total does not match lines",
+      "expected_error": "total_mismatch"
+    },
+    {
+      "id": "invoice-empty",
+      "tag": "zero",
+      "input": "empty extraction",
+      "expected": []
+    }
+  ]
+}

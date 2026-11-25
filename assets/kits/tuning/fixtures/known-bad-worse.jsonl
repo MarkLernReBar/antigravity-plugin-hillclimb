@@ -1,0 +1,4 @@
+{"trial": 1, "params": {"batch_size": 16, "cutoff": 0.5, "mode": "fast"}, "validation": 16.0, "evaluations": 2}
+{"trial": 2, "params": {"batch_size": 8, "cutoff": 0.7, "mode": "balanced"}, "validation": 15.0, "evaluations": 2}
+{"trial": 3, "params": {"batch_size": 32, "cutoff": 0.3, "mode": "safe"}, "validation": 16.5, "evaluations": 2}
+{"selected": 2, "params": {"batch_size": 8, "cutoff": 0.7, "mode": "balanced"}, "evaluations": 2}

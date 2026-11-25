@@ -1,0 +1,10 @@
+{
+  "kit": "tuning",
+  "sample": true,
+  "label": "SAMPLE HOLDOUT \u2014 separate instances for the final check",
+  "holdout": [
+    "holdout-1",
+    "holdout-2",
+    "holdout-3"
+  ]
+}

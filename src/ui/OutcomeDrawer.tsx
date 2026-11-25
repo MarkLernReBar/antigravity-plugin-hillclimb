@@ -1,0 +1,1818 @@
+// The outcome drawer: the contract, the ancestors it inherits from, the
+// proposals waiting for a person, the live climb, and the evidence, plans and
+// decisions recorded against one key.
+//
+// Everything that changes state goes through `act` (validated by
+// src/actions.ts). The live climb is read-only: `dispatch` and `live` belong to
+// the parent, because running a climb is not a thing a view may decide to do on
+// its own.
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { FormEvent, JSX, KeyboardEvent as ReactKeyboardEvent } from 'react'
+import type { Action } from '../actions.js'
+import type { Change, Comment, Contract, Evidence, Goal, Outcome, Plan } from '../model.js'
+import type { LiveData, ViewProps } from '../view-props.js'
+import { formatWhen, sortOutcomes, signalOf } from './TreeView.js'
+
+// ---------------------------------------------------------------------------
+// Pure helpers (exported for tests)
+// ---------------------------------------------------------------------------
+
+export type DiffKind = 'same' | 'added' | 'removed' | 'changed'
+export interface DiffRow {
+  kind: DiffKind
+  label: string
+  before: string | null
+  after: string | null
+}
+
+/** A row-per-field diff between the live contract and a proposal. */
+export function contractDiff(current: Contract, proposed: Contract): DiffRow[] {
+  const rows: DiffRow[] = []
+  const field = (label: string, before: string, after: string): void => {
+    rows.push({ kind: before === after ? 'same' : 'changed', label, before, after })
+  }
+  field('Title', current.title, proposed.title)
+  field('Story', current.story, proposed.story)
+  field('Rank', String(current.rank), String(proposed.rank))
+  field(
+    'Recheck',
+    current.recheckDays === null ? 'never' : `${current.recheckDays} days`,
+    proposed.recheckDays === null ? 'never' : `${proposed.recheckDays} days`,
+  )
+  field(
+    'Depends on',
+    current.dependsOn.slice().sort().join(', ') || 'none',
+    proposed.dependsOn.slice().sort().join(', ') || 'none',
+  )
+
+  const previous = new Map(current.criteria.map((row) => [row.id, row]))
+  const next = new Set(proposed.criteria.map((row) => row.id))
+  const text = (row: { given: string; when: string; then: string }): string => `${row.given} / ${row.when} / ${row.then}`
+  for (const row of proposed.criteria) {
+    const before = previous.get(row.id)
+    if (before === undefined) {
+      rows.push({ kind: 'added', label: row.id, before: null, after: text(row) })
+    } else {
+      const beforeText = text(before)
+      const afterText = text(row)
+      rows.push({ kind: beforeText === afterText ? 'same' : 'changed', label: row.id, before: beforeText, after: afterText })
+    }
+  }
+  for (const row of current.criteria) {
+    if (!next.has(row.id)) rows.push({ kind: 'removed', label: row.id, before: text(row), after: null })
+  }
+  return rows
+}
+
+export function contractOf(outcome: Outcome): Contract {
+  return {
+    title: outcome.title,
+    story: outcome.story,
+    criteria: outcome.criteria.map((row) => ({ ...row })),
+    dependsOn: outcome.dependsOn.slice(),
+    rank: outcome.rank,
+    recheckDays: outcome.recheckDays,
+  }
+}
+
+/** `max` when the best score is above the baseline, `min` when below. */
+export function inferDirection(live: LiveData): 'min' | 'max' | 'unknown' {
+  if (live.baseline === null || live.best === null) return 'unknown'
+  if (live.best > live.baseline) return 'max'
+  if (live.best < live.baseline) return 'min'
+  return 'unknown'
+}
+
+/**
+ * The measure's direction, using the bar as the tie-break when the best score
+ * still equals the baseline (the chart alone cannot tell which way is better).
+ */
+export function directionOf(live: LiveData): 'min' | 'max' {
+  const inferred = inferDirection(live)
+  if (inferred !== 'unknown') return inferred
+  if (live.baseline !== null && live.target !== null && live.baseline !== live.target) {
+    return live.target > live.baseline ? 'max' : 'min'
+  }
+  return 'max'
+}
+
+/**
+ * What the numbers actually support, as distinct states. “The bar is met” and
+ * “the climb improved something” are different claims, and a baseline that
+ * already sits on the bar demonstrates no improvement at all.
+ */
+export type ScoreVerdict =
+  | 'no-baseline'
+  | 'no-gain-yet'
+  | 'improved-below-target'
+  | 'baseline-at-target'
+  | 'target-met-with-gain'
+  | 'improved'
+
+export interface Verdict {
+  kind: ScoreVerdict
+  label: string
+  detail: string
+}
+
+const meets = (score: number, target: number, direction: 'min' | 'max'): boolean =>
+  direction === 'max' ? score >= target : score <= target
+
+const improved = (live: LiveData, direction: 'min' | 'max'): boolean => {
+  if (live.baseline === null || live.best === null) return false
+  return direction === 'max' ? live.best > live.baseline : live.best < live.baseline
+}
+
+export function verdictOf(live: LiveData): Verdict {
+  if (live.baseline === null) {
+    return { kind: 'no-baseline', label: 'No baseline yet', detail: 'The run has not scored the unchanged starting point, so no comparison exists.' }
+  }
+  const direction = directionOf(live)
+  const gain = improved(live, direction)
+  const holdout =
+    live.holdout === null ? ' No holdout is recorded, so nothing here catches overfitting to the visible cases.' : ''
+  if (live.target === null) {
+    return gain
+      ? { kind: 'improved', label: 'Improved, no bar set', detail: `Best ${formatScore(live.best)} is better than the baseline ${formatScore(live.baseline)}.${holdout}` }
+      : { kind: 'no-gain-yet', label: 'No gain yet', detail: `Best still equals the baseline ${formatScore(live.baseline)}.${holdout}` }
+  }
+  if (meets(live.best ?? live.baseline, live.target, direction)) {
+    if (!gain) {
+      return {
+        kind: 'baseline-at-target',
+        label: 'Bar met without a demonstrated gain',
+        detail: `The unchanged baseline already scores ${formatScore(live.baseline)} against a bar of ${formatScore(live.target)}. That is attainment, not improvement.${holdout}`,
+      }
+    }
+    return {
+      kind: 'target-met-with-gain',
+      label: 'Bar met with a demonstrated gain',
+      detail: `Best ${formatScore(live.best)} beats the baseline ${formatScore(live.baseline)} and meets the bar of ${formatScore(live.target)}.${holdout}`,
+    }
+  }
+  if (gain) {
+    return {
+      kind: 'improved-below-target',
+      label: 'Improved, bar not met',
+      detail: `Best ${formatScore(live.best)} beats the baseline ${formatScore(live.baseline)} but is short of the bar ${formatScore(live.target)}.${holdout}`,
+    }
+  }
+  return {
+    kind: 'no-gain-yet',
+    label: 'No gain yet',
+    detail: `Best still equals the baseline ${formatScore(live.baseline)}, and the bar is ${formatScore(live.target)}.${holdout}`,
+  }
+}
+
+/** The worker's own account of where it is; optional, so an older read still renders. */
+export type WorkerStatus = NonNullable<LiveData['worker']>
+
+const workerOf = (live: LiveData): WorkerStatus | null => live.worker ?? null
+
+/** One readable line per fact an operator or agent needs to resume this climb. */
+export interface ProgressLine {
+  label: string
+  detail: string
+}
+
+export function progressLines(live: LiveData): ProgressLine[] {
+  const verdict = verdictOf(live)
+  const lines: ProgressLine[] = []
+  if (live.engine === 'search') {
+    const shape = live.search ?? null
+    lines.push({
+      label: 'Engine',
+      detail:
+        shape === null
+          ? 'evolutionary search · the run’s own record of which search this is has not been read yet'
+          : `evolutionary search · climber ${shape.climber ?? 'recorded by the run, not named here'}` +
+            (shape.featureDimensions === null ? '' : ` over ${shape.featureDimensions.join(', ')}`) +
+            (shape.count > 1 ? ` · ${shape.count} searches in this run, showing ${shape.id}` : ''),
+    })
+  } else if (live.engine === 'repo') {
+    lines.push({ label: 'Engine', detail: 'repo climb · each kept step is a commit, scored by the check' })
+  } else {
+    lines.push({ label: 'Engine', detail: 'no engine has run for this outcome yet' })
+  }
+  lines.push({ label: 'Where it stands', detail: `${verdict.label}. ${verdict.detail}` })
+  const last = live.rows.length === 0 ? null : live.rows[live.rows.length - 1]
+  lines.push({
+    label: 'Last observation',
+    detail:
+      last === null
+        ? 'nothing measured yet: no step or candidate has a score'
+        : `${live.rows.length} recorded · last “${last.label}” scored ${formatScore(last.score)} at ${formatTime(last.at)}`,
+  })
+  // The worker's phase is the one fact that means something before any score
+  // exists, so it is shown even when the run has recorded no row at all.
+  const worker = workerOf(live)
+  if (worker !== null) {
+    lines.push({
+      label: 'Worker',
+      detail:
+        `${worker.phase} · ${worker.liveness}` +
+        (worker.retries > 0 ? ` · ${worker.retries} retr${worker.retries === 1 ? 'y' : 'ies'} so far` : '') +
+        (worker.heartbeatAt === null ? ' · no heartbeat recorded' : ` · last heartbeat ${formatTime(worker.heartbeatAt)}`),
+    })
+    lines.push({ label: 'Next action', detail: worker.nextAction })
+  }
+  lines.push({
+    label: 'Resume',
+    detail:
+      live.engine === 'search'
+        ? 'The run resumes rather than restarts: an existing run folder is re-entered with the climber it started with, so its history stays one run.'
+        : 'The climb resumes from its incumbent commit: reading the status does not run the check, and the next attempt is scored against the incumbent.',
+  })
+  lines.push({
+    label: 'Not in this read',
+    detail: 'the allowance, the repeat count and the spread between runs live in the run’s own log; this view does not guess them.',
+  })
+  return lines
+}
+
+function formatTime(value: string): string {
+  const parsed = parseTime(value)
+  return Number.isFinite(parsed) ? formatWhen(parsed) : value
+}
+
+export interface LineageNode {
+  id: string
+  parent: string | null
+  depth: number
+  row: number
+  label: string
+  score: number | null
+  at: string
+}
+
+export interface Lineage {
+  nodes: LineageNode[]
+  edges: Array<{ from: string; to: string }>
+  depthCount: number
+  rowCount: number
+}
+
+/**
+ * Lay a candidate tree out by descent depth; a missing parent is a root.
+ *
+ * Candidate ids are recording slots and repeat inside one slot, so each
+ * candidate gets its own node id and a parent reference resolves to the first
+ * candidate that carried it. Duplicates are shown, never silently merged.
+ */
+export function lineageGraph(rows: LiveData['rows']): Lineage {
+  const used = new Set<string>()
+  const entries = rows.map((row, index) => {
+    const candidate = used.has(row.id) ? `${row.id}#${index}` : row.id
+    used.add(candidate)
+    return { row, id: candidate }
+  })
+  const firstById = new Map<string, string>()
+  for (const entry of entries) {
+    if (!firstById.has(entry.row.id)) firstById.set(entry.row.id, entry.id)
+  }
+  const byId = new Map(entries.map((entry) => [entry.id, entry]))
+  const parentOf = (entry: (typeof entries)[number]): string | null => {
+    if (entry.row.parent === null) return null
+    return firstById.get(entry.row.parent) ?? null
+  }
+
+  const depth = new Map<string, number>()
+  const resolve = (id: string, seen: Set<string>): number => {
+    const known = depth.get(id)
+    if (known !== undefined) return known
+    if (seen.has(id)) return 0
+    seen.add(id)
+    const entry = byId.get(id)
+    const parent = entry === undefined ? null : parentOf(entry)
+    if (entry === undefined || parent === null) {
+      depth.set(id, 0)
+      return 0
+    }
+    const value = resolve(parent, seen) + 1
+    depth.set(id, value)
+    return value
+  }
+  for (const entry of entries) resolve(entry.id, new Set())
+
+  const perDepth = new Map<number, number>()
+  const nodes: LineageNode[] = entries.map((entry) => {
+    const level = depth.get(entry.id) ?? 0
+    const rowIndex = perDepth.get(level) ?? 0
+    perDepth.set(level, rowIndex + 1)
+    return {
+      id: entry.id,
+      parent: parentOf(entry),
+      depth: level,
+      row: rowIndex,
+      label: entry.row.label,
+      score: entry.row.score,
+      at: entry.row.at,
+    }
+  })
+  const edges = nodes
+    .filter((node): node is LineageNode & { parent: string } => node.parent !== null)
+    .map((node) => ({ from: node.parent, to: node.id }))
+  return {
+    nodes,
+    edges,
+    depthCount: Math.max(...nodes.map((node) => node.depth), 0) + 1,
+    rowCount: Math.max(...nodes.map((node) => node.row), 0) + 1,
+  }
+}
+
+/** The evidence, as text an agent can paste into a message or a PR body. */
+export function evidenceOutput(evidence: Evidence[], outcome: Outcome): string {
+  const head = `${outcome.key} · ${outcome.title} (v${outcome.version})`
+  if (evidence.length === 0) return `${head}\nNo evidence recorded.`
+  const lines: string[] = [head]
+  for (const row of evidence) {
+    const criteria = row.criterionIds.length === 0 ? '—' : row.criterionIds.join(', ')
+    const stale = row.version !== outcome.version ? ' [earlier version]' : ''
+    lines.push(`${row.kind.toUpperCase()} ${criteria} ${formatWhen(Date.parse(row.created.replace(' ', 'T')))}${stale}`)
+    lines.push(`  ${row.text}`)
+    lines.push(`  source: ${row.source} · track: ${row.track}`)
+  }
+  return lines.join('\n')
+}
+
+export function formatScore(score: number | null): string {
+  if (score === null || !Number.isFinite(score)) return '—'
+  return Number.isInteger(score) ? String(score) : String(Math.round(score * 1e6) / 1e6)
+}
+
+function parseTime(value: string): number {
+  const parsed = Date.parse(value.replace(' ', 'T'))
+  return Number.isFinite(parsed) ? parsed : Number.NaN
+}
+
+// ---------------------------------------------------------------------------
+// Chart
+// ---------------------------------------------------------------------------
+
+const CHART = { w: 560, h: 200, l: 52, r: 14, t: 14, b: 26 }
+
+/** A quiet re-read while the Live tab is open. Live data is cheap; a stale chart is not. */
+const LIVE_POLL_MS = 15_000
+
+function LiveChart({ live }: { live: LiveData }): JSX.Element {
+  const points = useMemo(() => {
+    // `id` is the recording slot, and a slot may hold several candidates, so the
+    // React key is positional: duplicate ids must not collapse points away.
+    const usable = live.rows
+      .filter((row): row is typeof row & { score: number } => typeof row.score === 'number')
+      .map((row, index) => ({
+        key: `p${index}`,
+        id: row.id,
+        label: row.label,
+        score: row.score,
+        t: parseTime(row.at),
+        index,
+        at: row.at,
+      }))
+    // Timestamps only order the x-axis when they are all readable and actually
+    // differ. A batch of candidates written in the same second is laid out in
+    // recorded order instead of stacking every point on one x.
+    const allTimed = usable.every((point) => Number.isFinite(point.t))
+    const distinct = new Set(usable.map((point) => point.t)).size
+    const timed = allTimed && distinct > 1
+    return { usable, timed }
+  }, [live.rows])
+
+  const scores = points.usable.map((point) => point.score)
+  const values = [live.baseline, live.best, live.target, ...scores].filter(
+    (value): value is number => typeof value === 'number' && Number.isFinite(value),
+  )
+  if (values.length === 0) {
+    return <p className="hc-empty-note">No scores recorded for this climb yet.</p>
+  }
+  const rawMin = Math.min(...values)
+  const rawMax = Math.max(...values)
+  const pad = rawMin === rawMax ? Math.max(1, Math.abs(rawMin) * 0.1) : (rawMax - rawMin) * 0.08
+  const min = rawMin - pad
+  const max = rawMax + pad
+  const innerW = CHART.w - CHART.l - CHART.r
+  const innerH = CHART.h - CHART.t - CHART.b
+  const y = (value: number): number => CHART.t + innerH - ((value - min) / (max - min)) * innerH
+
+  const xs = points.usable.map((point) => (points.timed ? point.t : point.index))
+  const xMin = Math.min(...xs)
+  const xMax = Math.max(...xs)
+  const x = (value: number): number =>
+    xs.length <= 1 || xMin === xMax ? CHART.l + innerW / 2 : CHART.l + ((value - xMin) / (xMax - xMin)) * innerW
+
+  const ordered = points.usable.slice().sort((a, b) => (points.timed ? a.t - b.t : a.index - b.index))
+  const path =
+    ordered.length === 1
+      ? (() => {
+          const only = ordered[0] as (typeof ordered)[number]
+          const px = x(points.timed ? only.t : only.index)
+          const py = y(only.score)
+          const tick = Math.min(18, innerW / 2)
+          return `M ${px - tick} ${py} L ${px + tick} ${py}`
+        })()
+      : ordered.map((point, index) => `${index === 0 ? 'M' : 'L'} ${x(points.timed ? point.t : point.index)} ${y(point.score)}`).join(' ')
+
+  const rule = (value: number | null, className: string, label: string): JSX.Element | null => {
+    if (value === null || !Number.isFinite(value)) return null
+    const lineY = y(value)
+    return (
+      <g className={className}>
+        <line x1={CHART.l} x2={CHART.w - CHART.r} y1={lineY} y2={lineY} />
+        <text x={CHART.l - 6} y={lineY + 3} textAnchor="end">
+          {label}
+        </text>
+      </g>
+    )
+  }
+
+  return (
+    <figure className="hc-chart-figure">
+      <svg
+        className="hc-chart"
+        viewBox={`0 0 ${CHART.w} ${CHART.h}`}
+        role="img"
+        aria-label={`Score over time. Baseline ${formatScore(live.baseline)}, best ${formatScore(live.best)}, target ${formatScore(live.target)}.`}
+      >
+        <rect className="hc-chart-bg" x={CHART.l} y={CHART.t} width={innerW} height={innerH} />
+        {rule(live.baseline, 'hc-rule hc-rule-baseline', 'base')}
+        {rule(live.target, 'hc-rule hc-rule-target', 'target')}
+        {rule(live.best, 'hc-rule hc-rule-best', 'best')}
+        <text className="hc-axis" x={CHART.l - 6} y={CHART.t + 8} textAnchor="end">
+          {formatScore(max)}
+        </text>
+        <text className="hc-axis" x={CHART.l - 6} y={CHART.t + innerH} textAnchor="end">
+          {formatScore(min)}
+        </text>
+        {ordered.length > 0 ? <path className="hc-chart-line" d={path} /> : null}
+        {ordered.map((point) => {
+          const px = x(points.timed ? point.t : point.index)
+          const py = y(point.score)
+          const best = live.best !== null && point.score === live.best
+          return (
+            <circle key={point.key} className={best ? 'hc-point is-best' : 'hc-point'} cx={px} cy={py} r={best ? 5 : 3}>
+              <title>{`${point.label}: ${formatScore(point.score)} at ${point.at}`}</title>
+            </circle>
+          )
+        })}
+      </svg>
+      <figcaption className="hc-chart-legend">
+        <span>
+          <i className="hc-swatch hc-swatch-baseline" /> baseline {formatScore(live.baseline)}
+        </span>
+        <span>
+          <i className="hc-swatch hc-swatch-best" /> best {formatScore(live.best)}
+        </span>
+        <span>
+          <i className="hc-swatch hc-swatch-target" /> target {formatScore(live.target)}
+        </span>
+        <span className="hc-hint">
+          {inferDirection(live) === 'unknown'
+            ? 'direction not inferable from these two scores'
+            : `${inferDirection(live) === 'max' ? 'higher' : 'lower'} is better`}
+        </span>
+      </figcaption>
+    </figure>
+  )
+}
+
+function LineageGraph({ live }: { live: LiveData }): JSX.Element {
+  const lineage = useMemo(() => lineageGraph(live.rows), [live.rows])
+  if (lineage.nodes.length === 0) {
+    return <p className="hc-empty-note">No candidates yet. Dispatch an engine to start the climb.</p>
+  }
+  const colW = 132
+  const rowH = 34
+  const boxW = 116
+  const boxH = 24
+  const width = Math.max(lineage.depthCount * colW, boxW + 8)
+  const height = Math.max(lineage.rowCount * rowH, rowH)
+  const position = (node: LineageNode): { x: number; y: number } => ({
+    x: node.depth * colW + 4,
+    y: node.row * rowH + 4,
+  })
+  const byId = new Map(lineage.nodes.map((node) => [node.id, node]))
+  return (
+    <div className="hc-lineage-scroll">
+      <svg
+        className="hc-lineage"
+        viewBox={`0 0 ${width} ${height}`}
+        width={width}
+        height={height}
+        role="img"
+        aria-label={`Candidate lineage: ${lineage.nodes.length} candidates`}
+      >
+        {lineage.edges.map((edge) => {
+          const from = byId.get(edge.from)
+          const to = byId.get(edge.to)
+          if (from === undefined || to === undefined) return null
+          const a = position(from)
+          const b = position(to)
+          const x1 = a.x + boxW
+          const y1 = a.y + boxH / 2
+          const x2 = b.x
+          const y2 = b.y + boxH / 2
+          const dx = Math.max(12, (x2 - x1) / 2)
+          return <path key={`${edge.from}→${edge.to}`} className="hc-lineage-edge" d={`M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`} />
+        })}
+        {lineage.nodes.map((node) => {
+          const at = position(node)
+          const best = live.best !== null && node.score === live.best
+          return (
+            <g key={node.id} className={best ? 'hc-lineage-node is-best' : 'hc-lineage-node'} transform={`translate(${at.x} ${at.y})`}>
+              <rect width={boxW} height={boxH} rx={6} />
+              <text x={6} y={boxH / 2 + 4} className="hc-lineage-score">
+                {formatScore(node.score)}
+              </text>
+              <text x={boxW - 6} y={boxH / 2 + 4} textAnchor="end" className="hc-lineage-label">
+                {node.label.length > 12 ? `${node.label.slice(0, 11)}…` : node.label}
+              </text>
+              <title>{`${node.id} · ${node.label} · ${formatScore(node.score)} · parent ${node.parent ?? 'none'}`}</title>
+            </g>
+          )
+        })}
+      </svg>
+    </div>
+  )
+}
+
+export interface EliteGridCell {
+  island: number
+  bins: number[]
+  parent: string | null
+  score: number | null
+  attempts: number
+}
+
+export interface EliteGridRow {
+  island: number
+  /** Cells of one island, in the order the bridge returned them. */
+  cells: EliteGridCell[]
+  /** The grid's extent on each axis, from the recorded bins themselves. */
+  width: number
+  height: number
+  best: number | null
+  worst: number | null
+}
+
+/**
+ * Group the recorded cells by island and give each island its own extent.
+ *
+ * The extent comes from the bins the engine wrote, never from a bin count this
+ * module guessed: a search that recorded `[3, 7]` and `[9, 4]` has a 7-wide,
+ * 4-tall picture even when the selector's own `feature_bins` was different.
+ * A one-dimensional grid is a single row.
+ */
+export function eliteGridRows(cells: EliteGridCell[] | undefined): EliteGridRow[] {
+  const byIsland = new Map<number, EliteGridCell[]>()
+  for (const cell of cells ?? []) {
+    if (cell.bins.length === 0) continue
+    const seen = byIsland.get(cell.island)
+    if (seen === undefined) byIsland.set(cell.island, [cell])
+    else seen.push(cell)
+  }
+  return [...byIsland.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([island, islandCells]) => {
+      const xs = islandCells.map((cell) => cell.bins[0] ?? 0)
+      const ys = islandCells.map((cell) => cell.bins[1] ?? 0)
+      const scores = islandCells.map((cell) => cell.score).filter((score): score is number => score !== null)
+      return {
+        island,
+        cells: islandCells,
+        width: Math.max(1, Math.max(...xs) - Math.min(...xs) + 1),
+        height: Math.max(1, Math.max(...ys) - Math.min(...ys) + 1),
+        best: scores.length === 0 ? null : Math.max(...scores),
+        worst: scores.length === 0 ? null : Math.min(...scores),
+      }
+    })
+}
+
+/** Where a cell sits in a grid drawn at 44px, with its recorded bins as the axes. */
+const ELITE = { cell: 44, gap: 3, label: 30 }
+
+/**
+ * The MAP-Elites cells the search recorded, one grid per island.
+ *
+ * A cell is a bin the engine wrote when it expanded from it
+ * (`climber_meta.cell`), not an archive slot this view reconstructs; the
+ * caption says so, because the live archive lives in the search process and is
+ * never persisted. No cells recorded means an honest empty state.
+ */
+function EliteGrid({ live }: { live: LiveData }): JSX.Element {
+  const rows = useMemo(() => eliteGridRows(live.elite), [live.elite])
+  if (rows.length === 0) {
+    return (
+      <p className="hc-empty-note">
+        {live.engine === 'search'
+          ? 'This search recorded no grid cells. A MAP-Elites climber records them on every candidate built from the archive; greedy does not have a grid.'
+          : 'Only a search climb has a feature grid.'}
+      </p>
+    )
+  }
+  const dimensions = live.search?.featureDimensions ?? null
+  const axis = (index: number): string => {
+    const name = dimensions?.[index]
+    return name === undefined ? `bin ${index + 1}` : name
+  }
+  return (
+    <figure className="hc-elite">
+      {rows.map((row) => {
+        const xs = row.cells.map((cell) => cell.bins[0] ?? 0)
+        const ys = row.cells.map((cell) => cell.bins[1] ?? 0)
+        const minX = Math.min(...xs)
+        const minY = Math.min(...ys)
+        const width = row.width * (ELITE.cell + ELITE.gap) + ELITE.label
+        const height = row.height * (ELITE.cell + ELITE.gap) + ELITE.label
+        const fill = (score: number | null): number => {
+          if (score === null || row.best === null || row.worst === null) return 0.25
+          if (row.best === row.worst) return 0.55
+          return 0.2 + (0.75 * (score - row.worst)) / (row.best - row.worst)
+        }
+        return (
+          <section key={row.island} className="hc-elite-island" aria-label={`Island ${row.island}`}>
+            <figcaption className="hc-hint">
+              island {row.island} · {row.cells.length} recorded cell{row.cells.length === 1 ? '' : 's'}
+            </figcaption>
+            <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height} role="img" aria-label={`Island ${row.island}: ${row.cells.length} recorded cells`}>
+              <text x={0} y={ELITE.label - 10} className="hc-elite-axis">
+                {axis(1)}↑
+              </text>
+              <text x={ELITE.label} y={height - 4} className="hc-elite-axis">
+                {axis(0)}→
+              </text>
+              {row.cells.map((cell) => {
+                const x = ELITE.label + ((cell.bins[0] ?? 0) - minX) * (ELITE.cell + ELITE.gap)
+                const y = ELITE.label + (row.height - 1 - ((cell.bins[1] ?? 0) - minY)) * (ELITE.cell + ELITE.gap)
+                const best = live.best !== null && cell.score === live.best
+                return (
+                  <g key={`${cell.island}:${cell.bins.join(',')}`} transform={`translate(${x} ${y})`} className={best ? 'hc-elite-cell is-best' : 'hc-elite-cell'}>
+                    <rect width={ELITE.cell} height={ELITE.cell} rx={5} fillOpacity={fill(cell.score)} />
+                    <text x={ELITE.cell / 2} y={ELITE.cell / 2 + 4} textAnchor="middle" className="hc-elite-score">
+                      {formatScore(cell.score)}
+                    </text>
+                    <title>{`island ${cell.island} · cell [${cell.bins.join(', ')}] · parent ${cell.parent ?? 'unknown'} · ${formatScore(cell.score)} · ${cell.attempts} attempt${cell.attempts === 1 ? '' : 's'} recorded here`}</title>
+                  </g>
+                )
+              })}
+              <text x={ELITE.label - 6} y={ELITE.label - 10} className="hc-elite-axis" textAnchor="end">
+                {Math.max(...ys)}
+              </text>
+            </svg>
+          </section>
+        )
+      })}
+      <figcaption className="hc-hint">
+        Cells the engine journaled when it expanded from them (<code>climber_meta.cell</code>), best parent per cell.
+        {dimensions === null ? ' Axes are the recorded bins: this search did not record its feature dimensions.' : ''}
+      </figcaption>
+    </figure>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Drawer pieces
+// ---------------------------------------------------------------------------
+
+interface DrawerChangeProps {
+  change: Change
+  current: Contract
+  act: (action: Action) => Promise<void>
+  onError: (message: string) => void
+}
+
+function ChangeCard({ change, current, act, onError }: DrawerChangeProps): JSX.Element {
+  const [busy, setBusy] = useState(false)
+  const rows = useMemo(() => contractDiff(current, change.proposed), [current, change.proposed])
+  const changed = rows.filter((row) => row.kind !== 'same')
+  const run = async (action: Action): Promise<void> => {
+    setBusy(true)
+    try {
+      await act(action)
+    } catch (thrown) {
+      onError(thrown instanceof Error ? thrown.message : String(thrown))
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <article className={`hc-change hc-change-${change.state}`} aria-label={`Proposal ${change.id}`}>
+      <header className="hc-change-head">
+        <code>{change.id}</code>
+        <span className={`hc-badge hc-change-state-${change.state}`}>{change.state}</span>
+        <span className="hc-hint">
+          base v{change.baseVersion} · {formatWhen(parseTime(change.created))}
+        </span>
+      </header>
+      {changed.length === 0 ? (
+        <p className="hc-hint">Identical to the current contract.</p>
+      ) : (
+        <table className="hc-diff">
+          <caption className="hc-sr-only">Proposed changes</caption>
+          <tbody>
+            {changed.map((row) => (
+              <tr key={row.label} className={`hc-diff-${row.kind}`}>
+                <th scope="row">{row.label}</th>
+                <td>
+                  {row.before === null ? <span className="hc-hint">—</span> : <del>{row.before}</del>}
+                  {row.after === null ? null : <ins>{row.after}</ins>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {change.state === 'pending' ? (
+        <div className="hc-row-actions">
+          <button type="button" className="hc-btn hc-btn-primary" disabled={busy} onClick={() => void run({ op: 'approve_change', id: change.id })}>
+            Approve
+          </button>
+          <button type="button" className="hc-btn" disabled={busy} onClick={() => void run({ op: 'reject_change', id: change.id })}>
+            Not yet
+          </button>
+        </div>
+      ) : null}
+    </article>
+  )
+}
+
+interface EditFormProps {
+  outcome: Outcome
+  act: (action: Action) => Promise<void>
+  onError: (message: string) => void
+  onDone: () => void
+}
+
+function EditProposal({ outcome, act, onError, onDone }: EditFormProps): JSX.Element {
+  const [draft, setDraft] = useState<Contract>(() => contractOf(outcome))
+  const [version, setVersion] = useState(String(outcome.version + 1))
+  const [busy, setBusy] = useState(false)
+  const versionValue = Number(version)
+
+  const submit = async (event: FormEvent): Promise<void> => {
+    event.preventDefault()
+    if (!Number.isInteger(versionValue) || versionValue < 1) {
+      onError('A proposed version must be a whole number, 1 or more.')
+      return
+    }
+    if (draft.criteria.length === 0) {
+      onError('An outcome needs at least one criterion.')
+      return
+    }
+    if (draft.criteria.some((row) => row.given.trim() === '' || row.when.trim() === '' || row.then.trim() === '')) {
+      onError('Every criterion needs a given, a when and a then.')
+      return
+    }
+    setBusy(true)
+    try {
+      await act({
+        op: 'propose_change',
+        key: outcome.key,
+        version: versionValue,
+        contract: {
+          title: draft.title.trim(),
+          story: draft.story.trim(),
+          criteria: draft.criteria.map((row) => ({
+            id: row.id.trim(),
+            given: row.given.trim(),
+            when: row.when.trim(),
+            then: row.then.trim(),
+          })),
+          dependsOn: draft.dependsOn,
+          rank: draft.rank,
+          recheckDays: draft.recheckDays,
+        },
+      })
+      onDone()
+    } catch (thrown) {
+      onError(thrown instanceof Error ? thrown.message : String(thrown))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <form className="hc-edit" onSubmit={(event) => void submit(event)} aria-label="Propose an edit">
+      <div className="hc-field">
+        <label htmlFor="hc-edit-title">Title</label>
+        <input id="hc-edit-title" value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} required />
+      </div>
+      <div className="hc-field">
+        <label htmlFor="hc-edit-story">Story</label>
+        <textarea id="hc-edit-story" rows={2} value={draft.story} onChange={(event) => setDraft({ ...draft, story: event.target.value })} required />
+      </div>
+      <fieldset className="hc-criteria-edit">
+        <legend>Criteria</legend>
+        {draft.criteria.map((row, index) => (
+          <div className="hc-criterion-draft" key={`${row.id}-${index}`}>
+            <input
+              aria-label={`Criterion ${index + 1} id`}
+              className="hc-criterion-id"
+              value={row.id}
+              onChange={(event) => {
+                const next = draft.criteria.slice()
+                next[index] = { ...row, id: event.target.value }
+                setDraft({ ...draft, criteria: next })
+              }}
+              required
+            />
+            <input
+              aria-label={`Criterion ${index + 1} given`}
+              value={row.given}
+              onChange={(event) => {
+                const next = draft.criteria.slice()
+                next[index] = { ...row, given: event.target.value }
+                setDraft({ ...draft, criteria: next })
+              }}
+              required
+            />
+            <input
+              aria-label={`Criterion ${index + 1} when`}
+              value={row.when}
+              onChange={(event) => {
+                const next = draft.criteria.slice()
+                next[index] = { ...row, when: event.target.value }
+                setDraft({ ...draft, criteria: next })
+              }}
+              required
+            />
+            <input
+              aria-label={`Criterion ${index + 1} then`}
+              value={row.then}
+              onChange={(event) => {
+                const next = draft.criteria.slice()
+                next[index] = { ...row, then: event.target.value }
+                setDraft({ ...draft, criteria: next })
+              }}
+              required
+            />
+            <button
+              type="button"
+              className="hc-icon-btn"
+              aria-label={`Remove criterion ${index + 1}`}
+              disabled={draft.criteria.length === 1}
+              onClick={() => setDraft({ ...draft, criteria: draft.criteria.filter((_, at) => at !== index) })}
+            >
+              ×
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          className="hc-btn"
+          onClick={() =>
+            setDraft({
+              ...draft,
+              criteria: [...draft.criteria, { id: `ac${draft.criteria.length + 1}`, given: '', when: '', then: '' }],
+            })
+          }
+        >
+          Add criterion
+        </button>
+      </fieldset>
+      <div className="hc-field hc-field-row">
+        <label htmlFor="hc-edit-rank">Rank</label>
+        <input
+          id="hc-edit-rank"
+          type="number"
+          min={0}
+          step={1}
+          value={draft.rank}
+          onChange={(event) => setDraft({ ...draft, rank: Number(event.target.value) })}
+        />
+        <label htmlFor="hc-edit-recheck">Recheck (days)</label>
+        <input
+          id="hc-edit-recheck"
+          type="number"
+          min={1}
+          step={1}
+          value={draft.recheckDays ?? ''}
+          placeholder="never"
+          onChange={(event) =>
+            setDraft({ ...draft, recheckDays: event.target.value.trim() === '' ? null : Number(event.target.value) })
+          }
+        />
+      </div>
+      <div className="hc-field">
+        <label htmlFor="hc-edit-depends">Depends on (comma-separated keys)</label>
+        <input
+          id="hc-edit-depends"
+          value={draft.dependsOn.join(', ')}
+          onChange={(event) =>
+            setDraft({
+              ...draft,
+              dependsOn: event.target.value
+                .split(',')
+                .map((part) => part.trim())
+                .filter((part) => part !== ''),
+            })
+          }
+        />
+      </div>
+      <div className="hc-row-actions">
+        <label className="hc-field-inline" htmlFor="hc-edit-version">
+          Proposed version
+          <input
+            id="hc-edit-version"
+            type="number"
+            min={1}
+            step={1}
+            value={version}
+            onChange={(event) => setVersion(event.target.value)}
+          />
+        </label>
+        <button type="submit" className="hc-btn hc-btn-primary" disabled={busy}>
+          {busy ? 'Proposing…' : 'Propose change'}
+        </button>
+        <button type="button" className="hc-btn" onClick={onDone} disabled={busy}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  )
+}
+
+interface CommentThreadProps {
+  comment: Comment
+  replies: Comment[]
+  act: (action: Action) => Promise<void>
+  onError: (message: string) => void
+}
+
+function CommentNode({ comment, replies, act, onError }: CommentThreadProps): JSX.Element {
+  const [answering, setAnswering] = useState(false)
+  const [reply, setReply] = useState('')
+  const [replying, setReplying] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  const run = async (action: Action): Promise<void> => {
+    setBusy(true)
+    try {
+      await act(action)
+      setReplying(false)
+      setReply('')
+    } catch (thrown) {
+      onError(thrown instanceof Error ? thrown.message : String(thrown))
+    } finally {
+      setBusy(false)
+      setAnswering(false)
+    }
+  }
+
+  return (
+    <li className={`hc-comment${comment.answer !== null ? ' is-answered' : ''}`}>
+      <div className="hc-comment-body">
+        <p className="hc-comment-text">{comment.text}</p>
+        <p className="hc-hint">
+          {formatWhen(parseTime(comment.created))}
+          {comment.answer !== null ? ` · answered: ${comment.answer}` : ''}
+        </p>
+        {comment.options.length > 0 ? (
+          <div className="hc-row-actions" role="group" aria-label="Answer with an option">
+            {comment.options.map((option) => (
+              <button
+                key={option}
+                type="button"
+                className={`hc-chip${comment.answer === option ? ' is-active' : ''}`}
+                aria-pressed={comment.answer === option}
+                disabled={busy || comment.answer !== null}
+                onClick={() => void run({ op: 'answer', id: comment.id, answer: option })}
+              >
+                {option}
+              </button>
+            ))}
+            {comment.answer === null ? (
+              <button type="button" className="hc-link" onClick={() => setAnswering(!answering)}>
+                {answering ? 'Cancel' : 'Answer in my own words'}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+        {answering && comment.answer === null ? (
+          <form
+            className="hc-inline-form"
+            onSubmit={(event) => {
+              event.preventDefault()
+              const value = new FormData(event.currentTarget).get('answer')
+              if (typeof value === 'string' && value.trim() !== '') {
+                void run({ op: 'answer', id: comment.id, answer: value.trim() })
+              }
+            }}
+          >
+            <input name="answer" aria-label="Your answer" placeholder="Your answer" required />
+            <button type="submit" className="hc-btn hc-btn-primary" disabled={busy}>
+              Answer
+            </button>
+          </form>
+        ) : null}
+        {replying ? (
+          <form
+            className="hc-inline-form"
+            onSubmit={(event) => {
+              event.preventDefault()
+              if (reply.trim() === '') return
+              void run({ op: 'comment', key: comment.key, text: reply.trim(), options: [], parentId: comment.id })
+            }}
+          >
+            <input value={reply} onChange={(event) => setReply(event.target.value)} aria-label="Reply" placeholder="Reply" required />
+            <button type="submit" className="hc-btn hc-btn-primary" disabled={busy}>
+              Reply
+            </button>
+          </form>
+        ) : (
+          <button type="button" className="hc-link" onClick={() => setReplying(true)}>
+            Reply
+          </button>
+        )}
+      </div>
+      {replies.length > 0 ? (
+        <ul className="hc-comment-children">
+          {replies.map((child) => (
+            <CommentNode
+              key={child.id}
+              comment={child}
+              replies={replies.filter((row) => row.parentId === child.id)}
+              act={act}
+              onError={onError}
+            />
+          ))}
+        </ul>
+      ) : null}
+    </li>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Drawer
+// ---------------------------------------------------------------------------
+
+type DrawerTab = 'contract' | 'live' | 'evidence' | 'plan' | 'discussion'
+
+const TABS: Array<{ id: DrawerTab; label: string }> = [
+  { id: 'contract', label: 'Contract' },
+  { id: 'live', label: 'Live' },
+  { id: 'evidence', label: 'Evidence' },
+  { id: 'plan', label: 'Plan' },
+  { id: 'discussion', label: 'Discussion' },
+]
+
+export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
+  const { data, track, selected, select, act, dispatch, live } = props
+  const outcome = useMemo(
+    () => (selected === null ? undefined : data.outcomes.find((row) => row.key === selected)),
+    [data.outcomes, selected],
+  )
+  const goal = useMemo(
+    () => (selected === null ? undefined : data.goals.find((row) => row.key === selected)),
+    [data.goals, selected],
+  )
+  const ranked = useMemo(
+    () => (selected === null ? undefined : data.ranked.find((row) => row.key === selected)),
+    [data.ranked, selected],
+  )
+
+  const [tab, setTab] = useState<DrawerTab>('contract')
+  const [error, setError] = useState<string | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [liveData, setLiveData] = useState<LiveData | null>(null)
+  const [liveLoading, setLiveLoading] = useState(false)
+  const [liveError, setLiveError] = useState<string | null>(null)
+  const [engine, setEngine] = useState<'repo' | 'search'>('repo')
+  const [dispatching, setDispatching] = useState(false)
+  const [dispatchNote, setDispatchNote] = useState<string | null>(null)
+  const [configuring, setConfiguring] = useState(false)
+  const [configureError, setConfigureError] = useState<string | null>(null)
+  const [planDraft, setPlanDraft] = useState('')
+  const isOutcome = data.outcomes.some((row) => row.key === selected)
+  const [reply, setReply] = useState('')
+
+  const liveRef = useRef(live)
+  liveRef.current = live
+  const dispatchRef = useRef(dispatch)
+  dispatchRef.current = dispatch
+
+  useEffect(() => {
+    setError(null)
+    setEditing(false)
+    setTab('contract')
+    setDispatchNote(null)
+  }, [selected])
+
+  const loadLive = useCallback(async (key: string): Promise<void> => {
+    setLiveLoading(true)
+    try {
+      const next = await liveRef.current(key)
+      setLiveData(next)
+      setLiveError(null)
+      if (next.engine !== null) setEngine(next.engine)
+    } catch (thrown) {
+      setLiveError(thrown instanceof Error ? thrown.message : String(thrown))
+    } finally {
+      setLiveLoading(false)
+    }
+  }, [])
+
+  // One read when the drawer opens, then a quiet poll while the Live tab is the
+  // one on screen. Leaving the tab, changing key or changing track tears the
+  // timer down, so a background drawer never keeps asking.
+  useEffect(() => {
+    if (isOutcome === false || selected === null) {
+      setLiveData(null)
+      setLiveError(null)
+      setLiveLoading(false)
+      return
+    }
+    let alive = true
+    const read = async (quiet: boolean): Promise<void> => {
+      if (!quiet) setLiveLoading(true)
+      try {
+        const next = await liveRef.current(selected)
+        if (!alive) return
+        setLiveData(next)
+        setLiveError(null)
+        if (next.engine !== null) setEngine(next.engine)
+      } catch (thrown) {
+        if (!alive) return
+        setLiveError(thrown instanceof Error ? thrown.message : String(thrown))
+      } finally {
+        if (alive && !quiet) setLiveLoading(false)
+      }
+    }
+    void read(false)
+    if (tab !== 'live') {
+      return () => {
+        alive = false
+      }
+    }
+    const timer = window.setInterval(() => {
+      void read(true)
+    }, LIVE_POLL_MS)
+    return () => {
+      alive = false
+      window.clearInterval(timer)
+    }
+  }, [isOutcome, selected, tab, track])
+
+  const evidenceOnKey = useMemo(
+    () => (selected === null ? [] : data.evidence.filter((row) => row.key === selected)),
+    [data.evidence, selected],
+  )
+  // The drawer is a view of one track: its evidence, its output and its live
+  // climb. Evidence recorded on another track is counted, never silently lost.
+  const evidence = useMemo(
+    () => evidenceOnKey.filter((row) => row.track === track).slice().sort((a, b) => parseTime(b.created) - parseTime(a.created)),
+    [evidenceOnKey, track],
+  )
+  const evidenceElsewhere = evidenceOnKey.length - evidence.length
+  const changes = useMemo(
+    () => (selected === null ? [] : data.changes.filter((row) => row.key === selected).slice().sort((a, b) => parseTime(b.created) - parseTime(a.created))),
+    [data.changes, selected],
+  )
+  const plans = useMemo(
+    () => (selected === null ? [] : data.plans.filter((row) => row.key === selected).slice().sort((a, b) => b.version - a.version)),
+    [data.plans, selected],
+  )
+  const comments = useMemo(
+    () => (selected === null ? [] : data.comments.filter((row) => row.key === selected).slice().sort((a, b) => parseTime(a.created) - parseTime(b.created))),
+    [data.comments, selected],
+  )
+  const childGoals = useMemo(
+    () => (selected === null ? [] : data.goals.filter((row) => row.parentGoalKey === selected).slice().sort((a, b) => a.rank - b.rank)),
+    [data.goals, selected],
+  )
+  const goalOutcomes = useMemo(
+    () => (selected === null ? [] : data.outcomes.filter((row) => row.goalKey === selected).slice().sort(sortOutcomes)),
+    [data.outcomes, selected],
+  )
+
+  if (selected === null) return null
+
+  const current: Contract | null = outcome !== undefined ? contractOf(outcome) : null
+  const pending = changes.filter((row) => row.state === 'pending')
+  const signal = ranked?.signal ?? (selected === null ? 'unverified' : signalOf(data.ranked, selected))
+  const ancestors = ranked?.ancestors ?? []
+  const claim = ranked?.claim ?? null
+  const title = outcome?.title ?? goal?.title ?? selected
+  const version = outcome?.version ?? null
+  const evidenceText = outcome !== undefined ? evidenceOutput(evidence, outcome) : ''
+
+  const run = async (action: Action, clear?: () => void): Promise<void> => {
+    setError(null)
+    try {
+      await act(action)
+      clear?.()
+    } catch (thrown) {
+      setError(thrown instanceof Error ? thrown.message : String(thrown))
+    }
+  }
+
+  // The host owns the editor dialog; this view only asks for it.
+  const configure = props.configure
+
+  const doConfigure = async (): Promise<void> => {
+    if (configure === undefined || outcome === undefined) return
+    setConfiguring(true)
+    setConfigureError(null)
+    try {
+      await configure(outcome.key, engine)
+      setDispatchNote(`Verifier for ${outcome.key} saved. Dispatch when ready.`)
+      await loadLive(outcome.key)
+    } catch (thrown) {
+      setConfigureError(thrown instanceof Error ? thrown.message : String(thrown))
+    } finally {
+      setConfiguring(false)
+    }
+  }
+
+  const doDispatch = async (): Promise<void> => {
+    if (outcome === undefined) return
+    setDispatching(true)
+    setDispatchNote(null)
+    setError(null)
+    try {
+      await dispatchRef.current(outcome.key, engine)
+      setDispatchNote(`Dispatched to the ${engine} engine.`)
+      await loadLive(outcome.key)
+    } catch (thrown) {
+      setError(thrown instanceof Error ? thrown.message : String(thrown))
+    } finally {
+      setDispatching(false)
+    }
+  }
+
+  const onTabKey = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
+    const index = TABS.findIndex((row) => row.id === tab)
+    if (event.key === 'ArrowRight') {
+      event.preventDefault()
+      setTab(TABS[(index + 1) % TABS.length]?.id ?? 'contract')
+    } else if (event.key === 'ArrowLeft') {
+      event.preventDefault()
+      setTab(TABS[(index - 1 + TABS.length) % TABS.length]?.id ?? 'contract')
+    }
+  }
+
+  return (
+    <section
+      className="hc-drawer"
+      aria-label={`${outcome === undefined ? 'Goal' : 'Outcome'} ${selected}`}
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape') return
+        const tag = (event.target as HTMLElement).tagName
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+        event.stopPropagation()
+        select(null)
+      }}
+    >
+      <header className="hc-drawer-head">
+        <div className="hc-drawer-title">
+          <p className="hc-crumbs" aria-label="Ancestors">
+            {ancestors.map((ancestor: Goal) => (
+              <span key={ancestor.key}>
+                <button type="button" className="hc-link" onClick={() => select(ancestor.key)}>
+                  {ancestor.title}
+                </button>
+                <span aria-hidden="true"> / </span>
+              </span>
+            ))}
+            <code>{selected}</code>
+          </p>
+          <h2>{title}</h2>
+          <p className="hc-drawer-meta">
+            <span className={`hc-badge hc-signal-${signal}`}>{signal}</span>
+            {version !== null ? <span>v{version}</span> : null}
+            {ranked !== undefined ? <span>rank {ranked.effectiveRank}</span> : null}
+            {claim !== null ? (
+              <span className="hc-claim">
+                claimed by <code>{claim.threadId}</code> until {formatWhen(parseTime(claim.expires))}
+              </span>
+            ) : null}
+            {pending.length > 0 ? <span className="hc-chip hc-chip-warn">{pending.length} proposed</span> : null}
+          </p>
+        </div>
+        <div className="hc-drawer-actions">
+          <button type="button" className="hc-icon-btn" onClick={() => select(null)} aria-label="Close the drawer">
+            ×
+          </button>
+        </div>
+      </header>
+
+      {error !== null ? (
+        <p className="hc-error hc-drawer-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+
+      <div className="hc-tabs" role="tablist" aria-label="Sections" onKeyDown={onTabKey}>
+        {TABS.map((row) => (
+          <button
+            key={row.id}
+            type="button"
+            role="tab"
+            aria-label={row.label}
+            id={`hc-tab-${row.id}`}
+            aria-selected={tab === row.id}
+            aria-controls={`hc-panel-${row.id}`}
+            tabIndex={tab === row.id ? 0 : -1}
+            className={tab === row.id ? 'hc-tab is-active' : 'hc-tab'}
+            onClick={() => setTab(row.id)}
+          >
+            {row.label}
+            {row.id === 'evidence' && evidence.length > 0 ? <span className="hc-tab-count">{evidence.length}</span> : null}
+            {row.id === 'plan' && plans.length > 0 ? <span className="hc-tab-count">{plans.length}</span> : null}
+            {row.id === 'discussion' && comments.length > 0 ? <span className="hc-tab-count">{comments.length}</span> : null}
+          </button>
+        ))}
+      </div>
+
+      <div className="hc-drawer-body">
+        {tab === 'contract' ? (
+          <div role="tabpanel" id="hc-panel-contract" aria-labelledby="hc-tab-contract" className="hc-panel">
+            {outcome !== undefined && current !== null ? (
+              <>
+                <section className="hc-section" aria-label="Contract">
+                  <header className="hc-section-head">
+                    <h3>Contract</h3>
+                    <button type="button" className="hc-btn" onClick={() => setEditing(!editing)} aria-expanded={editing}>
+                      {editing ? 'Cancel edit' : 'Edit'}
+                    </button>
+                  </header>
+                  <p className="hc-story">{outcome.story}</p>
+                  <ol className="hc-criteria">
+                    {outcome.criteria.map((row) => (
+                      <li key={row.id}>
+                        <code className="hc-criterion-key">{row.id}</code>
+                        <dl>
+                          <dt>Given</dt>
+                          <dd>{row.given}</dd>
+                          <dt>When</dt>
+                          <dd>{row.when}</dd>
+                          <dt>Then</dt>
+                          <dd>{row.then}</dd>
+                        </dl>
+                      </li>
+                    ))}
+                  </ol>
+                  <p className="hc-hint">
+                    rank {outcome.rank} · {outcome.dependsOn.length > 0 ? `depends on ${outcome.dependsOn.join(', ')}` : 'no dependencies'} ·{' '}
+                    {outcome.recheckDays === null ? 'no recheck' : `recheck every ${outcome.recheckDays} days`}
+                  </p>
+                  {editing ? (
+                    <EditProposal outcome={outcome} act={act} onError={setError} onDone={() => setEditing(false)} />
+                  ) : null}
+                </section>
+
+                <section className="hc-section" aria-label="Proposals">
+                  <header className="hc-section-head">
+                    <h3>Proposals</h3>
+                    <span className="hc-hint">{pending.length} pending</span>
+                  </header>
+                  {changes.length === 0 ? (
+                    <p className="hc-empty-note">Nobody has proposed a change.</p>
+                  ) : (
+                    changes.map((change) => <ChangeCard key={change.id} change={change} current={current} act={act} onError={setError} />)
+                  )}
+                </section>
+              </>
+            ) : null}
+
+            {goal !== undefined ? (
+              <section className="hc-section" aria-label="Goal">
+                <h3>Brief</h3>
+                <p className="hc-story">{goal.brief}</p>
+                <p className="hc-hint">
+                  rank {goal.rank} · parent {goal.parentGoalKey === null ? 'none' : goal.parentGoalKey}
+                </p>
+                {childGoals.length > 0 ? (
+                  <>
+                    <h4>Sub-goals</h4>
+                    <ul className="hc-key-list">
+                      {childGoals.map((kid) => (
+                        <li key={kid.key}>
+                          <button type="button" className="hc-link" onClick={() => select(kid.key)}>
+                            <code>{kid.key}</code> {kid.title}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                ) : null}
+                <h4>Outcomes</h4>
+                {goalOutcomes.length === 0 ? (
+                  <p className="hc-empty-note">No outcomes under this goal yet.</p>
+                ) : (
+                  <ul className="hc-key-list">
+                    {goalOutcomes.map((row) => (
+                      <li key={row.key}>
+                        <button type="button" className="hc-link" onClick={() => select(row.key)}>
+                          <code>{row.key}</code> {row.title}
+                        </button>
+                        <span className={`hc-badge hc-signal-${signalOf(data.ranked, row.key)}`}>{signalOf(data.ranked, row.key)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            ) : null}
+          </div>
+        ) : null}
+
+        {tab === 'live' && outcome !== undefined ? (
+          <div role="tabpanel" id="hc-panel-live" aria-labelledby="hc-tab-live" className="hc-panel">
+            <section className="hc-section" aria-label="Dispatch">
+              <header className="hc-section-head">
+                <h3>Dispatch</h3>
+                <button type="button" className="hc-btn" onClick={() => void loadLive(outcome.key)} disabled={liveLoading}>
+                  {liveLoading ? 'Reading…' : 'Refresh'}
+                </button>
+              </header>
+              <div className="hc-row-actions" role="group" aria-label="Engine">
+                {(['repo', 'search'] as const).map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    className={`hc-chip${engine === option ? ' is-active' : ''}`}
+                    aria-pressed={engine === option}
+                    onClick={() => setEngine(option)}
+                  >
+                    {option}
+                  </button>
+                ))}
+                {configure === undefined ? null : (
+                  <button type="button" className="hc-btn" onClick={() => void doConfigure()} disabled={configuring}>
+                    {configuring ? 'Opening…' : 'Configure verifier'}
+                  </button>
+                )}
+                <button type="button" className="hc-btn hc-btn-primary" onClick={() => void doDispatch()} disabled={dispatching}>
+                  {dispatching ? 'Dispatching…' : `Dispatch to ${engine}`}
+                </button>
+                {liveData?.engine !== null && liveData?.engine !== undefined ? (
+                  <span className="hc-hint">running on {liveData.engine}</span>
+                ) : null}
+              </div>
+              {liveData !== null && liveData.baseline === null ? (
+                <p className="hc-hint">No verifier has scored this outcome yet. Configure one before dispatching.</p>
+              ) : null}
+              {configureError === null ? null : (
+                <p className="hc-error" role="alert">
+                  Could not open the verifier editor: {configureError}
+                </p>
+              )}
+              {dispatchNote !== null ? (
+                <p className="hc-hint" role="status">
+                  {dispatchNote}
+                </p>
+              ) : null}
+              {liveError !== null ? (
+                <p className="hc-error" role="alert">
+                  {liveError}
+                </p>
+              ) : null}
+            </section>
+
+            {liveData === null ? (
+              <p className="hc-empty-note">{liveLoading ? 'Reading the climb…' : 'No live climb data for this outcome.'}</p>
+            ) : (
+              <>
+                <section className="hc-section" aria-label="Progress and resume">
+                  <header className="hc-section-head">
+                    <h3>Progress</h3>
+                    <span className={`hc-badge hc-verdict-${verdictOf(liveData).kind}`}>{verdictOf(liveData).label}</span>
+                  </header>
+                  <dl className="hc-progress">
+                    {progressLines(liveData).map((line) => (
+                      <div key={line.label}>
+                        <dt>{line.label}</dt>
+                        <dd>{line.detail}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </section>
+
+                <section className="hc-section" aria-label="Scores">
+                  <header className="hc-section-head">
+                    <h3>Score</h3>
+                    <span className="hc-hint">
+                      {formatScore(liveData.baseline)} → {formatScore(liveData.best)}
+                      {liveData.target === null ? '' : ` · target ${formatScore(liveData.target)}`}
+                    </span>
+                  </header>
+                  <LiveChart live={liveData} />
+                  {liveData.holdout !== null ? (
+                    <p className="hc-hint">
+                      Holdout: <code>{liveData.holdout}</code> — never read it again.
+                    </p>
+                  ) : (
+                    <p className="hc-hint">No holdout recorded; nothing catches overfitting to the visible cases.</p>
+                  )}
+                </section>
+
+                <section className="hc-section" aria-label="Candidate lineage">
+                  <h3>Candidates</h3>
+                  {liveData.search !== null && liveData.search !== undefined && liveData.search.count > 1 ? (
+                    <p className="hc-hint">
+                      This run holds {liveData.search.count} searches; these are <code>{liveData.search.id}</code>’s own candidates, not a run-wide tally.
+                    </p>
+                  ) : null}
+                  <LineageGraph live={liveData} />
+                </section>
+
+                <section className="hc-section" aria-label="MAP-Elites grid">
+                  <h3>Feature grid</h3>
+                  <EliteGrid live={liveData} />
+                </section>
+
+                <section className="hc-section" aria-label="Operator stream">
+                  <h3>Operator stream</h3>
+                  {liveData.rows.length === 0 ? (
+                    <p className="hc-empty-note">The climb has not recorded a step.</p>
+                  ) : (
+                    <ol className="hc-stream">
+                      {liveData.rows
+                        .slice()
+                        .sort((a, b) => parseTime(a.at) - parseTime(b.at))
+                        .map((row) => {
+                          const best = liveData.best !== null && row.score === liveData.best
+                          return (
+                            <li key={row.id} className={best ? 'hc-stream-row is-best' : 'hc-stream-row'}>
+                              <span className="hc-stream-when">{formatWhen(parseTime(row.at))}</span>
+                              <code className="hc-stream-id">{row.id}</code>
+                              <span className="hc-stream-label">{row.label}</span>
+                              <span className="hc-stream-score">{formatScore(row.score)}</span>
+                              <span className="hc-stream-parent">{row.parent === null ? 'root' : `← ${row.parent}`}</span>
+                            </li>
+                          )
+                        })}
+                    </ol>
+                  )}
+                </section>
+              </>
+            )}
+          </div>
+        ) : null}
+
+        {tab === 'evidence' && selected !== null ? (
+          <div role="tabpanel" id="hc-panel-evidence" aria-labelledby="hc-tab-evidence" className="hc-panel">
+            <section className="hc-section" aria-label="Record evidence">
+              <h3>Record evidence</h3>
+              {outcome !== undefined ? (
+                <EvidenceForm
+                  outcome={outcome}
+                  track={track}
+                  act={act}
+                  onError={setError}
+                />
+              ) : (
+                <p className="hc-empty-note">Evidence attaches to an outcome.</p>
+              )}
+            </section>
+
+            {outcome !== undefined ? (
+              <section className="hc-section" aria-label="Evidence output">
+                <header className="hc-section-head">
+                  <h3>Output</h3>
+                  <button
+                    type="button"
+                    className="hc-btn"
+                    onClick={() => {
+                      void navigator.clipboard?.writeText(evidenceText).catch(() => setError('The clipboard is not available.'))
+                    }}
+                  >
+                    Copy
+                  </button>
+                </header>
+                <pre className="hc-output" tabIndex={0} aria-label="Evidence as text">
+                  {evidenceText}
+                </pre>
+              </section>
+            ) : null}
+
+            <section className="hc-section" aria-label="Evidence list">
+              <h3>Evidence ({evidence.length})</h3>
+              {evidenceElsewhere > 0 ? (
+                <p className="hc-hint" role="status">
+                  {evidenceElsewhere} more recorded on another track, not shown here.
+                </p>
+              ) : null}
+              {evidence.length === 0 ? (
+                <p className="hc-empty-note">
+                  {evidenceElsewhere > 0 ? `Nothing recorded on track ${track}.` : 'Nothing recorded against this outcome.'}
+                </p>
+              ) : (
+                <ul className="hc-evidence">
+                  {evidence.map((row) => (
+                    <li key={row.id} className={`hc-evidence-row hc-kind-${row.kind}`}>
+                      <div className="hc-evidence-head">
+                        <span className={`hc-badge hc-kind-${row.kind}`}>{row.kind}</span>
+                        <code>{row.key}.v{row.version}</code>
+                        <span className="hc-hint">{formatWhen(parseTime(row.created))}</span>
+                        <span className="hc-hint">track {row.track}</span>
+                        {row.criterionIds.map((id) => (
+                          <span key={id} className="hc-chip">
+                            {id}
+                          </span>
+                        ))}
+                      </div>
+                      <p>{row.text}</p>
+                      <p className="hc-hint">source: {row.source}</p>
+                      {outcome !== undefined && row.version !== outcome.version ? (
+                        <p className="hc-warn">Recorded against an earlier version of this outcome.</p>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </div>
+        ) : null}
+
+        {tab === 'plan' && selected !== null ? (
+          <div role="tabpanel" id="hc-panel-plan" aria-labelledby="hc-tab-plan" className="hc-panel">
+            <section className="hc-section" aria-label="Plans">
+              <h3>Plans</h3>
+              {plans.length === 0 ? (
+                <p className="hc-empty-note">No plan written. Say how you will build this before you start.</p>
+              ) : (
+                plans.map((plan: Plan) => (
+                  <article key={plan.key + plan.version} className="hc-plan">
+                    <header className="hc-plan-head">
+                      <strong>v{plan.version}</strong>
+                      <span className="hc-hint">{formatWhen(parseTime(plan.created))}</span>
+                    </header>
+                    <pre className="hc-plan-body">{plan.body}</pre>
+                  </article>
+                ))
+              )}
+              <form
+                className="hc-plan-form"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  if (planDraft.trim() === '') return
+                  const action: Action =
+                    plans.length === 0
+                      ? { op: 'write_plan', key: selected, body: planDraft.trim() }
+                      : { op: 'revise_plan', key: selected, version: (plans[0]?.version ?? 0) + 1, body: planDraft.trim() }
+                  void run(action, () => setPlanDraft(''))
+                }}
+              >
+                <label htmlFor="hc-plan-draft">{plans.length === 0 ? 'Write a plan' : 'Revise the plan'}</label>
+                <textarea
+                  id="hc-plan-draft"
+                  rows={5}
+                  value={planDraft}
+                  onChange={(event) => setPlanDraft(event.target.value)}
+                  placeholder="What you will change, and what proves it."
+                />
+                <button type="submit" className="hc-btn hc-btn-primary" disabled={planDraft.trim() === ''}>
+                  {plans.length === 0 ? 'Write plan' : `Save v${(plans[0]?.version ?? 0) + 1}`}
+                </button>
+              </form>
+            </section>
+          </div>
+        ) : null}
+
+        {tab === 'discussion' && selected !== null ? (
+          <div role="tabpanel" id="hc-panel-discussion" aria-labelledby="hc-tab-discussion" className="hc-panel">
+            <section className="hc-section" aria-label="Discussion">
+              <h3>Discussion</h3>
+              {comments.length === 0 ? (
+                <p className="hc-empty-note">No questions on this key.</p>
+              ) : (
+                <ul className="hc-comments">
+                  {comments
+                    .filter((row) => row.parentId === null || !comments.some((other) => other.id === row.parentId))
+                    .map((row) => (
+                      <CommentNode
+                        key={row.id}
+                        comment={row}
+                        replies={comments.filter((other) => other.parentId === row.id)}
+                        act={act}
+                        onError={setError}
+                      />
+                    ))}
+                </ul>
+              )}
+              <form
+                className="hc-plan-form"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  if (reply.trim() === '') return
+                  void run({ op: 'comment', key: selected, text: reply.trim(), options: [], parentId: null }, () => setReply(''))
+                }}
+              >
+                <label htmlFor="hc-reply">Ask or say something</label>
+                <textarea id="hc-reply" rows={3} value={reply} onChange={(event) => setReply(event.target.value)} />
+                <button type="submit" className="hc-btn hc-btn-primary" disabled={reply.trim() === ''}>
+                  Comment
+                </button>
+              </form>
+            </section>
+          </div>
+        ) : null}
+      </div>
+    </section>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Evidence form
+// ---------------------------------------------------------------------------
+
+interface EvidenceFormProps {
+  outcome: Outcome
+  track: string
+  act: (action: Action) => Promise<void>
+  onError: (message: string) => void
+}
+
+function EvidenceForm({ outcome, track, act, onError }: EvidenceFormProps): JSX.Element {
+  const [kind, setKind] = useState<'confirms' | 'denies' | 'note'>('confirms')
+  const [criterionIds, setCriterionIds] = useState<string[]>(() => outcome.criteria.map((row) => row.id))
+  const [text, setText] = useState('')
+  const [source, setSource] = useState('')
+  const [trackValue, setTrackValue] = useState(track)
+  const [busy, setBusy] = useState(false)
+
+  const submit = async (event: FormEvent): Promise<void> => {
+    event.preventDefault()
+    if (text.trim() === '' || source.trim() === '') {
+      onError('Evidence needs a result and a source.')
+      return
+    }
+    setBusy(true)
+    try {
+      await act({
+        op: 'add_evidence',
+        key: outcome.key,
+        version: outcome.version,
+        kind,
+        criterionIds,
+        text: text.trim(),
+        source: source.trim(),
+        track: trackValue.trim() === '' ? track : trackValue.trim(),
+      })
+      setText('')
+      setSource('')
+    } catch (thrown) {
+      onError(thrown instanceof Error ? thrown.message : String(thrown))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <form className="hc-evidence-form" onSubmit={(event) => void submit(event)} aria-label="Record evidence">
+      <div className="hc-field hc-field-row">
+        <label htmlFor="hc-evidence-kind">Kind</label>
+        <select id="hc-evidence-kind" value={kind} onChange={(event) => setKind(event.target.value as typeof kind)}>
+          <option value="confirms">confirms</option>
+          <option value="denies">denies</option>
+          <option value="note">note</option>
+        </select>
+        <label htmlFor="hc-evidence-track">Track</label>
+        <input id="hc-evidence-track" value={trackValue} onChange={(event) => setTrackValue(event.target.value)} />
+      </div>
+      <fieldset className="hc-criteria-pick">
+        <legend>Criteria</legend>
+        {outcome.criteria.map((row) => {
+          const checked = criterionIds.includes(row.id)
+          return (
+            <label key={row.id} className="hc-toggle">
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() =>
+                  setCriterionIds(checked ? criterionIds.filter((id) => id !== row.id) : [...criterionIds, row.id])
+                }
+              />
+              <span>{row.id}</span>
+            </label>
+          )
+        })}
+      </fieldset>
+      <div className="hc-field">
+        <label htmlFor="hc-evidence-text">Result</label>
+        <textarea
+          id="hc-evidence-text"
+          rows={3}
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          placeholder="booking.test.ts passes; the day view renders 80 bookings in 240ms"
+          required
+        />
+      </div>
+      <div className="hc-field">
+        <label htmlFor="hc-evidence-source">Source</label>
+        <input
+          id="hc-evidence-source"
+          value={source}
+          onChange={(event) => setSource(event.target.value)}
+          placeholder="PR #418 · CI run 2191"
+          required
+        />
+      </div>
+      <button type="submit" className="hc-btn hc-btn-primary" disabled={busy}>
+        {busy ? 'Saving…' : 'Add evidence'}
+      </button>
+    </form>
+  )
+}

@@ -1,0 +1,80 @@
+{
+  "id": "correctness",
+  "name": "correctness",
+  "version": "1.0.0",
+  "title": "Correctness or extraction",
+  "summary": "Count the expected cases whose output satisfies an independent oracle. Guards keep coverage, types, genuinely zero answers and error paths honest.",
+  "goal": "Increase the number of expected cases whose output matches the independent oracle without losing coverage, types, zero answers or error paths.",
+  "metric": "cases_correct",
+  "metricLabel": "expected cases correct",
+  "unit": "cases",
+  "scoreMode": "count",
+  "direction": "max",
+  "targetGuidance": "Set the bar one or two cases above the measured baseline. Do not shrink the case set or relax the oracle to reach it.",
+  "check": "python3 {kit}/score.py --manifest {manifest} --candidate {candidate}",
+  "guards": ["coverage", "types", "zero", "error_paths"],
+  "guardDetails": {
+    "coverage": "Every manifest case appears exactly once and every required tag has a case.",
+    "types": "Every output leaf has the oracle's JSON type; a string zero is not a numeric zero.",
+    "zero": "Genuinely zero or empty answers are present and correct.",
+    "error_paths": "Every expected error case is present and returns the expected error."
+  },
+  "holdout": "python3 {kit}/score.py --manifest {manifest} --holdout {holdout} --candidate {candidate}",
+  "data": {
+    "manifest": "cases.json",
+    "holdout": "holdout.json",
+    "sample": true,
+    "label": "SAMPLE FIXTURE — replace with real project cases and expected outputs",
+    "resultFormat": "JSONL or a JSON array; one row per case with case and output or error."
+  },
+  "baseline": {
+    "fixture": "fixtures/sample-good.jsonl",
+    "expected": 5,
+    "valid": true
+  },
+  "knownBad": [
+    {
+      "id": "wrong-total",
+      "fixture": "fixtures/known-bad-wrong.jsonl",
+      "expect": "worse",
+      "reason": "One subtotal is wrong, so the score falls below the baseline."
+    },
+    {
+      "id": "string-zero",
+      "fixture": "fixtures/known-bad-zero.jsonl",
+      "expect": "guard_fail",
+      "guard": "types",
+      "reason": "A zero subtotal is returned as the string '0'; the types guard rejects it."
+    },
+    {
+      "id": "missing-case",
+      "fixture": "fixtures/known-bad-missing.jsonl",
+      "expect": "rejected",
+      "reason": "One manifest case is absent, so the score is not trustworthy."
+    },
+    {
+      "id": "duplicate-case",
+      "fixture": "fixtures/known-bad-duplicate.jsonl",
+      "expect": "rejected",
+      "reason": "A case appears twice, so the count would be inflated."
+    },
+    {
+      "id": "nonfinite",
+      "fixture": "fixtures/known-bad-nonfinite.jsonl",
+      "expect": "rejected",
+      "reason": "A non-finite number cannot be compared to the oracle."
+    },
+    {
+      "id": "incomplete-row",
+      "fixture": "fixtures/known-bad-incomplete.jsonl",
+      "expect": "rejected",
+      "reason": "A row has neither output nor error."
+    }
+  ],
+  "repeats": {
+    "runs": 2,
+    "maxSpread": 0,
+    "why": "The adapter is deterministic; repeated fixture runs must return the same score."
+  },
+  "notes": "The oracle is the manifest's expected value. The candidate never grades itself. A real case set should include at least one zero answer and one error path."
+}

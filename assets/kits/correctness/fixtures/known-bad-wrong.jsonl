@@ -1,0 +1,5 @@
+{"case": "invoice-1001", "output": {"subtotal": 16.0, "currency": "USD"}}
+{"case": "invoice-1002", "output": {"subtotal": 0.01, "currency": "USD"}}
+{"case": "invoice-zero", "output": {"subtotal": 0, "currency": "USD"}}
+{"case": "invoice-bad-total", "error": "total_mismatch"}
+{"case": "invoice-empty", "output": []}

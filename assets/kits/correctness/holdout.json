@@ -1,0 +1,18 @@
+{
+  "kit": "correctness",
+  "sample": true,
+  "label": "SAMPLE HOLDOUT — separate cases for the final check; never use them while tuning",
+  "required_tags": ["money", "zero"],
+  "cases": [
+    {
+      "id": "holdout-invoice-2001",
+      "tag": "money",
+      "expected": {"subtotal": 42.25, "currency": "USD"}
+    },
+    {
+      "id": "holdout-invoice-zero",
+      "tag": "zero",
+      "expected": {"subtotal": 0, "currency": "USD"}
+    }
+  ]
+}

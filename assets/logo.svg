@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Hill Climb">
+  <rect x="12" y="12" width="104" height="104" rx="22" fill="#0F766E" />
+  <path d="M26 92 L50 58 L66 74 L92 40" fill="none" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M76 40 H94 V58" fill="none" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" />
+  <circle cx="50" cy="58" r="5" fill="#99F6E4" />
+  <circle cx="66" cy="74" r="5" fill="#99F6E4" />
+  <circle cx="92" cy="40" r="6" fill="#FFFFFF" />
+</svg>

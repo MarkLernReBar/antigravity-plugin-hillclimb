@@ -1,0 +1,193 @@
+{
+  "kit": "latency-cost",
+  "sample": true,
+  "label": "SAMPLE FIXTURE \u2014 replace with your real workload cases and measured outputs",
+  "unit": "request",
+  "workload": {
+    "requests": 20,
+    "cache": "warm",
+    "notes": "20 representative lookups; declare cold and warm paths separately when users see both."
+  },
+  "cases": [
+    {
+      "id": "lookup-01",
+      "tag": "warm",
+      "input": "sample lookup 1",
+      "expected": {
+        "found": false,
+        "rows": 1
+      }
+    },
+    {
+      "id": "lookup-02",
+      "tag": "warm",
+      "input": "sample lookup 2",
+      "expected": {
+        "found": true,
+        "rows": 2
+      }
+    },
+    {
+      "id": "lookup-03",
+      "tag": "warm",
+      "input": "sample lookup 3",
+      "expected": {
+        "found": false,
+        "rows": 3
+      }
+    },
+    {
+      "id": "lookup-04",
+      "tag": "warm",
+      "input": "sample lookup 4",
+      "expected": {
+        "found": true,
+        "rows": 4
+      }
+    },
+    {
+      "id": "lookup-05",
+      "tag": "warm",
+      "input": "sample lookup 5",
+      "expected": {
+        "found": false,
+        "rows": 5
+      }
+    },
+    {
+      "id": "lookup-06",
+      "tag": "warm",
+      "input": "sample lookup 6",
+      "expected": {
+        "found": true,
+        "rows": 6
+      }
+    },
+    {
+      "id": "lookup-07",
+      "tag": "warm",
+      "input": "sample lookup 7",
+      "expected": {
+        "found": false,
+        "rows": 7
+      }
+    },
+    {
+      "id": "lookup-08",
+      "tag": "warm",
+      "input": "sample lookup 8",
+      "expected": {
+        "found": true,
+        "rows": 8
+      }
+    },
+    {
+      "id": "lookup-09",
+      "tag": "warm",
+      "input": "sample lookup 9",
+      "expected": {
+        "found": false,
+        "rows": 9
+      }
+    },
+    {
+      "id": "lookup-10",
+      "tag": "warm",
+      "input": "sample lookup 10",
+      "expected": {
+        "found": true,
+        "rows": 10
+      }
+    },
+    {
+      "id": "lookup-11",
+      "tag": "cold",
+      "input": "sample lookup 11",
+      "expected": {
+        "found": false,
+        "rows": 11
+      }
+    },
+    {
+      "id": "lookup-12",
+      "tag": "cold",
+      "input": "sample lookup 12",
+      "expected": {
+        "found": true,
+        "rows": 12
+      }
+    },
+    {
+      "id": "lookup-13",
+      "tag": "cold",
+      "input": "sample lookup 13",
+      "expected": {
+        "found": false,
+        "rows": 13
+      }
+    },
+    {
+      "id": "lookup-14",
+      "tag": "cold",
+      "input": "sample lookup 14",
+      "expected": {
+        "found": true,
+        "rows": 14
+      }
+    },
+    {
+      "id": "lookup-15",
+      "tag": "cold",
+      "input": "sample lookup 15",
+      "expected": {
+        "found": false,
+        "rows": 15
+      }
+    },
+    {
+      "id": "lookup-16",
+      "tag": "cold",
+      "input": "sample lookup 16",
+      "expected": {
+        "found": true,
+        "rows": 16
+      }
+    },
+    {
+      "id": "lookup-17",
+      "tag": "cold",
+      "input": "sample lookup 17",
+      "expected": {
+        "found": false,
+        "rows": 17
+      }
+    },
+    {
+      "id": "lookup-18",
+      "tag": "cold",
+      "input": "sample lookup 18",
+      "expected": {
+        "found": true,
+        "rows": 18
+      }
+    },
+    {
+      "id": "lookup-19",
+      "tag": "cold",
+      "input": "sample lookup 19",
+      "expected": {
+        "found": false,
+        "rows": 19
+      }
+    },
+    {
+      "id": "lookup-20",
+      "tag": "cold",
+      "input": "sample lookup 20",
+      "expected": {
+        "found": true,
+        "rows": 20
+      }
+    }
+  ]
+}

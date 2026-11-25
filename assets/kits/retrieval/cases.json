@@ -1,0 +1,75 @@
+{
+  "kit": "retrieval",
+  "sample": true,
+  "label": "SAMPLE FIXTURE \u2014 replace with real queries, judged relevant documents and hard negatives",
+  "project": "acme",
+  "k": 5,
+  "latency_budget_ms": 300,
+  "queries": [
+    {
+      "id": "q-renewal",
+      "text": "renewal policy",
+      "company": "Acme",
+      "relevant": [
+        "doc-renewal"
+      ],
+      "hard_negatives": [
+        "doc-pricing"
+      ]
+    },
+    {
+      "id": "q-pricing",
+      "text": "pricing tiers",
+      "company": "Acme",
+      "relevant": [
+        "doc-pricing"
+      ],
+      "hard_negatives": [
+        "doc-renewal"
+      ]
+    },
+    {
+      "id": "q-support",
+      "text": "support hours",
+      "company": "Acme",
+      "relevant": [
+        "doc-support"
+      ],
+      "hard_negatives": [
+        "doc-support-blog"
+      ]
+    }
+  ],
+  "documents": {
+    "doc-renewal": {
+      "project": "acme",
+      "company": "Acme",
+      "source": "acme.example/renewal"
+    },
+    "doc-pricing": {
+      "project": "acme",
+      "company": "Acme",
+      "source": "acme.example/pricing"
+    },
+    "doc-support": {
+      "project": "acme",
+      "company": "Acme",
+      "source": "acme.example/support"
+    },
+    "doc-support-blog": {
+      "project": "acme",
+      "company": "Acme",
+      "source": "acme.example/blog/support-hours"
+    },
+    "doc-other-project": {
+      "project": "globex",
+      "company": "Globex",
+      "source": "globex.example/pricing"
+    },
+    "doc-other-company": {
+      "project": "acme",
+      "company": "Globex",
+      "source": "globex.example/support"
+    }
+  }
+}

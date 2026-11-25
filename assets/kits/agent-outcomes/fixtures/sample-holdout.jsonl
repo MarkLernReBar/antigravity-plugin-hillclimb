@@ -1,0 +1,4 @@
+{"task": "holdout-task-note", "trial": 1, "claimed": true, "state": {"status": "done"}, "artifact": {"files": ["note.md"], "content": "Account note."}, "effects": [], "cost_usd": 0.05}
+{"task": "holdout-task-note", "trial": 2, "claimed": true, "state": {"status": "done"}, "artifact": {"files": ["note.md"], "content": "Account note."}, "effects": [], "cost_usd": 0.05}
+{"task": "holdout-task-close", "trial": 1, "claimed": true, "state": {"status": "closed"}, "artifact": {"files": ["task.json"], "content": "{\"status\":\"closed\"}"}, "effects": [], "cost_usd": 0.04}
+{"task": "holdout-task-close", "trial": 2, "claimed": true, "state": {"status": "closed"}, "artifact": {"files": ["task.json"], "content": "{\"status\":\"closed\"}"}, "effects": [], "cost_usd": 0.04}

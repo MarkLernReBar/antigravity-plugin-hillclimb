@@ -1,0 +1,36 @@
+{
+  "kit": "agent-outcomes",
+  "sample": true,
+  "label": "SAMPLE HOLDOUT \u2014 separate tasks for the final check",
+  "trials": 2,
+  "cost_budget_usd": 2.0,
+  "tasks": [
+    {
+      "id": "holdout-task-note",
+      "goal": "Write a short account note.",
+      "expect": {
+        "state": {
+          "status": "done"
+        },
+        "contains": [
+          "note"
+        ],
+        "forbidden_effects": [
+          "email_sent"
+        ]
+      }
+    },
+    {
+      "id": "holdout-task-close",
+      "goal": "Close a stale task.",
+      "expect": {
+        "state": {
+          "status": "closed"
+        },
+        "forbidden_effects": [
+          "delete_record"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,101 @@
+{
+  "id": "retrieval",
+  "name": "retrieval",
+  "version": "1.0.0",
+  "title": "Retrieval and ranking",
+  "summary": "Score mean reciprocal rank on judged queries, with guards for project isolation, attribution and latency.",
+  "goal": "Raise MRR on judged queries without leaking another project's documents, attributing another company's page, or exceeding the latency budget.",
+  "metric": "mrr",
+  "metricLabel": "mean reciprocal rank",
+  "unit": "mrr",
+  "scoreMode": "rank",
+  "direction": "max",
+  "targetGuidance": "Set the bar a small fraction of MRR above baseline; one rank improvement on a judged query is a real change.",
+  "check": "python3 {kit}/score.py --manifest {manifest} --candidate {candidate}",
+  "guards": ["completeness", "isolation", "attribution", "latency", "judgments"],
+  "guardDetails": {
+    "completeness": "Every judged query appears exactly once.",
+    "isolation": "No ranked document belongs to another project.",
+    "attribution": "No ranked document belongs to another company; right-company-wrong-source misses are reported in diagnostics.",
+    "latency": "Every row is within the manifest's latency budget.",
+    "judgments": "Hard negatives are not also judged relevant."
+  },
+  "holdout": "python3 {kit}/score.py --manifest {manifest} --holdout {holdout} --candidate {candidate}",
+  "data": {
+    "manifest": "cases.json",
+    "holdout": "holdout.json",
+    "sample": true,
+    "label": "SAMPLE FIXTURE — replace with real judged queries and documents",
+    "result": "JSONL rows: {\"query\": \"...\", \"docs\": [\"doc-id\", ...], \"latency_ms\": 40}"
+  },
+  "baseline": {
+    "fixture": "fixtures/sample-good.jsonl",
+    "expected": 1.0,
+    "valid": true
+  },
+  "knownBad": [
+    {
+      "id": "hard-negative-first",
+      "fixture": "fixtures/known-bad-first.jsonl",
+      "expect": "worse",
+      "reason": "The first document is a hard negative on every query, so MRR falls."
+    },
+    {
+      "id": "right-company-wrong-source",
+      "fixture": "fixtures/known-bad-wrong-source.jsonl",
+      "expect": "worse",
+      "reason": "A same-company page is ranked but not the judged relevant page; MRR falls and diagnostics name the miss."
+    },
+    {
+      "id": "wrong-company",
+      "fixture": "fixtures/known-bad-wrong-company.jsonl",
+      "expect": "guard_fail",
+      "guard": "attribution",
+      "reason": "A document from another company is ranked."
+    },
+    {
+      "id": "cross-project",
+      "fixture": "fixtures/known-bad-cross-project.jsonl",
+      "expect": "guard_fail",
+      "guard": "isolation",
+      "reason": "A document from another project is ranked."
+    },
+    {
+      "id": "slow",
+      "fixture": "fixtures/known-bad-slow.jsonl",
+      "expect": "guard_fail",
+      "guard": "latency",
+      "reason": "The query exceeds the declared latency budget."
+    },
+    {
+      "id": "missing",
+      "fixture": "fixtures/known-bad-missing.jsonl",
+      "expect": "rejected",
+      "reason": "One judged query is absent."
+    },
+    {
+      "id": "duplicate",
+      "fixture": "fixtures/known-bad-duplicate.jsonl",
+      "expect": "rejected",
+      "reason": "One query appears twice."
+    },
+    {
+      "id": "nonfinite",
+      "fixture": "fixtures/known-bad-nonfinite.jsonl",
+      "expect": "rejected",
+      "reason": "Infinity is not a latency measurement."
+    },
+    {
+      "id": "incomplete",
+      "fixture": "fixtures/known-bad-incomplete.jsonl",
+      "expect": "rejected",
+      "reason": "A row has no ranked documents."
+    }
+  ],
+  "repeats": {
+    "runs": 2,
+    "maxSpread": 0,
+    "why": "The adapter is deterministic; repeat real candidate runs to measure noise."
+  },
+  "notes": "The right-company-wrong-source case is a quality miss, not a contract violation. Keep it in the judged set so the score cannot hide it."
+}

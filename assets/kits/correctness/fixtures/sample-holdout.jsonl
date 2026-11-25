@@ -1,0 +1,2 @@
+{"case": "holdout-invoice-2001", "output": {"subtotal": 42.25, "currency": "USD"}}
+{"case": "holdout-invoice-zero", "output": {"subtotal": 0, "currency": "USD"}}

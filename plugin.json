@@ -1,0 +1,12 @@
+{
+  "name": "hillclimb",
+  "displayName": "Hill Climb",
+  "version": "0.3.0",
+  "description": "Rank project outcomes, review contracts, and follow verified progress from repo climbs (climb.py), evolutionary searches (hillclimb.sh), benchmark kits, and equal-budget studies.",
+  "logo": "assets/logo.svg",
+  "suggestedPrompts": [
+    "Open Hill Climb and inspect our ranked outcomes and inbox",
+    "Set up Hill Climb in this repo and help me build a locked check and climb card",
+    "Lint our Hill Climb contract tree against all 22 rubric rules"
+  ]
+}

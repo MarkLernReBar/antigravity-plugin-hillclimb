@@ -1,0 +1,116 @@
+{
+  "id": "tuning",
+  "name": "tuning",
+  "version": "1.1.0",
+  "title": "Numeric tuning and program search",
+  "summary": "Score the selected candidate's validation objective under a declared evaluation allowance. The private holdout is read once, after selection, through a separate final read.",
+  "goal": "Lower the validation objective without leaving the search space, exceeding the allowance, or selecting on holdout results.",
+  "metric": "validation_objective",
+  "metricLabel": "validation objective",
+  "unit": "ms",
+  "scoreMode": "objective",
+  "direction": "min",
+  "targetGuidance": "Set the bar a small fraction below the measured validation baseline; keep validation and holdout instances disjoint and read the holdout once, after selection.",
+  "check": "python3 {kit}/score.py --manifest {manifest} --candidate {candidate}",
+  "guards": [
+    "bounds",
+    "allowance",
+    "no_leakage",
+    "selection",
+    "disjoint"
+  ],
+  "guardDetails": {
+    "bounds": "Every trial's parameters are inside the declared space and no two trials repeat a parameter set.",
+    "allowance": "The trial evaluations stay within the declared allowance.",
+    "no_leakage": "No trial row carries holdout results.",
+    "selection": "The selected trial has the best validation objective.",
+    "disjoint": "Validation and holdout instances do not overlap."
+  },
+  "holdout": "python3 {kit}/score.py --manifest {manifest} --holdout {holdout} --candidate {candidate}",
+  "data": {
+    "manifest": "cases.json",
+    "holdout": "holdout.json",
+    "sample": true,
+    "result": "JSONL rows: trial rows {\"trial\": n, \"params\": {...}, \"validation\": number, \"evaluations\": n} plus one selected row {\"selected\": n, \"params\": {...}, \"evaluations\": n}. The final read adds \"holdout\": {instance: number} to the selected row."
+  },
+  "baseline": {
+    "fixture": "fixtures/sample-good.jsonl",
+    "expected": 11.8
+  },
+  "finalBaseline": {
+    "fixture": "fixtures/sample-final.jsonl",
+    "expected": 11.8
+  },
+  "knownBad": [
+    {
+      "id": "worse-validation",
+      "fixture": "fixtures/known-bad-worse.jsonl",
+      "expect": "worse",
+      "reason": "the selected trial is the best available but its validation objective is worse than the baseline"
+    },
+    {
+      "id": "out-of-bounds",
+      "fixture": "fixtures/known-bad-out-of-bounds.jsonl",
+      "expect": "rejected",
+      "reason": "batch_size 128 is outside the declared space"
+    },
+    {
+      "id": "over-budget",
+      "fixture": "fixtures/known-bad-over-budget.jsonl",
+      "expect": "rejected",
+      "reason": "the trial evaluations exceed the allowance"
+    },
+    {
+      "id": "duplicate-params",
+      "fixture": "fixtures/known-bad-duplicate.jsonl",
+      "expect": "rejected",
+      "reason": "two trials repeat the same parameters"
+    },
+    {
+      "id": "nonfinite",
+      "fixture": "fixtures/known-bad-nonfinite.jsonl",
+      "expect": "rejected",
+      "reason": "a validation objective is Infinity"
+    },
+    {
+      "id": "missing-selected",
+      "fixture": "fixtures/known-bad-missing.jsonl",
+      "expect": "rejected",
+      "reason": "the selected row is missing"
+    },
+    {
+      "id": "mis-selected",
+      "fixture": "fixtures/known-bad-mis-selected.jsonl",
+      "expect": "guard_fail",
+      "guard": "selection",
+      "reason": "the selected trial is not the best validation objective"
+    },
+    {
+      "id": "holdout-leakage",
+      "fixture": "fixtures/known-bad-leakage.jsonl",
+      "expect": "guard_fail",
+      "guard": "no_leakage",
+      "reason": "a trial row carries holdout results"
+    }
+  ],
+  "finalControls": [
+    {
+      "id": "final-incomplete",
+      "fixture": "fixtures/known-bad-final-incomplete.jsonl",
+      "expect": "rejected",
+      "reason": "the selected row does not cover every holdout instance"
+    },
+    {
+      "id": "final-overlap",
+      "fixture": "fixtures/known-bad-final-overlap.jsonl",
+      "expect": "rejected",
+      "reason": "the holdout instances overlap the validation instances"
+    }
+  ],
+  "repeats": {
+    "runs": 2,
+    "maxSpread": 0,
+    "why": "the adapter is deterministic; repeat real tuner runs to measure noise"
+  },
+  "notes": "Selection happens on validation. The final read is separate and run once; it is the only path that reads holdout metrics. Changing the holdout cannot change the visible score."
+}

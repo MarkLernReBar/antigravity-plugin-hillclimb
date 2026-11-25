@@ -1,0 +1,5 @@
+{"case": "holdout-lookup-101", "correct": true, "useful_ms": 6, "output": {"found": false, "rows": 101}}
+{"case": "holdout-lookup-102", "correct": true, "useful_ms": 7, "output": {"found": true, "rows": 102}}
+{"case": "holdout-lookup-103", "correct": true, "useful_ms": 8, "output": {"found": false, "rows": 103}}
+{"case": "holdout-lookup-104", "correct": true, "useful_ms": 9, "output": {"found": true, "rows": 104}}
+{"case": "holdout-lookup-105", "correct": true, "useful_ms": 10, "output": {"found": false, "rows": 105}}
