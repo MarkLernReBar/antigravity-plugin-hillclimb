@@ -12,7 +12,7 @@ Write what the check produces, like screenshots or reports, under
 file on a kept step and deletes it on an undone one. Big inputs, like a copy
 of real data, go under `.hill-climb/<name>/data/`, which kits skip.
 
-`$JUDGE` below is the absolute path of `scripts/judge.py`, next to `climb.py`.
+`$JUDGE` below is the path to `.hill-climb/engine/judge.py`, next to `climb.py`.
 
 ## Exact match: ports, rewrites, clones
 
@@ -85,6 +85,36 @@ list of tests grows as the climb finds bugs:
 
 Keep each step's check to the affected tests, and the full suites as guards.
 
+### Worked example: an audit in twelve lines
+
+The check is written first, from the failures, not from the fix:
+
+```sh
+cat > spec/test_cart.py <<'EOF'          # one failing test per finding, from the spec
+import unittest; from cart import total
+class Findings(unittest.TestCase):
+    def test_empty_cart_is_zero(self): self.assertEqual(total([]), 0)
+    def test_save10_rounds(self):      self.assertEqual(total([19.99, 5], "SAVE10"), 22.49)
+EOF
+
+python3 "$CLIMB" init cart-audit --goal "fix every cart finding" \
+  --check "python3 -m unittest discover -s spec" --score 'failures=(\d+)|errors=(\d+)' \
+  --direction min --target 0 --guard "python3 -m unittest test_old" --lock spec
+#   Baseline 2 (min): the run ends "FAILED (failures=1, errors=1)", and the pattern sums both.
+#   init committed spec/ as the first step on climb/cart-audit.
+
+# one idea, one change, one try:
+$EDITOR cart.py
+python3 "$CLIMB" try "start the sum at zero"
+#   step 1 kept    1 (was 2, start 2)  start the sum at zero
+
+$EDITOR cart.py                            # a change you expect to win
+python3 "$CLIMB" try "tidy the coupon path"
+#   step 2 undone  1 (best 1)  tidy the coupon path      <- undone, and the tree is reset
+
+hillclimb status                        # Score 2 -> 1 (min), bar 0. Steps 2, kept 1, 1 since the last gain.
+```
+
 ## Benchmarks: speed, memory, size
 
 - First see if a count can stand in for the clock. See "Fast checks".
@@ -144,7 +174,7 @@ screenshots of the reference.
 3. **Write the rubric.** Name what to look at and what a 10, 7, and 4 look
    like. Specific beats general. "The save button reads clearly on a dark
    background" beats "it looks good".
-4. **Score with `scripts/judge.py`.** It runs the judges in parallel, takes
+4. **Score with `.hill-climb/engine/judge.py`.** It runs the judges in parallel, takes
    the median, and writes each judge's worst gap and next fix to
    `.hill-climb/judge-notes.md`. Read those notes before every step. They are
    your best source of ideas.
@@ -152,7 +182,7 @@ screenshots of the reference.
 ```sh
 #!/bin/sh
 node scripts/capture-states.js .hill-climb/ui/shots || exit 1
-python3 "$JUDGE" --rubric .hill-climb/ui/rubric.md \
+python3 .hill-climb/engine/judge.py --rubric .hill-climb/ui/rubric.md \
   --candidate .hill-climb/ui/shots --reference refs/ui --rounds 2
 ```
 
@@ -226,5 +256,5 @@ Other wins:
 - Split a slow build so only the changed part rebuilds.
 
 When the check is slow because the machine is busy or small, that is a
-blocker for me. Try every fix you can make first. Then ask with the question
-tool, and say how long steps wait and what would fix it.
+blocker for me. Try every fix you can make first. Then ask with `hillclimb_comment`
+(with `options`) or ask the user directly, and say how long steps wait and what would fix it.

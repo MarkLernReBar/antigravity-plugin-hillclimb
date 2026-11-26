@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
+import { basename, dirname, join, resolve, sep } from "node:path";
 import { homedir } from "node:os";
 import { HillClimbError } from "./errors.js";
 import {
@@ -24,12 +24,16 @@ import {
   number,
   parseCard,
   parseLog,
+  redactSecrets,
   summarize,
   verdictLine,
   type ClimbCard,
   type ClimbFiles,
+  type ClimbSummary,
   type LogRow,
 } from "./state.js";
+
+export { redactSecrets } from "./state.js";
 
 export const ENGINE_COMMANDS = [
   'init <name> --goal "..." --check "<command>" --lock <check files>',
@@ -104,16 +108,6 @@ function hasRealClimbContent(dir: string): boolean {
     return false;
   }
   return false;
-}
-
-/** Mask inline environment secrets (e.g. FOO_TOKEN=abc, API_KEY=xyz) before storing or rendering commands. */
-export function redactSecrets(command: string): string {
-  return command
-    .replace(
-      /\b([A-Z0-9_]*(?:TOKEN|SECRET|KEY|PASSWORD|PASS|CREDENTIAL|AUTH)[A-Z0-9_]*)=("[^"]*"|'[^']*'|[^\s]+)/gi,
-      "$1=<redacted>",
-    )
-    .replace(/\b(Bearer\s+)[A-Za-z0-9._~+/=-]{8,}/g, "$1<redacted>");
 }
 
 export function discoverClimbs(repoPath: string): { climbs: string[]; prepared: string[] } {
@@ -268,6 +262,7 @@ export function installEngine(repoPath: string): {
     wrote.push(path);
   }
 
+  clearScanCache(repoPath);
   return { engine: target, command: climbCommand(repoPath), wrote, exclude, warning };
 }
 
@@ -309,10 +304,10 @@ export function getClimbCard(repoPath: string, name?: string) {
     data: {
       directory: repoPath,
       name: card.name,
-      goal: card.goal,
+      goal: redactSecrets(card.goal),
       branch: card.branch ?? null,
       base: card.base ?? null,
-      check: Array.isArray(card.check) ? card.check : card.check === undefined ? [] : [card.check],
+      check: (Array.isArray(card.check) ? card.check : card.check === undefined ? [] : [card.check]).map(redactSecrets),
       score: card.score ?? [],
       direction: card.direction,
       target: card.target,
@@ -323,8 +318,8 @@ export function getClimbCard(repoPath: string, name?: string) {
       scoreMode: card.score_mode ?? "failure-count",
       minGain: card.min_gain ?? 0,
       timeout: card.timeout ?? null,
-      guards: card.guards ?? [],
-      holdout: card.holdout ?? null,
+      guards: (card.guards ?? []).map(redactSecrets),
+      holdout: card.holdout ? redactSecrets(card.holdout) : null,
       locked: card.lock ?? [],
       fingerprint: card.fingerprint ?? null,
       repos: (card.repos ?? []).map((repo) => repo.path),
@@ -359,7 +354,11 @@ export function getClimbList(repoPath: string) {
 export function getClimbLog(repoPath: string, name?: string, limit = 40) {
   const { name: climbName } = readClimb(repoPath, name);
   const rows = readRows(repoPath, climbName);
-  const slice = rows.slice(-limit);
+  const slice = rows.slice(-limit).map((row) => ({
+    ...row,
+    ...(typeof row.idea === "string" ? { idea: redactSecrets(row.idea) } : {}),
+    ...(typeof row.why === "string" ? { why: redactSecrets(row.why) } : {}),
+  }));
   const text = slice
     .map((row) => {
       const score = typeof row.score === "number" ? number(row.score) : "-";
@@ -379,7 +378,7 @@ export function getClimbNotes(repoPath: string, name?: string): string {
       hint: `Write a few lines after every 5 steps: ${joinPath(stateDir(repoPath), climbName, "notes.md")}`,
     });
   }
-  return notes.text;
+  return redactSecrets(notes.text);
 }
 
 export function getClimbVerdict(repoPath: string, name?: string): string {
@@ -431,6 +430,7 @@ export interface ScannedClimb {
   scoreMode: string | null;
   rows: ScannedClimbRow[];
   notes: string | null;
+  bestCommit: string | null;
   preparedFiles: number;
   preparedSampleFiles: string[];
   updatedAt: string | null;
@@ -443,10 +443,33 @@ export interface ScannedProjectClimbs {
   currentCount: number;
   archivedCount: number;
   climbs: ScannedClimb[];
+  warnings: string[];
 }
 
-function collectSampleFiles(dir: string, limit = 200): { count: number; samples: string[] } {
+function statMtimeMs(path: string): number {
+  try {
+    return statSync(path).mtimeMs;
+  } catch {
+    return 0;
+  }
+}
+
+function statSignature(path: string): { mtimeMs: number; size: number } | null {
+  try {
+    const st = statSync(path);
+    return { mtimeMs: st.mtimeMs, size: st.size };
+  } catch {
+    return null;
+  }
+}
+
+function isEnoent(error: unknown): boolean {
+  return (error as NodeJS.ErrnoException | null)?.code === "ENOENT";
+}
+
+function collectSampleFiles(dir: string, limit = 200): { count: number; samples: string[]; maxMtimeMs: number } {
   let count = 0;
+  let maxMtimeMs = statMtimeMs(dir);
   const samples: string[] = [];
   const stack: Array<{ full: string; rel: string }> = [{ full: dir, rel: "" }];
   while (stack.length > 0 && count < limit) {
@@ -460,15 +483,18 @@ function collectSampleFiles(dir: string, limit = 200): { count: number; samples:
     for (const e of entries) {
       if (count >= limit) break;
       const rel = cur.rel ? `${cur.rel}/${e.name}` : e.name;
+      const fullPath = join(cur.full, e.name);
       if (e.isDirectory()) {
-        if (e.name !== "__pycache__") stack.push({ full: join(cur.full, e.name), rel });
+        if (e.name !== "__pycache__") stack.push({ full: fullPath, rel });
       } else if (e.isFile()) {
         count += 1;
         if (samples.length < 8) samples.push(rel);
+        const mtime = statMtimeMs(fullPath);
+        if (mtime > maxMtimeMs) maxMtimeMs = mtime;
       }
     }
   }
-  return { count, samples };
+  return { count, samples, maxMtimeMs };
 }
 
 function classifyOrigin(dir: string, isMain: boolean): { origin: "antigravity" | "checkout" | "archived"; workerLabel: string } {
@@ -511,9 +537,10 @@ function readWorktreeBranch(dir: string): string | null {
   }
 }
 
-function linkedWorktreesOf(repoPath: string): string[] {
+function linkedWorktreesOf(repoPath: string, warnings: string[]): string[] {
   const seen = new Set<string>();
   const normalizedMain = resolve(repoPath);
+  const expectedGitDir = join(normalizedMain, ".git").replaceAll("\\", "/");
   const add = (candidate: string) => {
     const abs = resolve(candidate);
     if (abs === normalizedMain || seen.has(abs)) return;
@@ -533,8 +560,10 @@ function linkedWorktreesOf(repoPath: string): string[] {
         const wtDir = dirname(resolve(gitWorktreesDir, entry.name, targetGitFile));
         add(wtDir);
       }
-    } catch {
-      // ignore unreadable git worktrees
+    } catch (error) {
+      if (!isEnoent(error)) {
+        warnings.push(`Failed to scan git worktrees in ${gitWorktreesDir}: ${error instanceof Error ? error.message : String(error)}`);
+      }
     }
   }
 
@@ -548,20 +577,26 @@ function linkedWorktreesOf(repoPath: string): string[] {
         for (const wt of readdirSync(convDir, { withFileTypes: true })) {
           if (!wt.isDirectory()) continue;
           const wtPath = join(convDir, wt.name);
+          const absWt = resolve(wtPath);
+          if (absWt === normalizedMain || seen.has(absWt)) continue;
           const dotGit = join(wtPath, ".git");
           try {
             const pointer = readFileSync(dotGit, "utf8").replaceAll("\\", "/");
-            const expectedGitDir = join(normalizedMain, ".git").replaceAll("\\", "/");
             if (pointer.includes(expectedGitDir)) {
               add(wtPath);
             }
-          } catch {
-            continue;
+          } catch (error) {
+            const code = (error as NodeJS.ErrnoException | null)?.code;
+            if (code !== "ENOENT" && code !== "EISDIR") {
+              warnings.push(`Failed to read worktree pointer ${dotGit}: ${error instanceof Error ? error.message : String(error)}`);
+            }
           }
         }
       }
-    } catch {
-      // ignore
+    } catch (error) {
+      if (!isEnoent(error)) {
+        warnings.push(`Failed to scan Antigravity worktrees in ${agyWorktreesRoot}: ${error instanceof Error ? error.message : String(error)}`);
+      }
     }
   }
 
@@ -575,18 +610,121 @@ function conversationIdFromPath(dir: string): string | null {
 }
 
 const SCAN_CACHE_TTL_MS = 4_000;
+const LIVE_RECENCY_MS = 15 * 60 * 1000;
+const CLIMB_STAT_MEMO_MAX = 500;
 const scanCache = new Map<string, { at: number; value: ScannedProjectClimbs }>();
+const climbStatMemo = new Map<
+  string,
+  {
+    cardMtimeMs: number;
+    cardSize: number;
+    logMtimeMs: number;
+    logSize: number;
+    card: ClimbCard;
+    rows: LogRow[];
+    summary: ClimbSummary;
+    checks: string[];
+  }
+>();
+
+function safeRealpath(path: string): string | null {
+  try {
+    return realpathSync(path);
+  } catch {
+    return null;
+  }
+}
+
+function mainCheckoutOf(dir: string): string | null {
+  try {
+    const dotGit = join(dir, ".git");
+    if (!existsSync(dotGit)) return null;
+    const st = statSync(dotGit);
+    if (st.isDirectory()) return resolve(dir);
+    if (!st.isFile()) return null;
+    const pointer = readFileSync(dotGit, "utf8");
+    const m = /^gitdir:\s*(.+)$/m.exec(pointer);
+    if (!m?.[1]) return null;
+    const gitDir = resolve(dir, m[1].trim());
+    const commonDirPath = join(gitDir, "commondir");
+    if (existsSync(commonDirPath)) {
+      const relCommon = readFileSync(commonDirPath, "utf8").trim();
+      if (relCommon) {
+        const commonGitDir = resolve(gitDir, relCommon);
+        return dirname(commonGitDir);
+      }
+    }
+    const norm = gitDir.replaceAll("\\", "/");
+    const idx = norm.lastIndexOf("/.git/worktrees/");
+    if (idx > 0) return resolve(norm.slice(0, idx));
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 export function clearScanCache(repoPath?: string): void {
-  if (!repoPath) scanCache.clear();
-  else scanCache.delete(resolve(repoPath));
+  if (!repoPath) {
+    scanCache.clear();
+    climbStatMemo.clear();
+    return;
+  }
+  const abs = resolve(repoPath);
+  const mainCheckout = mainCheckoutOf(abs);
+  if (!mainCheckout) {
+    // Ambiguous or non-git path: clear all scan/stat caches to avoid stale entries.
+    scanCache.clear();
+    climbStatMemo.clear();
+    return;
+  }
+  const targets = new Set<string>([abs, resolve(mainCheckout)]);
+  for (const p of [abs, resolve(mainCheckout)]) {
+    const real = safeRealpath(p);
+    if (real) targets.add(real);
+  }
+  for (const key of scanCache.keys()) {
+    const sepIdx = key.indexOf("|");
+    const keyRoot = sepIdx >= 0 ? key.slice(0, sepIdx) : key;
+    if (targets.has(keyRoot)) {
+      scanCache.delete(key);
+      continue;
+    }
+    const realKeyRoot = safeRealpath(keyRoot);
+    if (realKeyRoot && targets.has(realKeyRoot)) {
+      scanCache.delete(key);
+    }
+  }
+  // Clear per-climb stat memo entries under both the given worktree and its main checkout.
+  const isUnderTargets = (candidate: string): boolean => {
+    for (const target of targets) {
+      if (candidate === target || candidate.startsWith(`${target}${sep}`)) return true;
+    }
+    return false;
+  };
+  for (const climbDir of climbStatMemo.keys()) {
+    if (isUnderTargets(climbDir)) {
+      climbStatMemo.delete(climbDir);
+      continue;
+    }
+    const realClimbDir = safeRealpath(climbDir);
+    if (realClimbDir && isUnderTargets(realClimbDir)) {
+      climbStatMemo.delete(climbDir);
+    }
+  }
+}
+
+export interface ScanProjectClimbsOptions {
+  force?: boolean;
+  bypassCache?: boolean;
+  rowLimit?: number;
+  includeNotes?: boolean;
 }
 
 /**
  * Scan the project's main checkout AND all linked git worktrees (including Antigravity swarm worktrees)
- * for active and prepared `.hill-climb/` runs. Uses a short TTL cache unless `force: true`.
+ * for active and prepared `.hill-climb/` runs. Uses a short TTL cache unless `force`/`bypassCache` is true.
  */
-export function scanProjectClimbs(repoPath: string | null, opts?: { force?: boolean }): ScannedProjectClimbs {
+export function scanProjectClimbs(repoPath: string | null, opts?: ScanProjectClimbsOptions): ScannedProjectClimbs {
   if (!repoPath || !existsSync(repoPath)) {
     return {
       projectDirectory: repoPath,
@@ -595,23 +733,36 @@ export function scanProjectClimbs(repoPath: string | null, opts?: { force?: bool
       currentCount: 0,
       archivedCount: 0,
       climbs: [],
+      warnings: [],
     };
   }
   const normalizedMain = resolve(repoPath);
-  if (!opts?.force) {
-    const cached = scanCache.get(normalizedMain);
-    if (cached && Date.now() - cached.at < SCAN_CACHE_TTL_MS) {
+  const bypassCache = Boolean(opts?.bypassCache || opts?.force);
+  const rowLimit = opts?.rowLimit === undefined ? 50 : Math.max(0, Math.floor(opts.rowLimit));
+  const includeNotes = opts?.includeNotes ?? true;
+  const cacheKey = `${normalizedMain}|${rowLimit}|${includeNotes ? 1 : 0}`;
+  const nowMs = Date.now();
+
+  if (!bypassCache) {
+    const cached = scanCache.get(cacheKey);
+    if (cached && nowMs - cached.at < SCAN_CACHE_TTL_MS) {
       return cached.value;
     }
   }
+
+  const warnings: string[] = [];
   const engineInstalled = existsSync(engineFile(normalizedMain, "climb.py"));
-  const worktrees = linkedWorktreesOf(normalizedMain);
+  const worktrees = linkedWorktreesOf(normalizedMain, warnings);
   const roots = [normalizedMain, ...worktrees];
   const climbs: ScannedClimb[] = [];
 
   for (const root of roots) {
     const isMain = root === normalizedMain;
+    const baseStateDir = stateDir(root);
+    if (!existsSync(baseStateDir)) continue;
     const found = discoverClimbs(root);
+    if (found.climbs.length === 0 && found.prepared.length === 0) continue;
+
     const branch = readWorktreeBranch(root);
     const worktreeName = basename(root);
     const conversationId = conversationIdFromPath(root);
@@ -619,18 +770,74 @@ export function scanProjectClimbs(repoPath: string | null, opts?: { force?: bool
 
     const parsedEntries: Array<{
       dirName: string;
-      state: ReturnType<typeof readState>;
-      summary: ReturnType<typeof summarize>;
+      climbDir: string;
+      card: ClimbCard;
+      rows: LogRow[];
+      summary: ClimbSummary;
       checks: string[];
+      latestMtimeMs: number;
     }> = [];
+
     for (const dirName of found.climbs) {
+      const climbDir = joinPath(baseStateDir, dirName);
       try {
-        const state = readState(root, dirName);
-        const summary = summarize(state, 50);
-        const card = state.card;
+        const cardPath = joinPath(climbDir, "card.json");
+        const logPath = joinPath(climbDir, "log.jsonl");
+        const lastPath = joinPath(climbDir, "last.txt");
+        const cardSig = statSignature(cardPath);
+        if (!cardSig) continue;
+        const logSig = statSignature(logPath);
+        const lastMtimeMs = statMtimeMs(lastPath);
+        const logMtimeMs = logSig?.mtimeMs ?? 0;
+        const logSize = logSig?.size ?? 0;
+        const latestMtimeMs = Math.max(cardSig.mtimeMs, logMtimeMs, lastMtimeMs);
+
+        const memo = !bypassCache ? climbStatMemo.get(climbDir) : undefined;
+        if (
+          memo &&
+          memo.cardMtimeMs === cardSig.mtimeMs &&
+          memo.cardSize === cardSig.size &&
+          memo.logMtimeMs === logMtimeMs &&
+          memo.logSize === logSize
+        ) {
+          parsedEntries.push({
+            dirName,
+            climbDir,
+            card: memo.card,
+            rows: memo.rows,
+            summary: memo.summary,
+            checks: memo.checks,
+            latestMtimeMs,
+          });
+          continue;
+        }
+
+        const cardText = readFileSync(cardPath, "utf8");
+        const card = parseCard(cardText);
+        const logText = logSig ? readFileSync(logPath, "utf8") : "";
+        const rows = logText === "" ? [] : parseLog(logText);
+        const pendingTree = existsSync(joinPath(climbDir, "pending-tree"));
+        const summary = summarize({ card, rows, notes: null, pendingTree }, 0, nowMs);
         const checks = Array.isArray(card.check) ? card.check : card.check === undefined ? [] : [card.check];
-        parsedEntries.push({ dirName, state, summary, checks });
-      } catch {
+
+        if (climbStatMemo.size >= CLIMB_STAT_MEMO_MAX) {
+          climbStatMemo.clear();
+        }
+        climbStatMemo.set(climbDir, {
+          cardMtimeMs: cardSig.mtimeMs,
+          cardSize: cardSig.size,
+          logMtimeMs,
+          logSize,
+          card,
+          rows,
+          summary,
+          checks,
+        });
+        parsedEntries.push({ dirName, climbDir, card, rows, summary, checks, latestMtimeMs });
+      } catch (error) {
+        warnings.push(
+          `Failed to read climb ${dirName} in ${root}: ${error instanceof Error ? error.message : String(error)}`,
+        );
         continue;
       }
     }
@@ -638,13 +845,13 @@ export function scanProjectClimbs(repoPath: string | null, opts?: { force?: bool
     // Identify canonical climbs (folder name === card.name) and any sibling fixture folders
     // referenced in their check/guard/holdout/lock commands (e.g., `.hill-climb/unit-count-bench/`).
     const canonicalNames = new Set(
-      parsedEntries.filter((e) => !e.state.card.name || e.state.card.name === e.dirName).map((e) => e.dirName),
+      parsedEntries.filter((e) => !e.card.name || e.card.name === e.dirName).map((e) => e.dirName),
     );
     const referencedSiblingDirs = new Set<string>();
     const refRegex = /\.hill-climb\/([^/\s"'`]+)/g;
     for (const entry of parsedEntries) {
       if (!canonicalNames.has(entry.dirName)) continue;
-      const card = entry.state.card;
+      const card = entry.card;
       const texts = [...entry.checks, ...(card.guards ?? []), ...(card.lock ?? []), ...(card.holdout ? [card.holdout] : [])];
       for (const text of texts) {
         for (const match of text.matchAll(refRegex)) {
@@ -656,33 +863,43 @@ export function scanProjectClimbs(repoPath: string | null, opts?: { force?: bool
       }
     }
 
-    for (const { dirName: name, state, summary, checks } of parsedEntries) {
-      const card = state.card;
+    for (const { dirName: name, climbDir, card, rows: allRows, summary, checks, latestMtimeMs } of parsedEntries) {
       const cardName = card.name?.trim() || name;
       // Skip orphaned/moved fixture directories that still contain a stale card.json from an earlier init
       // (folder name != card.name when the real climb exists alongside it, is referenced as fixtures, or has no log).
       if (
         cardName !== name &&
-        (canonicalNames.has(cardName) || referencedSiblingDirs.has(name) || state.rows.length === 0)
+        (canonicalNames.has(cardName) || referencedSiblingDirs.has(name) || allRows.length === 0)
       ) {
         continue;
       }
-      const rows: ScannedClimbRow[] = state.rows.slice(-50).map((r) => ({
-        kind: r.kind,
-        step: typeof r.step === "number" && Number.isFinite(r.step) ? r.step : null,
-        result: r.result ?? null,
-        score: typeof r.score === "number" ? r.score : null,
-        idea: r.idea ?? null,
-        why: r.why ?? null,
-        time: r.time ?? null,
-        commit: null,
-      }));
+      const rows: ScannedClimbRow[] =
+        rowLimit === 0
+          ? []
+          : allRows.slice(-rowLimit).map((r) => ({
+              kind: r.kind,
+              step: typeof r.step === "number" && Number.isFinite(r.step) ? r.step : null,
+              result: r.result ?? null,
+              score: typeof r.score === "number" ? r.score : null,
+              idea: typeof r.idea === "string" ? redactSecrets(r.idea) : null,
+              why: typeof r.why === "string" ? redactSecrets(r.why) : null,
+              time: r.time ?? null,
+              commit: null,
+            }));
       const rawTargetText = card.target_text ?? null;
       const targetTextMatches =
         rawTargetText !== null &&
         (summary.target === null ||
           (Number.isFinite(Number(rawTargetText)) && Math.abs(Number(rawTargetText) - summary.target) < 1e-9));
-      const isLive = summary.verdict === "climbing" || summary.verdict === "plateau";
+      const isLive =
+        (summary.verdict === "climbing" || summary.verdict === "plateau") &&
+        latestMtimeMs > 0 &&
+        nowMs - latestMtimeMs <= LIVE_RECENCY_MS;
+      const rawNotes = includeNotes ? readLocalFile(joinPath(climbDir, "notes.md")).text : null;
+      const notes = rawNotes === null ? null : redactSecrets(rawNotes);
+      const updatedAt =
+        allRows[allRows.length - 1]?.time ??
+        (latestMtimeMs > 0 ? new Date(latestMtimeMs).toISOString() : latestMtimeIso(climbDir));
       climbs.push({
         id: `${root}::${name}`,
         name,
@@ -695,7 +912,7 @@ export function scanProjectClimbs(repoPath: string | null, opts?: { force?: bool
         isMainCheckout: isMain,
         conversationId,
         branch: card.branch ?? branch,
-        goal: card.goal ?? null,
+        goal: typeof card.goal === "string" ? redactSecrets(card.goal) : null,
         direction: card.direction,
         baseline: summary.baseline,
         best: summary.best,
@@ -713,23 +930,25 @@ export function scanProjectClimbs(repoPath: string | null, opts?: { force?: bool
         locked: card.lock ?? [],
         scoreMode: card.score_mode ?? "failure-count",
         rows,
-        notes: state.notes,
+        notes,
+        bestCommit: card.best.commit?.trim() || null,
         preparedFiles: 0,
         preparedSampleFiles: [],
-        updatedAt: rows[rows.length - 1]?.time ?? latestMtimeIso(joinPath(stateDir(root), name)),
+        updatedAt,
       });
     }
 
     for (const name of found.prepared) {
       if (name === "bridge" || referencedSiblingDirs.has(name)) continue;
-      const dir = joinPath(stateDir(root), name);
-      const { count, samples } = collectSampleFiles(dir);
+      const dir = joinPath(baseStateDir, name);
+      const { count, samples, maxMtimeMs } = collectSampleFiles(dir);
+      const isLive = maxMtimeMs > 0 && nowMs - maxMtimeMs <= LIVE_RECENCY_MS;
       climbs.push({
         id: `${root}::${name}`,
         name,
         status: "prepared",
         origin,
-        isLive: true,
+        isLive,
         directory: root,
         worktreeName,
         workerLabel,
@@ -755,9 +974,10 @@ export function scanProjectClimbs(repoPath: string | null, opts?: { force?: bool
         scoreMode: null,
         rows: [],
         notes: null,
+        bestCommit: null,
         preparedFiles: count,
         preparedSampleFiles: samples,
-        updatedAt: latestMtimeIso(dir),
+        updatedAt: maxMtimeMs > 0 ? new Date(maxMtimeMs).toISOString() : latestMtimeIso(dir),
       });
     }
   }
@@ -785,7 +1005,8 @@ export function scanProjectClimbs(repoPath: string | null, opts?: { force?: bool
     currentCount,
     archivedCount,
     climbs,
+    warnings,
   };
-  scanCache.set(normalizedMain, { at: Date.now(), value: result });
+  scanCache.set(cacheKey, { at: Date.now(), value: result });
   return result;
 }

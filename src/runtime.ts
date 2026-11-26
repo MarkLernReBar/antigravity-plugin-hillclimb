@@ -1,10 +1,12 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, realpathSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, dirname, isAbsolute, join, parse as parsePath, relative, resolve, sep } from "node:path";
 import { z } from "zod";
 import type { Repository } from "./repository.js";
 import type { Goal, Outcome, Tree } from "./model.js";
 import type { LiveData } from "./view-props.js";
-import { number } from "./state.js";
+import { number, redactSecrets } from "./state.js";
+import { clearScanCache } from "./repo-ops.js";
 import { applyCore } from "./tree.js";
 import { read as bridgeRead, recipe as bridgeRecipe, type BridgeRead } from "./search-bridge.js";
 import { rigSchema, type Rig } from "./rig.js";
@@ -222,6 +224,17 @@ export interface RuntimeDeps {
   reconcileIntervalMs: number;
   staleAfterMs: number;
   automatic: boolean;
+  disableConversationService: boolean;
+  allowEphemeralConversationService: boolean;
+}
+
+export type RuntimeOptions = Partial<RuntimeDeps>;
+
+export interface DispatchOptions {
+  directory?: string;
+  deferWorkerLaunch?: boolean;
+  disableConversationService?: boolean;
+  allowEphemeralConversationService?: boolean;
 }
 
 const defaults = (): RuntimeDeps => ({
@@ -233,6 +246,8 @@ const defaults = (): RuntimeDeps => ({
   reconcileIntervalMs: RECONCILE_INTERVAL_MS,
   staleAfterMs: Math.max(RECONCILE_INTERVAL_MS * 4, 120_000),
   automatic: false,
+  disableConversationService: false,
+  allowEphemeralConversationService: false,
 });
 
 export interface WorkerBrief {
@@ -245,23 +260,162 @@ export interface WorkerBrief {
   outcome: Outcome;
   recipe: BridgeRecipe;
   directory: string;
+  rig?: Rig;
+  ancestors?: Goal[];
+}
+
+function parseRigFromRecipeMarker(recipe: BridgeRecipe): Rig | null {
+  const markerFile = recipe.files.find((file) => file.path === recipe.markerPath);
+  if (!markerFile) return null;
+  try {
+    const parsed = JSON.parse(markerFile.content) as { rig?: unknown };
+    if (!parsed.rig || typeof parsed.rig !== "object") return null;
+    const candidate = parsed.rig as { engine?: unknown };
+    if (candidate.engine !== "repo" && candidate.engine !== "search") return null;
+    return candidate as Rig;
+  } catch {
+    return null;
+  }
+}
+
+function parseAncestorsFromPrompt(rawPrompt: string): Goal[] {
+  const header = "## Briefs you inherit";
+  const start = rawPrompt.indexOf(header);
+  if (start === -1) return [];
+  const afterHeader = start + header.length;
+  const nextSection = rawPrompt.indexOf("\n## ", afterHeader);
+  const block = (nextSection === -1 ? rawPrompt.slice(afterHeader) : rawPrompt.slice(afterHeader, nextSection)).trim();
+  const goals: Goal[] = [];
+  for (const line of block.split("\n")) {
+    const match = /^- \*\*(.+)\*\* — (.*)$/.exec(line);
+    if (!match) continue;
+    goals.push({
+      key: "",
+      parentGoalKey: null,
+      title: match[1] as string,
+      brief: match[2] as string,
+      rank: goals.length,
+      created: "",
+    });
+  }
+  return goals;
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function redactRigForDisplay(rig: Rig): Rig {
+  if (rig.engine === "repo") {
+    return {
+      ...rig,
+      check: rig.check.map(redactSecrets),
+      guard: rig.guard.map(redactSecrets),
+      holdout: redactSecrets(rig.holdout),
+      lock: rig.lock.map(redactSecrets),
+      ...(rig.score !== undefined ? { score: rig.score.map(redactSecrets) } : {}),
+      ...(rig.preflight !== undefined ? { preflight: redactSecrets(rig.preflight) } : {}),
+      ...(rig.minGain !== undefined ? { minGain: redactSecrets(rig.minGain) } : {}),
+    };
+  }
+  return {
+    ...rig,
+    metric: redactSecrets(rig.metric),
+    verifier: redactSecrets(rig.verifier),
+    baseline: redactSecrets(rig.baseline),
+    ...(rig.budget !== undefined ? { budget: redactSecrets(rig.budget) } : {}),
+    ...(rig.agent !== undefined ? { agent: redactSecrets(rig.agent) } : {}),
+    ...(rig.model !== undefined ? { model: redactSecrets(rig.model) } : {}),
+    ...(rig.runner !== undefined ? { runner: redactSecrets(rig.runner) } : {}),
+  };
 }
 
 export function workerPrompt(brief: WorkerBrief): string {
   const { outcome, recipe } = brief;
+  const rawPrompt = recipe.prompt.trim();
+  const missingCriteria = outcome.criteria.filter((criterion) => !rawPrompt.includes(criterion.id));
+
+  let safePrompt = rawPrompt;
+  const displayRig = brief.rig ?? parseRigFromRecipeMarker(recipe);
+  let rebuilt = false;
+  if (displayRig !== null) {
+    try {
+      const ancestors = brief.ancestors ?? parseAncestorsFromPrompt(rawPrompt);
+      const safeOutcome: Outcome = {
+        ...outcome,
+        title: redactSecrets(outcome.title),
+        story: redactSecrets(outcome.story),
+        criteria: outcome.criteria.map((criterion) => ({
+          ...criterion,
+          given: redactSecrets(criterion.given),
+          when: redactSecrets(criterion.when),
+          then: redactSecrets(criterion.then),
+        })),
+      };
+      const safeAncestors: Goal[] = ancestors.map((goal) => ({
+        ...goal,
+        title: redactSecrets(goal.title),
+        brief: redactSecrets(goal.brief),
+      }));
+      const safeRig = redactRigForDisplay(displayRig);
+      const dirMatch = new RegExp(`^Outcome \\\`${escapeRegExp(outcome.key)}\\\` v${outcome.version} in (.+)\\.$`, "m").exec(rawPrompt);
+      const displayWorkspace = { directory: dirMatch?.[1] ?? "." };
+      const displayRecipe = bridgeRecipe({
+        workspace: displayWorkspace,
+        outcome: safeOutcome,
+        ancestors: safeAncestors,
+        engine: brief.engine,
+        rig: safeRig,
+        runId: brief.runId,
+        track: brief.track,
+      });
+      safePrompt = displayRecipe.prompt.trim();
+      const origDigest12 = recipe.binding.digest.slice(0, 12);
+      const dispDigest12 = displayRecipe.binding.digest.slice(0, 12);
+      if (origDigest12 && dispDigest12 && origDigest12 !== dispDigest12) {
+        safePrompt = safePrompt.replaceAll(dispDigest12, origDigest12);
+      }
+      if (displayRecipe.proof !== recipe.proof) {
+        safePrompt = safePrompt.replaceAll(displayRecipe.proof, redactSecrets(recipe.proof));
+      }
+      rebuilt = true;
+    } catch {
+      rebuilt = false;
+    }
+  }
+  if (!rebuilt) {
+    for (const criterion of outcome.criteria) {
+      const rawLine = `- **${criterion.id}** — given ${criterion.given}, when ${criterion.when}, then ${criterion.then}`;
+      if (safePrompt.includes(rawLine)) {
+        const safeLine = `- **${redactSecrets(criterion.id)}** — given ${redactSecrets(criterion.given)}, when ${redactSecrets(criterion.when)}, then ${redactSecrets(criterion.then)}`;
+        safePrompt = safePrompt.replaceAll(rawLine, safeLine);
+      }
+    }
+    const safeTitle = redactSecrets(outcome.title);
+    if (safeTitle !== outcome.title && outcome.title.length > 0) {
+      safePrompt = safePrompt.replaceAll(`# Climb: ${outcome.title}`, `# Climb: ${safeTitle}`);
+    }
+    const safeStory = redactSecrets(outcome.story);
+    if (safeStory !== outcome.story && outcome.story.length > 0) {
+      safePrompt = safePrompt.replaceAll(outcome.story, safeStory);
+    }
+  }
+  safePrompt = redactSecrets(safePrompt);
+
   const lines: string[] = [
-    `<!-- hillclimb: run ${recipe.runId} · ${brief.key} v${brief.version} · track ${brief.track} · engine ${brief.engine} · project ${brief.projectId} -->`,
+    `<!-- hillclimb: run ${redactSecrets(recipe.runId)} · ${redactSecrets(brief.key)} v${brief.version} · track ${redactSecrets(brief.track)} · engine ${brief.engine} · project ${redactSecrets(brief.projectId)} -->`,
     "",
-    `Workspace directory: \`${brief.directory}\``,
+    `Workspace directory: \`${redactSecrets(brief.directory)}\``,
     "",
-    recipe.prompt.trim(),
+    safePrompt,
     "",
   ];
-  const missingCriteria = outcome.criteria.filter((criterion) => !recipe.prompt.includes(criterion.id));
   if (missingCriteria.length) {
     lines.push("## Criteria this run must prove", "");
     for (const criterion of missingCriteria) {
-      lines.push(`- \`${criterion.id}\` given ${criterion.given}, when ${criterion.when}, then ${criterion.then}`);
+      lines.push(
+        `- \`${redactSecrets(criterion.id)}\` given ${redactSecrets(criterion.given)}, when ${redactSecrets(criterion.when)}, then ${redactSecrets(criterion.then)}`,
+      );
     }
     lines.push("");
   }
@@ -269,14 +423,107 @@ export function workerPrompt(brief: WorkerBrief): string {
     "## Limits this dispatch set",
     "- Work inside the configured repository checkout. Do not push, do not deploy, and do not move a branch someone else works on.",
     "- Use the configured engine, verifier and budget in this checkout.",
-    `- The receipt is the verifier's record. Run \`${recipe.proof}\` exactly once at the bar; do not write, edit or hand-set a receipt line. The bridge re-checks the verifier's own record and refuses anything it cannot re-run.`,
+    `- The receipt is the verifier's record. Run \`${redactSecrets(recipe.proof)}\` exactly once at the bar; do not write, edit or hand-set a receipt line. The bridge re-checks the verifier's own record and refuses anything it cannot re-run.`,
     "- Stop at the bar, at a plateau, or after two refusals for the same reason, and say which one it was.",
     "- When finished, call `hillclimb_search_summit` to verify the receipt landed in the ledger.",
   );
-  return lines.join("\n");
+  return redactSecrets(lines.join("\n"));
 }
 
-async function callConversationService<T>(method: string, body: Record<string, unknown>): Promise<T | null> {
+export interface ConversationServiceGuardOptions {
+  directory?: string | null;
+  disableConversationService?: boolean;
+  allowEphemeralConversationService?: boolean;
+}
+
+export type ConversationServiceBlockReason =
+  | "disabled_by_env"
+  | "disabled_by_option"
+  | "blocked_test_harness"
+  | "blocked_ephemeral_directory";
+
+function isTruthyEnv(value: string | undefined): boolean {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized === "1" || normalized === "true";
+}
+
+function isTestHarnessArg(arg: string): boolean {
+  if (arg === "--test" || arg.startsWith("--test=") || arg.startsWith("--test-")) return true;
+  return /(?:^|[\\/=])(?:tsx|vitest|jest|mocha)(?:[\\/.]|$)/i.test(arg);
+}
+
+function isTestHarnessEntrypoint(entry: string | undefined): boolean {
+  if (!entry) return false;
+  if (/(?:^|[\\/])node_modules[\\/](?:tsx|vitest|jest|mocha)(?:[\\/]|$)/i.test(entry)) return true;
+  const file = basename(entry);
+  if (/^(?:tsx|vitest|jest|mocha)(?:\.[cm]?[jt]s)?$/i.test(file)) return true;
+  return /\.(?:test|spec)\.[cm]?[jt]s$/i.test(file);
+}
+
+function isTestHarnessEnvironment(): boolean {
+  if (process.env.NODE_TEST_CONTEXT) return true;
+  if (isTruthyEnv(process.env.VITEST) || process.env.VITEST_WORKER_ID || process.env.JEST_WORKER_ID) return true;
+  if (process.execArgv.some(isTestHarnessArg)) return true;
+  if (isTestHarnessEntrypoint(process.argv[1])) return true;
+  for (const arg of process.argv.slice(2)) {
+    if (arg === "--") break;
+    if (arg === "--test" || arg.startsWith("--test=")) return true;
+  }
+  return false;
+}
+
+function safeCwd(): string {
+  try {
+    return process.cwd();
+  } catch {
+    return tmpdir();
+  }
+}
+
+function isEphemeralTempDirectory(directory: string): boolean {
+  const resolvedDir = resolve(directory);
+  const canonDir = canonicalPath(resolvedDir);
+  const rawRoots = [tmpdir(), "/tmp", "/private/tmp", "/var/folders", "/private/var/folders"];
+  for (const rawRoot of rawRoots) {
+    if (!rawRoot) continue;
+    const resRoot = resolve(rawRoot);
+    if (resRoot !== parsePath(resRoot).root) {
+      if (isSameOrInside(resRoot, resolvedDir) || isSameOrInside(resRoot, canonDir)) return true;
+    }
+    const canonRoot = canonicalPath(resRoot);
+    if (canonRoot !== parsePath(canonRoot).root) {
+      if (isSameOrInside(canonRoot, resolvedDir) || isSameOrInside(canonRoot, canonDir)) return true;
+    }
+  }
+  return false;
+}
+
+export function conversationServiceGuardReason(
+  options?: ConversationServiceGuardOptions,
+): ConversationServiceBlockReason | null {
+  if (isTruthyEnv(process.env.HILLCLIMB_DISABLE_CONVERSATION_SERVICE)) {
+    return "disabled_by_env";
+  }
+  if (options?.disableConversationService) {
+    return "disabled_by_option";
+  }
+  const allowTestOrEphemeral =
+    Boolean(options?.allowEphemeralConversationService) ||
+    isTruthyEnv(process.env.HILLCLIMB_ALLOW_TEST_CONVERSATION_SERVICE);
+  if (!allowTestOrEphemeral) {
+    if (isTestHarnessEnvironment()) return "blocked_test_harness";
+    if (options?.directory && isEphemeralTempDirectory(options.directory)) return "blocked_ephemeral_directory";
+  }
+  return null;
+}
+
+async function callConversationService<T>(
+  method: string,
+  body: Record<string, unknown>,
+  guardOptions?: ConversationServiceGuardOptions,
+): Promise<T | null> {
+  if (conversationServiceGuardReason(guardOptions) !== null) return null;
   const address = process.env.ANTIGRAVITY_LS_ADDRESS;
   const token = process.env.ANTIGRAVITY_CSRF_TOKEN;
   if (!address || !token) return null;
@@ -339,7 +586,7 @@ function ensureGitExclude(repoPath: string, extraRules: string[]): void {
   }
 }
 
-export function createRuntime(repo: Repository, overrides: Partial<RuntimeDeps> = {}) {
+export function createRuntime(repo: Repository, overrides: RuntimeOptions = {}) {
   const deps: RuntimeDeps = { ...defaults(), ...overrides };
   const db = repo.db;
 
@@ -376,6 +623,8 @@ export function createRuntime(repo: Repository, overrides: Partial<RuntimeDeps> 
     CREATE UNIQUE INDEX IF NOT EXISTS hc_runs_one_live
       ON hc_runs(project_id,key,track) WHERE state IN ('dispatching','live');
     CREATE INDEX IF NOT EXISTS hc_runs_thread ON hc_runs(thread_id);
+    CREATE INDEX IF NOT EXISTS hc_runs_project_state ON hc_runs(project_id,state);
+    CREATE INDEX IF NOT EXISTS hc_runs_project_key_track ON hc_runs(project_id,key,track);
     CREATE TABLE IF NOT EXISTS hc_receipts(
       receipt_id TEXT PRIMARY KEY,
       run_id TEXT NOT NULL,
@@ -728,7 +977,7 @@ export function createRuntime(repo: Repository, overrides: Partial<RuntimeDeps> 
     key: string,
     engine: Engine,
     track = "main",
-    options?: { directory?: string; deferWorkerLaunch?: boolean },
+    options?: DispatchOptions,
   ): Promise<DispatchResult> {
     if (!projectId) throw new RuntimeError("no_project", "Select a project before dispatching a climb.");
     if (engine !== "repo" && engine !== "search") throw new RuntimeError("no_engine", `Unknown engine ${String(engine)}.`);
@@ -814,7 +1063,7 @@ export function createRuntime(repo: Repository, overrides: Partial<RuntimeDeps> 
     } catch (error) {
       throw new RuntimeError("bridge_refused", message(error));
     }
-    const brief = workerPrompt({ projectId, key, track, engine, runId, version: outcome.version, outcome, recipe, directory });
+    const brief = workerPrompt({ projectId, key, track, engine, runId, version: outcome.version, outcome, recipe, directory, rig, ancestors });
 
     const attempt = ((failedAttemptsStmt.get(projectId, key, track, outcome.version) as { n: number } | undefined)?.n ?? 0) + 1;
     const launches = (launchesInFlightStmt.get() as { n: number } | undefined)?.n ?? 0;
@@ -902,6 +1151,7 @@ export function createRuntime(repo: Repository, overrides: Partial<RuntimeDeps> 
 
     try {
       materialize(directory, recipe);
+      clearScanCache(directory);
     } catch (error) {
       retire(runId, "failed", `materialize failed: ${message(error)}`);
       throw new RuntimeError("materialize_failed", `Could not write verifier files into ${directory}: ${message(error)}`);
@@ -922,13 +1172,24 @@ export function createRuntime(repo: Repository, overrides: Partial<RuntimeDeps> 
       };
     }
 
-    // Try spawning an Antigravity worker conversation via ConversationService if LS env is present.
-    const created = await callConversationService<{ conversation?: { id?: string } }>("CreateConversation", {
-      ...(projectInfo?.source === "antigravity" ? { projectId } : {}),
-      title: `Climb ${key} · ${engine}`,
-      tags: ["hillclimb", `run:${runId}`, `outcome:${key}`],
-      prompt: [{ text: brief }],
-    });
+    // Try spawning an Antigravity worker conversation via ConversationService if LS env is present
+    // and allowed by runtime/env/test-harness/ephemeral-directory safeguards.
+    const created = await callConversationService<{ conversation?: { id?: string } }>(
+      "CreateConversation",
+      {
+        ...(projectInfo?.source === "antigravity" ? { projectId } : {}),
+        title: `Climb ${key} · ${engine}`,
+        tags: ["hillclimb", `run:${runId}`, `outcome:${key}`],
+        prompt: [{ text: brief }],
+      },
+      {
+        directory,
+        disableConversationService: Boolean(options?.disableConversationService || deps.disableConversationService),
+        allowEphemeralConversationService: Boolean(
+          options?.allowEphemeralConversationService || deps.allowEphemeralConversationService,
+        ),
+      },
+    );
     const convId = created?.conversation?.id ?? null;
     if (convId) {
       attachWorker(runId, convId);
@@ -1135,9 +1396,22 @@ export function createRuntime(repo: Repository, overrides: Partial<RuntimeDeps> 
 
     let convRunState: string | null = null;
     if (row.thread_id && !row.thread_id.startsWith("local:")) {
-      const conv = await callConversationService<{ state?: { runState?: string } }>("GetConversation", {
-        conversationId: row.thread_id,
-      });
+      const guardDirectory =
+        row.directory ||
+        (isEphemeralTempDirectory(safeCwd())
+          ? safeCwd()
+          : (repo.getProject(row.project_id)?.directory ?? safeCwd()));
+      const conv = await callConversationService<{ state?: { runState?: string } }>(
+        "GetConversation",
+        {
+          conversationId: row.thread_id,
+        },
+        {
+          directory: guardDirectory,
+          disableConversationService: deps.disableConversationService,
+          allowEphemeralConversationService: deps.allowEphemeralConversationService,
+        },
+      );
       convRunState = conv?.state?.runState ?? null;
     }
 
@@ -1331,9 +1605,119 @@ function sameSet(left: string[], right: string[]): boolean {
   return right.every((item) => set.has(item));
 }
 
-function resolveInside(root: string, path: string): string {
-  if (path.startsWith("/")) return path;
-  return root.replace(/\/$/, "") + "/" + path.replace(/^\.\//, "");
+const MAX_SYMLINK_HOPS = 40;
+
+function isSameOrInside(basePath: string, candidatePath: string): boolean {
+  const rel = relative(basePath, candidatePath);
+  return rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`) && !rel.startsWith("../") && !isAbsolute(rel));
+}
+
+function isStrictlyInside(basePath: string, candidatePath: string): boolean {
+  const rel = relative(basePath, candidatePath);
+  return rel !== "" && rel !== ".." && !rel.startsWith(`..${sep}`) && !rel.startsWith("../") && !isAbsolute(rel);
+}
+
+function canonicalPath(p: string): string {
+  const abs = resolve(p);
+  const missing: string[] = [];
+  let cur = abs;
+  while (true) {
+    try {
+      const real = realpathSync(cur);
+      return missing.length ? join(real, ...missing) : real;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException | null)?.code;
+      if (code !== "ENOENT" && code !== "ENOTDIR") {
+        throw error;
+      }
+      const parent = dirname(cur);
+      if (parent === cur) {
+        return abs;
+      }
+      missing.unshift(basename(cur));
+      cur = parent;
+    }
+  }
+}
+
+function resolveSegments(
+  startDir: string,
+  segments: string[],
+  state: { hops: number },
+  boundary: string | null,
+  originalTargetPath: string,
+): string {
+  let cur = startDir;
+  for (const seg of segments) {
+    if (!seg || seg === ".") continue;
+    if (seg === "..") {
+      const parent = dirname(cur);
+      if (boundary !== null && !isSameOrInside(boundary, parent)) {
+        throw new RuntimeError("path_outside_root", `Refusing symlink path outside workspace root: ${originalTargetPath}`);
+      }
+      cur = parent;
+      continue;
+    }
+    const next = join(cur, seg);
+    let stat: ReturnType<typeof lstatSync>;
+    try {
+      stat = lstatSync(next);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException | null)?.code;
+      if (code === "ENOENT" || code === "ENOTDIR") {
+        cur = next;
+        continue;
+      }
+      if (code === "ELOOP") {
+        throw new RuntimeError("path_outside_root", `Refusing symlink loop in path: ${originalTargetPath}`);
+      }
+      throw error;
+    }
+    if (stat.isSymbolicLink()) {
+      state.hops += 1;
+      if (state.hops > MAX_SYMLINK_HOPS) {
+        throw new RuntimeError("path_outside_root", `Refusing symlink loop in path: ${originalTargetPath}`);
+      }
+      const rawLink = readlinkSync(next);
+      if (!rawLink || rawLink.includes("\0")) {
+        throw new RuntimeError("path_outside_root", `Refusing invalid symlink target for path: ${originalTargetPath}`);
+      }
+      const linkSegs = rawLink.split(/[\\/]+/).filter(Boolean);
+      if (isAbsolute(rawLink)) {
+        const fsRoot = parsePath(rawLink).root || sep;
+        const resolvedAbs = resolveSegments(fsRoot, linkSegs, state, null, originalTargetPath);
+        const canonAbs = canonicalPath(resolvedAbs);
+        if (boundary !== null && (!isSameOrInside(boundary, resolvedAbs) || !isSameOrInside(boundary, canonAbs))) {
+          throw new RuntimeError("path_outside_root", `Refusing symlink path outside workspace root: ${originalTargetPath}`);
+        }
+        cur = canonAbs;
+      } else {
+        cur = resolveSegments(dirname(next), linkSegs, state, boundary, originalTargetPath);
+      }
+    } else {
+      cur = next;
+    }
+  }
+  return cur;
+}
+
+export function resolveInside(root: string, targetPath: string): string {
+  if (!targetPath || targetPath.includes("\0")) {
+    throw new RuntimeError("path_outside_root", `Refusing invalid path ${JSON.stringify(targetPath)}`);
+  }
+  const base = resolve(root);
+  const resolved = resolve(base, targetPath);
+  const rel = relative(base, resolved);
+  if (!isStrictlyInside(base, resolved)) {
+    throw new RuntimeError("path_outside_root", `Refusing path outside workspace root: ${targetPath}`);
+  }
+  const baseReal = canonicalPath(base);
+  const segments = rel.split(sep).filter(Boolean);
+  const finalResolved = resolveSegments(baseReal, segments, { hops: 0 }, baseReal, targetPath);
+  if (!isStrictlyInside(baseReal, finalResolved)) {
+    throw new RuntimeError("path_outside_root", `Refusing symlink path outside workspace root: ${targetPath}`);
+  }
+  return resolved;
 }
 
 function message(error: unknown): string {

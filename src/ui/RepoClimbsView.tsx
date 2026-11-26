@@ -348,13 +348,30 @@ function StepTimeline({ climb }: { climb: ScannedClimb }) {
     return list.reverse();
   }, [climb]);
 
+  const [showAll, setShowAll] = useState(false);
+
   if (entries.length === 0) return null;
+  const visibleEntries = showAll ? entries : entries.slice(0, 25);
+  const truncated = entries.length > 25 && !showAll;
 
   return (
     <div className="cl-section">
-      <div className="cl-section-label">What happened ({entries.length} events, newest first)</div>
+      <div className="cl-section-label" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+        <span>
+          What happened ({truncated ? `showing latest 25 of ${entries.length}` : `${entries.length} events`}, newest first)
+        </span>
+        {entries.length > 25 ? (
+          <button
+            type="button"
+            className="hill-action-btn"
+            onClick={() => setShowAll((prev) => !prev)}
+          >
+            {showAll ? "Show latest 25" : `Show all ${entries.length}`}
+          </button>
+        ) : null}
+      </div>
       <ol className="cl-timeline">
-        {entries.slice(0, 25).map((e) => (
+        {visibleEntries.map((e) => (
           <li key={e.index} className={`cl-event cl-event-${e.tone}`}>
             <div className="cl-event-head">
               <span className={`cl-pill cl-pill-${e.tone}`}>{e.badge}</span>
@@ -671,7 +688,7 @@ export function RepoClimbsView({
                   </div>
 
                   <ScoreChart climb={chosen} />
-                  <StepTimeline climb={chosen} />
+                  <StepTimeline key={chosen.id} climb={chosen} />
 
                   {chosen.notes ? (
                     <details className="cl-disclosure" open>

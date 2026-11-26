@@ -17,7 +17,7 @@
     "completeness": "Every task has exactly the declared number of trials.",
     "evidence": "A claimed task has an artifact file; a claim without evidence is not a completion.",
     "no_side_effects": "No row records a forbidden effect for its task.",
-    "cost": "Every row's cost is finite and nonnegative."
+    "cost": "Every row's cost is finite and nonnegative, and total cost stays within cost_budget_usd."
   },
   "holdout": "python3 {kit}/score.py --manifest {manifest} --holdout {holdout} --candidate {candidate}",
   "data": {
@@ -25,7 +25,7 @@
     "holdout": "holdout.json",
     "sample": true,
     "label": "SAMPLE FIXTURE — replace with real tasks, artifacts and forbidden effects",
-    "result": "JSONL rows: {\"task\": \"...\", \"trial\": 1, \"claimed\": true, \"state\": {...}, \"artifact\": {\"files\": [...], \"content\": \"...\"}, \"effects\": [...], \"cost_usd\": 0.1}"
+    "resultFormat": "JSONL rows: {\"task\": \"...\", \"trial\": 1, \"claimed\": true, \"state\": {...}, \"artifact\": {\"files\": [...], \"content\": \"...\"}, \"effects\": [...], \"cost_usd\": 0.1}"
   },
   "baseline": {
     "fixture": "fixtures/sample-good.jsonl",
@@ -76,6 +76,13 @@
       "fixture": "fixtures/known-bad-incomplete.jsonl",
       "expect": "rejected",
       "reason": "A row has no state."
+    },
+    {
+      "id": "over-budget",
+      "fixture": "fixtures/known-bad-over-budget.jsonl",
+      "expect": "guard_fail",
+      "guard": "cost",
+      "reason": "Total cost across trials exceeds the declared cost_budget_usd."
     }
   ],
   "repeats": {

@@ -3,7 +3,7 @@
 //
 // The model is `src/model.ts` (Evidence) and `src/actions.ts` (add_evidence).
 // This script never writes to a tree: it builds Evidence records and prints the
-// exact `bb hillclimb act` command for each one, so the tree change goes through
+// exact `hillclimb act` command for each one, so the tree change goes through
 // the same validation and approval path as an agent's action.
 //
 // A test opts in by naming the outcome it covers, optionally pinned to a
@@ -24,7 +24,7 @@
 // Usage:
 //   node hillclimb-evidence.mjs --report results.json --format json \
 //     --contract .hillclimb/tree.json --source "$RUN_URL" \
-//     --project <bb-project-id> --commands
+//     --project <project-id> --commands
 //
 // Exit codes: 0 built (or nothing tagged), 1 usage, 2 stale or invalid contract
 // mapping. Never 0 for a run whose evidence could not be attached honestly.
@@ -222,7 +222,7 @@ export function readContract(value) {
         ? data.tree.outcomes
         : null;
   if (outcomes === null) {
-    throw new Error("the contract must be a tree snapshot (`bb hillclimb tree --json`) or an outcomes array");
+    throw new Error("the contract must be a tree snapshot (`hillclimb tree --json`) or an outcomes array");
   }
   const byKey = new Map();
   for (const outcome of outcomes) {
@@ -232,7 +232,7 @@ export function readContract(value) {
       .filter((id) => typeof id === "string");
     if (!Number.isInteger(outcome.version) || outcome.version < 1) {
       throw new Error(
-        `outcome ${outcome.key} has no positive integer version; read the contract with \`bb hillclimb tree --project <id> --json\``,
+        `outcome ${outcome.key} has no positive integer version; read the contract with \`hillclimb tree --project <id> --json\``,
       );
     }
     byKey.set(outcome.key, { key: outcome.key, version: outcome.version, criteria });
@@ -367,7 +367,7 @@ export function buildEvidence(input) {
         reason:
           direction === "older"
             ? `proves contract v${tag.version}; the contract is now v${outcome.version}. Never record old proof against a newer contract: re-run the test against the current contract, or drop the @version when it should track whatever is current.`
-            : `names v${tag.version} but the contract in hand is v${outcome.version}: this checkout is stale. Run \`bb hillclimb sync --project <id>\` and re-run.`,
+            : `names v${tag.version} but the contract in hand is v${outcome.version}: this checkout is stale. Run \`hillclimb sync --project <id>\` and re-run.`,
       });
       continue;
     }
@@ -527,8 +527,8 @@ export function renderActCommands(actionList, project) {
   return actionList.map((action) => {
     const json = JSON.stringify(action).replace(/'/g, "'\\''");
     return project === null || project === undefined || project === ""
-      ? `bb hillclimb act '${json}'`
-      : `bb hillclimb act '${json}' --project ${project}`;
+      ? `hillclimb act '${json}'`
+      : `hillclimb act '${json}' --project ${project}`;
   });
 }
 
@@ -607,7 +607,7 @@ const HELP = `hillclimb-evidence — turn tagged test results into Hillclimb evi
                              [--format auto|text|junit|json] [--source <url|sha>]
                              [--track main] [--kind ci] [--prefixes HC]
                              [--contract-frozen-at <ISO time>]
-                             [--project <bb-project-id>] [--commands] [--out <file>]
+                             [--project <project-id>] [--commands] [--out <file>]
 
 A test opts in by naming the outcome, and must say which contract it ran against:
   HC-12@3#ac1,ac2        proven evidence, pinned to contract v3 and to ac1, ac2
@@ -617,7 +617,7 @@ A test opts in by naming the outcome, and must say which contract it ran against
                          with the time the contract was frozen before the tests.
   HC-12                  no @version and no criteria: skipped
 
-Never writes to a tree. --commands prints one \`bb hillclimb act '<json>'\` line per
+Never writes to a tree. --commands prints one \`hillclimb act '<json>'\` line per
 record; --out writes the bundle as JSON. Exit 2 means the tags and the contract
 disagree; nothing was recorded.`;
 

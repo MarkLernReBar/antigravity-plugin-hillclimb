@@ -21,9 +21,13 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
+
+sys.dont_write_bytecode = True
 
 EXIT_OK = 0
 EXIT_GUARD_FAIL = 1
@@ -251,6 +255,12 @@ def _type_mismatches(expected: object, actual: object, path: str) -> list[str]:
         for index, (left, right) in enumerate(zip(expected, actual)):
             problems.extend(_type_mismatches(left, right, f"{path}[{index}]"))
         return problems
+    if isinstance(expected, bool) or isinstance(actual, bool):
+        if type(expected) is not type(actual):
+            return [f"{path}: expected {type(expected).__name__}, got {type(actual).__name__}"]
+        return []
+    if isinstance(expected, (int, float)) and isinstance(actual, (int, float)):
+        return []
     if type(expected) is not type(actual):
         return [f"{path}: expected {type(expected).__name__}, got {type(actual).__name__}"]
     return []
@@ -376,6 +386,10 @@ def _latency_score(manifest: dict, rows: list[dict], holdout: dict | None) -> di
         workload.get("requests") == len(defined),
         "workload.requests must equal the number of cases",
     )
+    require(
+        isinstance(workload.get("cache"), str) and bool(workload["cache"].strip()),
+        "manifest.workload.cache must be a nonempty string",
+    )
     by_id = {case["id"]: case for case in defined}
     seen: set[str] = set()
     observations: list[float] = []
@@ -426,11 +440,19 @@ def _latency_guards(
     for identifier in by_id:
         if identifier not in seen:
             completeness.append(f"missing case: {identifier}")
+    required_tags = manifest.get("required_tags") or []
+    if isinstance(required_tags, list):
+        present = {case.get("tag") for case in defined}
+        for tag in required_tags:
+            if tag not in present:
+                completeness.append(f"required tag has no case: {tag}")
 
     success: list[str] = []
     for row in rows:
         if row.get("correct") is not True:
             success.append(f"{row.get('case')}: correct is not true")
+        if row.get("error"):
+            success.append(f"{row.get('case')}: unexpected error {row.get('error')!r}")
 
     equivalence: list[str] = []
     for row in rows:
@@ -449,6 +471,15 @@ def _latency_guards(
         load.append("workload.requests does not match the case count")
     if not isinstance(workload.get("cache"), str) or not workload.get("cache"):
         load.append("workload.cache must name the cache condition")
+    else:
+        for row in rows:
+            if "cache" in row and row["cache"] != workload["cache"]:
+                load.append(
+                    f"{row.get('case')}: cache {row['cache']!r} != workload.cache {workload['cache']!r}"
+                )
+    max_p95 = workload.get("max_p95_ms")
+    if is_finite_number(max_p95) and is_finite_number(result.get("score")) and result["score"] > float(max_p95):
+        load.append(f"p95_useful_ms {result['score']} exceeds workload.max_p95_ms {max_p95}")
 
     return {
         "completeness": completeness,
@@ -575,6 +606,12 @@ def _retrieval_guards(
     for identifier in by_id:
         if identifier not in seen:
             completeness.append(f"missing query: {identifier}")
+    required_tags = manifest.get("required_tags") or []
+    if isinstance(required_tags, list):
+        present = {query.get("tag") for query in queries}
+        for tag in required_tags:
+            if tag not in present:
+                completeness.append(f"required tag has no query: {tag}")
 
     isolation: list[str] = []
     for row in rows:
@@ -635,6 +672,11 @@ def _agent_score(manifest: dict, rows: list[dict], holdout: dict | None) -> dict
     defined = cases(manifest, "tasks")
     trials = manifest.get("trials", 1)
     require(isinstance(trials, int) and trials >= 1, "manifest.trials must be a positive integer")
+    if "cost_budget_usd" in manifest and manifest["cost_budget_usd"] is not None:
+        require(
+            is_finite_number(manifest["cost_budget_usd"]) and manifest["cost_budget_usd"] >= 0,
+            "manifest.cost_budget_usd must be finite and nonnegative",
+        )
     by_id = {task["id"]: task for task in defined}
     for task in defined:
         expect = task.get("expect")
@@ -648,6 +690,7 @@ def _agent_score(manifest: dict, rows: list[dict], holdout: dict | None) -> dict
         )
     seen: set[tuple[str, int]] = set()
     rows_by_task: dict[str, list[dict]] = {}
+    total_cost = 0.0
     for row in rows:
         identifier = row.get("task")
         require(isinstance(identifier, str) and identifier, "row.task must be a nonempty string")
@@ -676,6 +719,7 @@ def _agent_score(manifest: dict, rows: list[dict], holdout: dict | None) -> dict
             "cost_usd" in row and is_finite_number(row["cost_usd"]) and row["cost_usd"] >= 0,
             f"{identifier}: cost_usd must be finite and nonnegative",
         )
+        total_cost += float(row["cost_usd"])
         rows_by_task.setdefault(identifier, []).append(row)
     for task in defined:
         require(
@@ -712,6 +756,8 @@ def _agent_score(manifest: dict, rows: list[dict], holdout: dict | None) -> dict
         "tasks_completed": completed,
         "tasks_failed": len(defined) - completed,
         "trials": trials,
+        "total_cost_usd": round(total_cost, 6),
+        "cost_budget_usd": manifest.get("cost_budget_usd"),
         "tasks": results,
         "warnings": sample_warnings(manifest),
     }
@@ -733,6 +779,12 @@ def _agent_guards(
             completeness.append(
                 f"{task['id']}: expected {trials} trials, got {counts.get(task['id'], 0)}"
             )
+    required_tags = manifest.get("required_tags") or []
+    if isinstance(required_tags, list):
+        present = {task.get("tag") for task in defined}
+        for tag in required_tags:
+            if tag not in present:
+                completeness.append(f"required tag has no task: {tag}")
 
     evidence: list[str] = []
     for row in rows:
@@ -751,9 +803,18 @@ def _agent_guards(
                 side_effects.append(f"{task['id']}: forbidden effect {effect}")
 
     cost: list[str] = []
+    total_cost = 0.0
     for row in rows:
-        if not is_finite_number(row.get("cost_usd")):
+        value = row.get("cost_usd")
+        if not is_finite_number(value):
             cost.append(f"{row.get('task')}: cost_usd is not finite")
+        elif value < 0:
+            cost.append(f"{row.get('task')}: cost_usd {value} must be nonnegative")
+        else:
+            total_cost += float(value)
+    budget = manifest.get("cost_budget_usd")
+    if is_finite_number(budget) and total_cost > float(budget) + 1e-9:
+        cost.append(f"total cost ${total_cost:.4f} exceeds cost_budget_usd ${float(budget):.4f}")
 
     return {
         "completeness": completeness,
@@ -891,6 +952,8 @@ def _tuning_final(manifest: dict, rows: list[dict], holdout: dict) -> dict:
     )
     results = selected.get("holdout")
     require(isinstance(results, dict), "selected row needs holdout results for the final read")
+    overlap = set(results) & set(validation)
+    require(not overlap, f"holdout results overlap validation instances: {sorted(overlap)}")
     require(
         set(results) == set(holdout_ids),
         "holdout results must cover exactly the holdout instances",
@@ -961,6 +1024,8 @@ def _tuning_guards(
     for trial in trials:
         if "holdout" in trial:
             leakage.append(f"trial {trial.get('trial')}: holdout results on a trial row")
+    if holdout is None and selected is not None and "holdout" in selected:
+        leakage.append("selected row carries holdout results on the visible split")
 
     selection: list[str] = []
     if selected is None:
@@ -982,6 +1047,10 @@ def _tuning_guards(
         overlap = set(validation) & set(holdout_ids)
         if overlap:
             disjoint.append(f"validation and holdout overlap: {sorted(overlap)}")
+        if isinstance(selected, dict) and isinstance(selected.get("holdout"), dict):
+            row_overlap = set(validation) & set(selected["holdout"])
+            if row_overlap:
+                disjoint.append(f"selected holdout overlaps validation: {sorted(row_overlap)}")
 
     return {
         "bounds": bounds,
@@ -1036,6 +1105,48 @@ def _require_disjoint(kit: str, manifest: dict, holdout: dict) -> None:
     require(not overlap, f"holdout overlaps the manifest: {sorted(overlap)}")
 
 
+def _cache_key(kit: str, args: argparse.Namespace) -> dict:
+    return {
+        "version": 1,
+        "kit": kit,
+        "candidate": args.candidate,
+        "cwd": str(Path(args.cwd).resolve()),
+        "manifest": str(Path(args.manifest).resolve()),
+        "holdout": str(Path(args.holdout).resolve()) if args.holdout else None,
+        "token": os.environ.get("HILLCLIMB_CACHE_TOKEN") or None,
+    }
+
+
+def _load_cached_rows(cache_path: Path, key: dict) -> list[dict] | None:
+    if not cache_path.is_file():
+        return None
+    try:
+        payload = json.loads(cache_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    if not all(payload.get(k) == v for k, v in key.items()):
+        return None
+    rows = payload.get("rows")
+    if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
+        return None
+    return rows
+
+
+def _write_cached_rows(cache_path: Path, key: dict, rows: list[dict]) -> None:
+    try:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=cache_path.parent, delete=False
+        ) as handle:
+            tmp_path = Path(handle.name)
+            json.dump({**key, "rows": rows}, handle)
+        os.replace(tmp_path, cache_path)
+    except OSError:
+        pass
+
+
 def score_main(kit: str, argv: list[str]) -> int:
     parser = argparse.ArgumentParser(
         description=f"Score a {kit} candidate against a manifest. Prints one number as the last stdout line."
@@ -1044,11 +1155,18 @@ def score_main(kit: str, argv: list[str]) -> int:
     parser.add_argument("--candidate", help="command that prints JSONL or a JSON array of result rows")
     parser.add_argument("--results", help="file containing JSONL or a JSON array of result rows")
     parser.add_argument("--holdout", help="separate holdout manifest; must be disjoint from --manifest")
-    parser.add_argument("--guard", help="run one guard instead of scoring")
+    parser.add_argument("--guard", action="append", default=[], help="run one guard instead of scoring (repeatable)")
+    parser.add_argument("--all-guards", action="store_true", help="run all guards (or --guards subset) in a single candidate pass")
+    parser.add_argument("--guards", help="comma-separated guard names to run in a single pass")
+    parser.add_argument("--cache-file", help="optional JSON cache path for candidate rows across score and guard calls")
     parser.add_argument("--json", action="store_true", help="print structured JSON instead of a bare score")
     parser.add_argument("--timeout", type=float, default=120.0, help="candidate timeout in seconds")
     parser.add_argument("--cwd", default=".", help="working directory for the candidate")
     args = parser.parse_args(argv)
+
+    cache_raw = args.cache_file or os.environ.get("HILLCLIMB_CACHE_FILE") or ""
+    cache_path = Path(cache_raw) if cache_raw and args.candidate else None
+    guard_mode = bool(args.guard) or args.all_guards or args.guards is not None
 
     try:
         manifest = load_json(args.manifest)
@@ -1068,24 +1186,65 @@ def score_main(kit: str, argv: list[str]) -> int:
             else:
                 score_manifest = manifest
                 score_holdout = None
-        rows = read_rows(args)
+
+        cache_key = _cache_key(kit, args) if cache_path is not None else None
+        rows: list[dict] | None = None
+        loaded_from_cache = False
+        if guard_mode and cache_path is not None and cache_key is not None:
+            rows = _load_cached_rows(cache_path, cache_key)
+            loaded_from_cache = rows is not None
+        if rows is None:
+            rows = read_rows(args)
         result = score(kit, score_manifest, rows, score_holdout)
+        if cache_path is not None and cache_key is not None and not loaded_from_cache:
+            _write_cached_rows(cache_path, cache_key, rows)
         guards = guard_failures(kit, score_manifest, rows, result, score_holdout)
-        if args.guard:
-            require(args.guard in guards, f"unknown guard: {args.guard}; choose from {', '.join(guards)}", EXIT_USAGE)
-            failures = guards[args.guard]
+        if len(args.guard) == 1 and not args.all_guards and args.guards is None:
+            guard_name = args.guard[0]
+            require(guard_name in guards, f"unknown guard: {guard_name}; choose from {', '.join(guards)}", EXIT_USAGE)
+            failures = guards[guard_name]
             payload = {
                 "ok": not failures,
                 "kit": kit,
-                "guard": args.guard,
+                "guard": guard_name,
                 "failures": failures,
                 "score": result["score"],
             }
             if args.json:
                 print(json.dumps(payload, indent=2, default=str))
             elif failures:
-                print(f"guard {args.guard} failed: {'; '.join(failures)}", file=sys.stderr)
+                print(f"guard {guard_name} failed: {'; '.join(failures)}", file=sys.stderr)
             return EXIT_OK if not failures else EXIT_GUARD_FAIL
+        if guard_mode:
+            selected: list[str] = []
+            for name in args.guard:
+                if name not in selected:
+                    selected.append(name)
+            if args.guards is not None:
+                parsed_guards = [part.strip() for part in args.guards.split(",") if part.strip()]
+                require(bool(parsed_guards), "empty --guards list", EXIT_USAGE)
+                for name in parsed_guards:
+                    if name not in selected:
+                        selected.append(name)
+            if not selected:
+                selected = list(guards.keys())
+            for name in selected:
+                require(name in guards, f"unknown guard: {name}; choose from {', '.join(guards)}", EXIT_USAGE)
+            selected_failures = {name: guards[name] for name in selected if guards[name]}
+            ok = not selected_failures
+            payload = {
+                "ok": ok,
+                "kit": kit,
+                "guards": {name: not guards[name] for name in selected},
+                "guard_failures": selected_failures,
+                "score": result["score"],
+            }
+            if args.json:
+                print(json.dumps(payload, indent=2, default=str))
+            elif not ok:
+                for name, failures in selected_failures.items():
+                    print(f"guard {name} failed: {'; '.join(failures)}", file=sys.stderr)
+            return EXIT_OK if ok else EXIT_GUARD_FAIL
         payload = {
             "ok": True,
             "kit": kit,
@@ -1108,6 +1267,8 @@ def score_main(kit: str, argv: list[str]) -> int:
         print(format_number(result["score"]))
         return EXIT_OK
     except Invalid as error:
+        if not guard_mode and cache_path is not None:
+            cache_path.unlink(missing_ok=True)
         payload = {"ok": False, "kit": kit, "valid": False, "error": str(error), "code": error.code}
         if args.json:
             print(json.dumps(payload, indent=2, default=str))

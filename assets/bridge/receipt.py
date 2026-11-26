@@ -28,12 +28,20 @@ the same way, because "it did not run" is a result too.
 from __future__ import annotations
 
 import json
+import math
+import os
 import re
+import signal
 import subprocess
 import sys
 import time
 from pathlib import Path
 
+sys.dont_write_bytecode = True
+
+ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+NUMBER = re.compile(r"[-+]?(?:\d+\.\d*|\.\d+|\d+)(?:[eE][-+]?\d+)?")
+DEFAULT_TIMEOUT = 1800
 OUTPUT_TAIL = 4000
 VALUE_FLAGS = {
     "--receipt": "receipt",
@@ -46,6 +54,7 @@ VALUE_FLAGS = {
     "--track": "track",
     "--command": "command",
     "--score-pattern": "score_pattern",
+    "--timeout": "timeout",
 }
 REQUIRED = ("receipt", "run_id", "binding", "outcome", "version", "engine", "command")
 
@@ -79,29 +88,79 @@ def number(pattern: str | None, output: str) -> float | None:
     """The score the command printed, as a number, or None."""
     if pattern is None:
         return None
-    match = re.search(pattern, output, re.MULTILINE)
-    if match is None:
+    text = ANSI.sub("", output)
+    raw_lines = [line.rstrip("\r").split("\r")[-1] for line in text.split("\n")]
+    lines = [line for line in raw_lines if re.search(pattern, line)]
+    if not lines:
         return None
-    text = match.group(1) if match.groups() else match.group(0)
+    found = [
+        group
+        for match in re.finditer(pattern, lines[-1])
+        for group in (match.groups() if match.re.groups else [match.group()])
+        if group is not None
+    ]
+    if not found:
+        return None
+    values = [value.replace(",", "") for value in found]
+    if not all(NUMBER.fullmatch(value) for value in values):
+        return None
+    numbers = [float(value) for value in values]
+    if not all(math.isfinite(scored) for scored in numbers):
+        return None
+    total = sum(numbers)
+    return total if math.isfinite(total) else None
+
+
+def parse_timeout(values: dict[str, str]) -> float:
+    raw = values.get("timeout")
+    if raw is None:
+        env_raw = os.environ.get("HILLCLIMB_RECEIPT_TIMEOUT", "").strip()
+        if not env_raw:
+            return float(DEFAULT_TIMEOUT)
+        raw = env_raw
     try:
-        return float(text)
+        timeout = float(raw)
     except ValueError:
-        return None
+        raise SystemExit(f"receipt.py: invalid timeout {raw!r}: must be a positive finite number") from None
+    if not (math.isfinite(timeout) and timeout > 0):
+        raise SystemExit(f"receipt.py: invalid timeout {raw!r}: must be a positive finite number")
+    return timeout
+
+
+def _decode_pipe(data: bytes | str | None) -> str:
+    if not data:
+        return ""
+    text = data.decode("utf-8", errors="replace") if isinstance(data, bytes) else data
+    return text.replace("\r\n", "\n")
 
 
 def main(argv: list[str]) -> int:
     values, command = parse(argv)
+    timeout = parse_timeout(values)
     started = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     try:
-        finished = subprocess.run(
+        proc = subprocess.Popen(
             command,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            text=True,
-            errors="replace",
+            start_new_session=True,
         )
-        code, output = finished.returncode, finished.stdout or ""
+        try:
+            raw_output, _ = proc.communicate(timeout=timeout)
+            code = proc.returncode
+            output = _decode_pipe(raw_output)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError, OSError):
+                pass
+            try:
+                partial, _ = proc.communicate(timeout=5)
+            except subprocess.TimeoutExpired:
+                partial = b""
+            code = 124
+            output = _decode_pipe(partial) + f"\n[receipt.py: verifier timed out after {timeout:g}s]"
     except FileNotFoundError:
         code, output = 127, f"{command[0]}: command not found"
     except OSError as error:  # permission, ENOMEM, a bad interpreter

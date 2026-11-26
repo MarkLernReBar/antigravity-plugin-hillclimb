@@ -1,10 +1,27 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
+import { basename, dirname, join } from "node:path";
 import type { Snapshot } from "./model.js";
 
-export async function writeMirror(directory: string, tree: Snapshot): Promise<{ root: string; files: number }> {
+export async function writeMirror(
+  directory: string,
+  tree: Snapshot,
+): Promise<{ root: string; files: number; pruned: number }> {
   const entries: [string, string][] = [];
-  const add = (file: string, lines: string[]) => entries.push([file, lines.join("\n") + "\n"]);
+  const expectedByDir = new Map<string, Set<string>>([
+    ["goals", new Set()],
+    ["outcomes", new Set()],
+    ["plans", new Set()],
+  ]);
+  const track = (file: string) => {
+    const slash = file.indexOf("/");
+    if (slash > 0) {
+      expectedByDir.get(file.slice(0, slash))?.add(basename(file));
+    }
+  };
+  const add = (file: string, lines: string[]) => {
+    track(file);
+    entries.push([file, lines.join("\n") + "\n"]);
+  };
 
   for (const g of tree.goals) {
     add("goals/" + g.key + ".md", [
@@ -42,8 +59,10 @@ export async function writeMirror(directory: string, tree: Snapshot): Promise<{ 
     const ledger = tree.evidence
       .filter((e) => e.key === o.key)
       .map((e) => JSON.stringify(e));
+    const evidenceFile = "outcomes/" + o.key + ".evidence.jsonl";
+    track(evidenceFile);
     entries.push([
-      "outcomes/" + o.key + ".evidence.jsonl",
+      evidenceFile,
       ledger.length ? ledger.join("\n") + "\n" : "",
     ]);
     for (const p of tree.plans.filter((p) => p.key === o.key)) {
@@ -70,5 +89,23 @@ export async function writeMirror(directory: string, tree: Snapshot): Promise<{ 
     await mkdir(dirname(fullPath), { recursive: true });
     await writeFile(fullPath, content, "utf8");
   }
-  return { root, files: entries.length };
+  let pruned = 0;
+  for (const subdir of ["outcomes", "plans", "goals"] as const) {
+    const expected = expectedByDir.get(subdir)!;
+    const dirPath = join(root, subdir);
+    let dirEntries;
+    try {
+      dirEntries = await readdir(dirPath, { withFileTypes: true });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException)?.code === "ENOENT") continue;
+      throw error;
+    }
+    for (const entry of dirEntries) {
+      if (!expected.has(entry.name)) {
+        await rm(join(dirPath, entry.name), { recursive: true, force: true });
+        pruned += 1;
+      }
+    }
+  }
+  return { root, files: entries.length, pruned };
 }

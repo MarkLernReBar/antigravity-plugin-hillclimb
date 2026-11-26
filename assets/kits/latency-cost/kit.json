@@ -25,7 +25,7 @@
     "holdout": "holdout.json",
     "sample": true,
     "label": "SAMPLE FIXTURE — replace with real workload cases and measured outputs",
-    "result": "JSONL rows: {\"case\": \"...\", \"correct\": true, \"useful_ms\": 12.5, \"output\": ...}"
+    "resultFormat": "JSONL rows: {\"case\": \"...\", \"correct\": true, \"useful_ms\": 12.5, \"output\": ...}"
   },
   "baseline": {
     "fixture": "fixtures/sample-good.jsonl",

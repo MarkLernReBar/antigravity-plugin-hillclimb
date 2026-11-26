@@ -34,7 +34,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { joinPath } from "./engine.js";
-import { number as formatNumber, parseCard, parseLog, type ClimbCard, type LogRow } from "./state.js";
+import { number as formatNumber, parseCard, parseLog, redactSecrets, type ClimbCard, type LogRow } from "./state.js";
 import type { Goal, Outcome, Tree } from "./model.js";
 import type { LiveData } from "./view-props.js";
 
@@ -1656,7 +1656,7 @@ function receiptText(marker: Marker, state: LiveState, line: ReceiptLine): strin
 
 function receiptSource(marker: Marker, state: LiveState, line: ReceiptLine): string {
   const verified = line.at === "" ? "" : ` at ${line.at}`;
-  return `${state.identity} · ${line.command}${verified} · binding ${marker.binding.digest.slice(0, 12)}`;
+  return `${state.identity} · ${redactSecrets(line.command)}${verified} · binding ${marker.binding.digest.slice(0, 12)}`;
 }
 
 // --- repo engine ------------------------------------------------------------
@@ -1694,7 +1694,7 @@ async function readRepo(files: FilePort, root: string, marker: Marker): Promise<
       id,
       parent: bestStep === 0 ? "baseline" : `step-${bestStep}`,
       score: finite(row.score),
-      label: typeof row.idea === "string" && row.idea !== "" ? row.idea : String(row.result ?? "step"),
+      label: typeof row.idea === "string" && row.idea !== "" ? redactSecrets(row.idea) : String(row.result ?? "step"),
       at: at(row.time),
     });
     if (row.result === "kept") bestStep = step;
@@ -1709,7 +1709,11 @@ async function readRepo(files: FilePort, root: string, marker: Marker): Promise<
     holdout: lastHoldout === null ? null : formatNumber(finite(lastHoldout.score) ?? 0),
   };
   const identity = `climb ${card.name}${card.best.commit ? `@${card.best.commit.slice(0, 12)}` : ""}${card.branch ? ` (${card.branch})` : ""}, ${kept.length} steps kept`;
-  const reached = lastHoldout !== null && finite(lastHoldout.visible) === card.best.score;
+  const lastVisible = finite(lastHoldout?.visible);
+  // Exact IEEE-754 equality is intentional here: both values come directly from
+  // Python json.dumps in card.json/log.jsonl (unlike stdout strings compared via agrees()),
+  // so a tolerance like 1e-4 could falsely accept a stale holdout after a small gain.
+  const reached = lastHoldout !== null && lastVisible !== null && lastVisible === card.best.score;
   return {
     live,
     holdout: reached ? finite(lastHoldout.score) : null,

@@ -1,13 +1,6 @@
 <!--
-Vendored from Desiderata-Labs/hillclimb-skills — practices.md (skill version 1.0.0+0fb508b0).
-MIT License: see LICENSE-mit in this directory. The body below is unmodified.
-
-Local command mapping for this plugin (the original text names remote MCP tools):
-  get_tree, list_next_outcomes, get_outcome  ->  hillclimb tree --project <id>
-  add_evidence, set_outcome_status, claim_outcome, release_outcome,
-  create_outcome, edit_outcome, write_plan, add_comment, answer
-                                             ->  hillclimb act '<JSON>' --project <id>
-  search over the local mirror               ->  hillclimb sync --project <id>, then rg .hillclimb/
+Adapted from Desiderata-Labs/hillclimb-skills — practices.md (MIT License: see LICENSE-mit).
+Updated to match local Hill Climb plugin MCP tools and data model.
 -->
 
 # Best practices
@@ -20,7 +13,7 @@ These patterns come from trees that teams climb every day. Use them as defaults 
 
 Keep it to about 100 to 200 words, in three parts:
 
-1. **Purpose and audience.** One paragraph on what the business does and who it serves.
+1. **Purpose and audience.** One paragraph on what the product does and who it serves.
 2. **Non-negotiables.** Five to eight bullets that must hold for every piece of work, such as:
    - security and isolation rules;
    - "nothing turns green by assertion";
@@ -35,8 +28,8 @@ Agents read the charter before every outcome, so write each non-negotiable as a 
 A tree that works well usually looks like this:
 
 ```
-Company (root, the charter)
-└─ Objective        5–7, ranked by business importance
+Product / Repo (root, the charter)
+└─ Objective        5–7, ranked by importance
    └─ Key result    2–5 per objective
       └─ Focus      optional, only where a key result gets crowded
          └─ outcomes
@@ -44,11 +37,10 @@ Company (root, the charter)
 
 - **Objectives hold no outcomes directly.** Outcomes hang off key results, or off focus goals.
 - **Split a key result into focus goals** once it holds more than about 15 to 20 outcomes. Most key results hold between 3 and 15.
-- **Label every goal's level** ("Objective", "Key result", "Focus"), so reports and `coverageByLevel` read naturally.
 
 ## Phrase goals as what will be true
 
-Objectives and key results are short, present-tense statements of a result. They aren't nouns, project names or system names:
+Objectives and key results are short, present-tense statements of a result. They aren't nouns, project names, or system names:
 
 | instead of | write |
 | --- | --- |
@@ -65,7 +57,7 @@ Systems (the API, the apps, the CLI, the infrastructure, the models) belong **un
 
 ## Rank promises first
 
-Put the objective that protects your invariants first: correctness, isolation, security, keeping data, and the product staying up. It's the one thing you can't trade away. Growth, adoption and cost come after. When the order is right, an agent that only ever takes the top item still does the right thing.
+Put the objective that protects your invariants first: correctness, isolation, security, keeping data, and the product staying up. It's the one thing you can't trade away. Growth, adoption, and cost come after. When the order is right, an agent that only ever takes the top item still does the right thing.
 
 ## Briefs at every level
 
@@ -78,26 +70,24 @@ Short briefs get read. Long ones get skimmed.
 
 ## Outcomes
 
-- **One behavior per outcome.** Usually one to four criteria, each checkable on its own.
-- **Write criteria a stranger could check.** Name the actor, the starting state, the action and the observable result.
-- **Tag where the work happens**, e.g. the service (`console`, `api`) or repository (`code-repo`), so people and agents can filter next work to the areas they own. Call `list_tags` first and use the organization's names; tags are optional. `tag_outcomes` tags a whole goal at once.
+- **One behavior per outcome.** Usually one to five criteria, each checkable on its own.
+- **Write criteria a stranger could check.** Name the actor, the starting state, the action, and the observable result.
 
 ## KPIs and forward-looking outcomes
 
-Some outcomes are measurements, such as "50 teams are active every week for four weeks running". Tag them `kpi` and put the measurement window in the criteria. Until the window has passed, record what you know as `note` evidence with kind `metric`, and leave the status unverified with a note saying what would prove it. Never verify a KPI early.
+Some outcomes are measurements, such as "50 teams are active every week for four weeks running". Put the measurement window in the criteria. Until the window has passed, record what you know as `note` evidence (`hillclimb_add_evidence`) and leave the outcome `unverified` with a note saying what would prove it. Never verify a KPI early.
 
 ## Triage
 
-When you import a backlog, some items won't fit anywhere yet. Put them under a **Triage** goal ranked last, with a brief saying it holds work waiting for review. Then go through it regularly:
-- move the items that matter into place;
-- write real outcomes for them;
-- archive the rest.
+When you import a backlog, some items won't fit anywhere yet. Put them under a **Triage** goal ranked last, with a brief saying it holds work waiting for review. Review it regularly:
+- fold or move real behaviors into proper outcomes;
+- drop or retire items that aren't lasting product behaviors.
 
 A tree that ends in a growing triage pile is a tree people stop trusting.
 
 ## Migrating tickets
 
-Tickets record work done, not behavior. When you bring in a tracker:
+Tickets record work done, not behavior. When bringing in an issue tracker:
 
 1. Write outcomes for the behavior the tickets add up to.
 2. Attach each ticket as evidence on the outcome it touches:
@@ -105,39 +95,36 @@ Tickets record work done, not behavior. When you bring in a tracker:
    - an open bug **denies**, which puts the outcome back in next work;
    - context goes in as a **note**.
 3. Skip chores and noise, and send anything ambiguous to triage.
-4. Tag outcomes you inferred from code or tickets, rather than ones a person wrote, with `derived`. Reviewers can then find them.
 
-Expect a migrated tree to start mostly unverified, with a fair number of failing and broken outcomes. That's an accurate picture, and it's what agents climb.
+Expect a migrated tree to start mostly `unverified`, with `broken` outcomes wherever open bugs exist. That's an accurate picture, and it's what agents climb.
 
 ## Wire the repository
 
-Put the loop in the repository's `AGENTS.md` (or `CLAUDE.md`) so every agent session climbs the same way:
+Put the loop in the repository's `AGENTS.md` (or skill instructions) so every agent session climbs the same way:
 
 ```markdown
 ## Working on this repo
-1. list_next_outcomes with tree: "<org>/<tree>" and tags: ["code-repo"].
-2. claim_outcome the top item, then get_outcome and read every brief above it.
+1. Call `hillclimb_next_outcomes` and pick the top item in `next`.
+2. Call `hillclimb_claim`, then `hillclimb_outcome` and read every ancestor brief above it.
 3. Work on a branch, scoped to that outcome.
-4. Check each criterion for real (tests, the running app), add_evidence with the
-   exact commands and output, then set_outcome_status.
-5. Open a PR that names the outcome key. Once checks pass, merge it, check the
-   outcome in production after the deploy, and add that evidence.
-6. If an outcome looks wrong or missing, propose it; never edit one to make work pass.
+4. Check each criterion for real (tests, the running app), call `hillclimb_add_evidence`
+   with exact commands and output, then `hillclimb_set_status`.
+5. Release with `hillclimb_release` if stopping early, and verify in production after deploy.
+6. If an outcome looks wrong or missing, use `hillclimb_propose_change`; never edit one to make work pass.
 ```
 
-Naming the outcome key in tests (`it('HC-12: …')`) and in PR titles links code, CI evidence and the tree together. The [evidence guide](https://hillclimb.me/docs/evidence.md) shows how to make CI post results automatically.
+Naming the outcome key in tests (`it('HC-12@3#ac1: …')`) links code, CI evidence, and the tree together. See [assets/ci/README.md](../../../assets/ci/README.md) and [evidence.md](evidence.md).
 
 ## Who does what
 
-- **People** own the charter, objectives, key results and the wording of outcomes. They approve drafts and decide trade-offs. Put them as approvers on the root.
-- **Agents** pick the top unproven outcome, build, prove and record. They propose new or better outcomes, then wait for a person.
-- **Contributors**, people or agents with the contributor role, report progress without reshaping the tree. Use this role for engineers when product owners govern the contract.
+- **People** own the charter, objectives, key results, and outcome contracts. They confirm `approve_change`, `reject_change`, and `promote_track` in the Hill Climb UI (`hillclimb_open`).
+- **Agents** pick the top unproven outcome, build, prove, and record evidence. They propose new or revised contracts (`hillclimb_propose_change`) and wait for human approval.
 
 ## Reading the tree's health
 
-`get_tree` reports coverage by level. In a healthy tree:
+`hillclimb_tree` and `hillclimb_next_outcomes` report derived signals (`bySignal`) and tree coverage (also shown in the UI map/outline via `hillclimb_open`). In a healthy tree:
 - verified coverage rises steadily from the top objective down;
-- "failing" and "broken" are dealt with before new unverified work;
-- a goal turns **achieved** once everything under it is verified.
+- `broken` and `stale` outcomes are fixed before starting new `unverified` work;
+- a goal's outcomes are all `verified` (or `recheck`).
 
-When something important is red, move it up rather than adding a new goal next to it.
+When something important is `broken`, fix it or raise its `rank` rather than adding a duplicate goal next to it.

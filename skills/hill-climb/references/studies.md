@@ -5,16 +5,17 @@ one per-search **budget**. An experiment is a set of config overrides — a sear
 policy (`climber`), a model, a tuning allowance — so "greedy or diverse?", "does
 memory help?", "is the tuner worth it?" are the same study with different arms.
 
-Native 0.8.2 owns execution, the store and the report:
+An external native search runner owns execution, the store, and the report (`hillclimb experiment run|report` and `hillclimb verify` are not bundled in this plugin's `dist/cli.mjs` or `climb.py`):
 
 ```sh
+# External native search runner commands (outside this plugin):
 hillclimb experiment run <spec>            # every experiment × repeat × problem
 hillclimb experiment report <study> --json # per-arm n/mean/median/spread, paired gaps
 ```
 
-This plugin adds the two reads a person or agent needs around those commands.
-**Neither command runs a search, contacts a provider, or invokes a shell.** The
-worker runs the printed `hillclimb …` commands in its own shell.
+This plugin provides the local preview and report commands (`hillclimb study-preview` / `hillclimb study-report` in CLI, or `hillclimb_study_preview` / `hillclimb_study_report` in MCP) around those runs.
+**Neither plugin command runs a search, contacts a provider, or invokes a shell.** The
+worker runs any printed runner commands in its own shell.
 
 ## Preview the plan before spending
 
@@ -140,15 +141,15 @@ to preserve.
 
 ```sh
 # Before spending: is this comparison even able to decide anything?
-hillclimb study-preview self-study --dir ~/study --candidates 25 --verifier-repeat 3
+hillclimb study-preview self-study --dir ./study --candidates 25 --verifier-repeat 3
 
-# The worker runs the study in its own shell (the plugin does not).
-cd ~/study && hillclimb experiment run experiments/self-study.yaml
-cd ~/study && hillclimb experiment report self-study --json > self-study-report.json
+# The worker runs the external native study in its own shell (the plugin does not).
+cd ./study && hillclimb experiment run experiments/self-study.yaml
+cd ./study && hillclimb experiment report self-study --json > self-study-report.json
 
 # After: import the engine's own artifact.
-hillclimb study-report --dir ~/study --artifact self-study-report.json
-hillclimb study-report --dir ~/study --artifact self-study-report.json --json
+hillclimb study-report --dir ./study --artifact self-study-report.json
+hillclimb study-report --dir ./study --artifact self-study-report.json --json
 ```
 
 A complete `--json` report is one object with

@@ -1,7 +1,7 @@
 {
   "name": "hillclimb",
   "displayName": "Hill Climb",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Rank project outcomes, review contracts, and follow verified progress from repo climbs (climb.py), evolutionary searches (hillclimb.sh), benchmark kits, and equal-budget studies.",
   "logo": "assets/logo.svg",
   "suggestedPrompts": [

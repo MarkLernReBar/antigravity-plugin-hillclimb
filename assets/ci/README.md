@@ -2,7 +2,7 @@
 
 `hillclimb-evidence.mjs` turns a test run into Hillclimb evidence, scoped to the
 contract version and criteria each test names. It **never writes to a tree**: it
-prints one `bb hillclimb act '<json>' --project <id>` per piece of evidence, so the
+prints one `hillclimb act '<json>' --project <id>` per piece of evidence, so the
 change goes through the same validation and approval path as an agent action.
 
 ## Tag a test with the outcome it proves
@@ -68,7 +68,7 @@ modification time against it, so a contract fetched after the run is refused.
 
 ```bash
 # fetch the contract before the tests, note the time, run the tests, then post
-bb hillclimb tree --project "$BB_PROJECT_ID" --json > .hillclimb/tree.json
+hillclimb tree --project "$HILLCLIMB_PROJECT_ID" --json > .hillclimb/tree.json
 FROZEN_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 npx vitest run --reporter=json --outputFile=test-results.json
 node assets/ci/hillclimb-evidence.mjs ... --contract-frozen-at "$FROZEN_AT"
@@ -83,7 +83,7 @@ flag exists for suites whose test names cannot be changed.
 | What happened | Why it is refused |
 | --- | --- |
 | A tag pins `@2` but the contract is v3 | That run proves the old contract. Recording it against v3 is the downgrade this hook exists to prevent. Re-run the test against the current contract, or drop `@version`. |
-| A tag pins `@4` but the checkout's contract is v3 | The checkout is stale. Run `bb hillclimb sync --project <id>` and re-run. |
+| A tag pins `@4` but the checkout's contract is v3 | The checkout is stale. Run `hillclimb sync --project <id>` and re-run. |
 | A tag names `#ac9` and the outcome has no `ac9` | Silently narrowing or widening the evidence scope is lost attribution. The tag is wrong; fix it. |
 | A test name names two outcome keys | One test proves one outcome. |
 | `--contract-frozen-at` is in the future | A contract frozen after the tests proves nothing; the run and the flag disagree. |
@@ -98,7 +98,7 @@ that names no criteria.
 
 ```bash
 # 1. get the contract the run is proving (spellings: tree snapshot or outcomes array)
-bb hillclimb tree --project proj_abc123 --json > .hillclimb/tree.json
+hillclimb tree --project proj_abc123 --json > .hillclimb/tree.json
 
 # 2. build evidence; --commands prints the act calls
 node assets/ci/hillclimb-evidence.mjs \
@@ -121,7 +121,7 @@ by the report's first character).
       # ran against, and the hook checks the file is older than this moment.
       - name: Freeze the contract
         run: |
-          bb hillclimb tree --project "$BB_PROJECT_ID" --json > .hillclimb/tree.json
+          hillclimb tree --project "$HILLCLIMB_PROJECT_ID" --json > .hillclimb/tree.json
           echo "HC_FROZEN_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
 
       - name: Test
@@ -136,13 +136,13 @@ by the report's first character).
             --report test-results.json --format json \
             --contract .hillclimb/tree.json --contract-frozen-at "$HC_FROZEN_AT" \
             --source "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            --project "$BB_PROJECT_ID" --commands --out ci-evidence.json
+            --project "$HILLCLIMB_PROJECT_ID" --commands --out ci-evidence.json
 ```
 
 With `@<version>` on the test names, drop the freeze step and the
 `--contract-frozen-at` argument: the tags already pin the version.
 
-The act calls need a BB host that can reach the project; commit `ci-evidence.json`
+The act calls need a Hill Climb CLI/host environment that can reach the project; commit `ci-evidence.json`
 as an artifact and let the thread that owns the tree apply them, or run the step
 on a self-hosted runner that is already enrolled. Each call carries `receiptId`
 (the evidence id), so applying a job's output twice does not double the proof.

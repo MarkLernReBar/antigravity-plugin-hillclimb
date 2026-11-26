@@ -1,20 +1,19 @@
 <!--
-Vendored from Desiderata-Labs/hillclimb-skills — writing.md (skill version 1.0.0+0fb508b0).
-MIT License: see LICENSE-mit in this directory. The body below is unmodified.
+Adapted from Desiderata-Labs/hillclimb-skills — writing.md (MIT License: see LICENSE-mit).
+Preserves # Outcomes, # Criteria, # Goals, # Placement and all 22 rubric rules (O1-O6, C1-C9, G1-G4, P1-P3) for src/linter.ts.
 
-Local command mapping for this plugin (the original text names remote MCP tools):
-  get_tree, list_next_outcomes, get_outcome  ->  hillclimb tree --project <id>
-  add_evidence, set_outcome_status, claim_outcome, release_outcome,
-  create_outcome, edit_outcome, write_plan, add_comment, answer
-                                             ->  hillclimb act '<JSON>' --project <id>
-  search over the local mirror               ->  hillclimb sync --project <id>, then rg .hillclimb/
+Local MCP tools & CLI:
+  hillclimb_tree / hillclimb_outcome / hillclimb_lint_tree   (CLI: hillclimb tree / lint)
+  hillclimb_act / hillclimb_propose_change / hillclimb_plan_write / hillclimb_add_evidence / hillclimb_comment
+                                                             (CLI: hillclimb act '<JSON>')
+  hillclimb_sync                                             (CLI: hillclimb sync, then rg .hillclimb/)
 -->
 
 # Writing goals, outcomes and criteria
 
 > What a great goal brief, outcome and criterion read like, the checks to run before you create or edit one, where details that don't belong go instead, and how to review a tree and propose rewrites a person can accept or reject one by one.
 
-A tree is a definition of how the product behaves. It changes when the product changes, not every time someone finds a bug or finishes a task. Read this before `create_goal`, `create_outcome` or `edit_outcome`, and run its checks on what you wrote.
+A tree is a definition of how the product behaves. It changes when the product changes, not every time someone finds a bug or finishes a task. Read this before `create_goal`, `create_outcome` (`hillclimb_act`), or `hillclimb_propose_change`, and run its checks on what you wrote.
 
 ## What great looks like
 
@@ -49,7 +48,7 @@ What they share:
 - **Each result is observable from outside:** a status, what a person sees, what's charged, what's written where someone can look. Two strangers would agree on pass or fail.
 - **Results say what doesn't change, too,** when that's the risk: "it stays verified", "the refusal is the same".
 - **Nothing about who decided it, when, or in which ticket.** That's history, and history lives in evidence and decisions.
-- **"Every quarter" isn't a criterion.** When proof goes out of date on a schedule (an access review, a restore drill, a certificate check), write the promise once and set `recheckEvery` in days instead. The outcome comes back as next work when its confirming evidence gets older than that, and stays verified meanwhile. Leave it unset when proof doesn't age.
+- **"Every quarter" isn't a criterion.** When proof goes out of date on a schedule (an access review, a restore drill, a certificate check), write the promise once and set `recheckDays` in days instead. The outcome comes back as next work when its confirming evidence gets older than that, and stays verified meanwhile. Leave it unset when proof doesn't age.
 
 ### A goal brief
 
@@ -72,7 +71,7 @@ Run these on every goal and outcome you create or edit, and on any you review. E
 - **O3 One to five criteria.** Flag more than seven: the outcome holds several behaviors (split it) or a test plan (move the cases to a plan). Flag a single criterion that only restates the title.
 - **O4 One behavior.** If the criteria split into groups a person would check separately (say, what a page shows, how it works on a phone, and what an API returns), they're separate outcomes.
 - **O5 A behavior, not a task.** Flag outcomes that are finished when something is done once, such as a measurement taken, a decision made, a document written, a migration run, a cutover, or a service switched on for a customer. Measurements and decisions are evidence for a behavior. One-off work belongs in a plan or a task list.
-- **O6 Still true.** When a decision changes how the product behaves, every criterion that states the old rule changes with it. Flag criteria that contradict a newer decision, another outcome, or the product itself. Outcomes that remove or reverse something ("no longer", "has no", "is gone") are the usual source: for each, search the tree for criteria that still state the old rule ("only people approve plans" beside "plans have no approval").
+- **O6 Still true.** When a decision changes how the product behaves, every criterion that states the old rule changes with it. Flag criteria that contradict a newer decision, another outcome, or the product itself. Outcomes that remove or reverse something ("no longer", "has no", "is gone") are the usual source: for each, search the tree (`hillclimb_sync` + `rg .hillclimb/`, or `hillclimb_tree`) for criteria that still state the old rule ("only people approve plans" beside "plans have no approval").
 
 ### Criteria
 
@@ -89,24 +88,24 @@ Run these on every goal and outcome you create or edit, and on any you review. E
 ### Goals
 
 - **G1 Short brief.** Two or three sentences, under about 400 characters; flag anything over 800. A What matters and Avoid list (above) can run longer; flag one over about 3,000 characters.
-- **G2 No plan or history in the brief.** Flag dates, steps, causes, designs, quotes and rulings, limits tables, branch names and file paths. A plan goes in `write_plan`, a design in an artifact, and a ruling is a decision.
+- **G2 No plan or history in the brief.** Flag dates, steps, causes, designs, quotes and rulings, limits tables, branch names and file paths. A plan goes in `hillclimb_plan_write`, design context in a plan or `note` evidence, and a ruling is a decision via `hillclimb_comment`.
 - **G3 A lasting condition.** Flag goals that are projects ("Replace the old service", "Launch v2"), that name a technology or vendor ("Files live in object storage"), or that describe the mechanism instead of what people get ("Reads are cached", "It doesn't reload on every call"). Write the condition the project brings about ("Large files never slow the app or the bill"), and track the project as a release or a plan.
 - **G4 Still true.** Flag briefs whose dates or targets have passed.
 
 ### Placement
 
-- **P1 Criterion, not sibling.** A new behavior that refines an existing outcome becomes a criterion on it, not a new outcome beside it. Search first (`search`, or `rg` in a `.hillclimb/` copy). Flag an outcome whose whole subject is one edge case of another's behavior ("a new version keeps the fields the publish leaves out" under "publishing again adds a version"): it's usually a fixed bug that grew its own outcome.
+- **P1 Criterion, not sibling.** A new behavior that refines an existing outcome becomes a criterion on it, not a new outcome beside it. Search first (`hillclimb_sync`, then `rg .hillclimb/`). Flag an outcome whose whole subject is one edge case of another's behavior ("a new version keeps the fields the publish leaves out" under "publishing again adds a version"): it's usually a fixed bug that grew its own outcome.
 - **P2 Generalize the bug.** A bug becomes the behavior it broke: a criterion on the outcome that owns that behavior, or a new outcome if none does. Its debugging notes become evidence (a "denies" while it's broken).
-- **P3 Not in the tree at all.** Decisions, measurements, one-off gates, documents, finished chores and pure polish (a control's exact size, a renamed route) don't belong in the tree as outcomes. Record what they established as evidence on the outcome they inform, or fold the polish into that outcome's criteria if it's a promise, then archive them.
+- **P3 Not in the tree at all.** Decisions, measurements, one-off gates, documents, finished chores and pure polish (a control's exact size, a renamed route) don't belong in the tree as outcomes. Record what they established as evidence on the outcome they inform, or fold the polish into that outcome's criteria if it's a promise, then retire or stop using them.
 
 ## Where the extra detail goes
 
 | You want to keep | Put it in |
 | --- | --- |
-| Who decided and when, a ruling, an approval | A decision: ask with `add_comment` (`needsReply`), and the answer is kept |
-| A ticket, PR, commit or debugging trace | Evidence on the outcome (`add_evidence`): "denies" while broken, "confirms" once fixed, "note" for context |
-| Test matrices, run counts, environment setup, step plans | A plan (`write_plan`) |
-| A design, data model, rationale or long policy table | An artifact (`publish_artifact`), linked from the brief or the plan |
+| Who decided and when, a ruling, an approval | A decision: ask with `hillclimb_comment` (with `options`), and the `answer` is kept |
+| A ticket, PR, commit or debugging trace | Evidence on the outcome (`hillclimb_add_evidence`): "denies" while broken, "confirms" once fixed, "note" for context |
+| Test matrices, run counts, environment setup, step plans | A plan (`hillclimb_plan_write`) |
+| A design, data model, rationale or long policy table | A plan (`hillclimb_plan_write`) or `note` evidence (`hillclimb_add_evidence`), or a repo doc linked from the plan |
 | Waiting on another outcome | `dependsOn` on the outcome that waits |
 | One-off work with no lasting behavior | A plan, a release or a task list outside the tree |
 
@@ -122,7 +121,7 @@ Before:
 After, as a criterion on the outcome that owns joining an organization:
 > **ac4**: Given an invite to someone who already has an account, when they open it signed in, then they join the organization with the invited role and keep their existing account.
 
-The incident, the file and the line become "denies" evidence until the fix ships. The bug outcome is archived after its evidence is carried over (`carry_evidence`).
+The incident, the file and the line become "denies" evidence until the fix ships; once folded into the parent outcome, copy active evidence via `hillclimb_add_evidence` and note the superseding outcome.
 
 **A rule buried in internals.**
 
@@ -142,15 +141,15 @@ After: one outcome for what the dashboard counts and ranks, one for the API that
 
 When a person asks you to review or lint a tree, or part of one:
 
-1. Read it: `get_tree` for the shape, then `get_outcome` (or the `.hillclimb/` copy) for each goal and outcome in scope.
+1. Read it: `hillclimb_tree` (or `hillclimb_lint_tree`) for the shape, then `hillclimb_outcome` (or the `.hillclimb/` copy via `hillclimb_sync`) for each goal and outcome in scope.
 2. Run the checks above. Report only real findings. A long criterion that's still one clear case can pass. Name what's already great too, so the person sees what to keep. Where you can check a criterion against the product (its docs, its code, a live call), do: an outcome that no longer describes the product is the most valuable finding, so list those first.
 3. For each finding, draft the fix. Default to proposing new wording, not just naming the problem:
    - a rewritten title, story or criterion, keeping the behavior and dropping what C4 to C6 and C8 to C9 flag;
    - for P1 and P2, the parent outcome and the criterion it would gain;
-   - for P3 and O5, what to record as evidence and where, and that it would then be archived;
+   - for P3 and O5, what to record as evidence and where, and that it should be retired or folded;
    - for O6, the newer decision and the criterion that has to change.
 
-   Weigh what an edit costs. Any change an agent makes to a verified outcome's criteria makes it stale until someone re-checks it, so don't propose wording-only fixes (capitals, punctuation, rephrasing that keeps the meaning) to verified criteria on their own. Mention them in one closing line, to fold into the next real edit of those outcomes.
+   Weigh what an edit costs. Any change to a verified outcome's criteria makes it `stale` until someone re-checks it, so don't propose wording-only fixes (capitals, punctuation, rephrasing that keeps the meaning) to verified criteria on their own. Mention them in one closing line, to fold into the next real edit of those outcomes.
 4. Present the findings as a list the person can answer yes or no to, one row at a time, most valuable first: out of date (O6), then splits, tasks and bugs, then wording. When one problem repeats across many outcomes, give it one sweep row with a couple of worked examples, every key it covers, and an offer to draft them all, rather than a row each. In a large tree, run the countable checks (lengths, criteria counts, names, dates, ticket ids, paths) on every item, not a sample, and make sure everything over a hard limit (O3 over seven, C3 over 500, G1 over 800) appears in some row.
 
 | # | Item | Check | Now | Proposed | Moves to |
@@ -158,11 +157,10 @@ When a person asks you to review or lint a tree, or part of one:
 | 1 | PAY-12 ac3 | C4, C5 | the current text | the rewrite | provenance to a note on PAY-12 |
 
 5. Apply only the rows they accept:
-   - wording: `edit_outcome` or `edit_goal`, with `changesMeaning` set honestly (an agent changing criteria always counts as true, so a verified outcome goes stale until it's re-checked);
-   - folds: the steps in [Reshaping](https://hillclimb.me/docs/shaping.md#reshaping), so verified work stays verified;
-   - archives: `archive_outcome` after its evidence is carried and the person has said yes.
+   - outcome edits: `hillclimb_propose_change` (files a pending contract change for human approval in the Inbox via `hillclimb_open`; approving a criterion edit bumps the outcome version and makes a verified outcome `stale` until re-checked);
+   - folds: record active evidence onto the target outcome via `hillclimb_add_evidence`, propose the added criteria via `hillclimb_propose_change`, and follow [Shaping](shaping.md).
 
-   Under approvers, your edits wait as pending changes for a person to approve.
+   All proposed contract changes wait in the Inbox for a person to approve (`approve_change` / `reject_change` require human confirmation in the UI).
 6. Record what moved. Provenance you removed from a criterion goes into a "note" evidence on that outcome, so nothing is lost.
 
 Never rewrite an outcome so work passes, and never change what a criterion promises without saying so in the row.

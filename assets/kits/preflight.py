@@ -25,6 +25,8 @@ import shlex
 import sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True
+
 KIT_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(KIT_ROOT))
 
@@ -180,6 +182,7 @@ def commands_for(kit: dict, args: argparse.Namespace) -> dict:
         name: substitute(kit["check"], kit, manifest, args.candidate, "<candidate>") + f" --guard {shlex.quote(name)}"
         for name in kit["guards"]
     }
+    all_guards = score + " --all-guards"
     holdout_command = None
     if kit.get("holdout") and holdout is not None:
         holdout_command = substitute(
@@ -218,10 +221,11 @@ def commands_for(kit: dict, args: argparse.Namespace) -> dict:
         "--after",
         kit.get("after", "stop"),
     ]
-    for name in kit["guards"]:
-        engine_init += ["--guard", guards[name]]
+    engine_init += ["--guard", all_guards]
     if holdout_command:
         engine_init += ["--holdout", holdout_command]
+        if kit.get("holdoutOnce"):
+            engine_init.append("--holdout-once")
     final_command = None
     if kit.get("finalBaseline") and kit.get("holdout") and holdout is not None:
         final_command = substitute(
@@ -235,6 +239,9 @@ def commands_for(kit: dict, args: argparse.Namespace) -> dict:
         "finalCommand": final_command,
         "score": score,
         "guards": guards,
+        "allGuards": all_guards,
+        "holdoutOnce": bool(kit.get("holdoutOnce")),
+        "holdoutRuns": int(kit.get("holdoutRuns", 1)),
         "holdoutCommand": holdout_command,
         "init": shlex.join(engine_init),
         "initCommand": init_command,
@@ -365,8 +372,14 @@ def run_preflight(kit: dict, args: argparse.Namespace) -> dict:
 
     repeats = kit.get("repeats", {})
     runs = args.repeats if args.repeats is not None else repeats.get("runs", 2)
+    repeat_runs = max(1, runs)
     scores: list[float] = []
-    for _ in range(max(1, runs)):
+    if args.candidate is not None:
+        scores.append(result["score"])
+        extra_runs = max(0, repeat_runs - 1)
+    else:
+        extra_runs = repeat_runs
+    for _ in range(extra_runs):
         try:
             repeat_rows = rows_for(baseline_fixture, args.candidate, args.timeout, args.cwd)
             scores.append(score_rows(kit, manifest, repeat_rows)["score"])
@@ -414,18 +427,26 @@ def run_final(kit: dict, args: argparse.Namespace) -> dict:
         results = Path(args.results) if args.results else fixture_path(kit, kit["finalBaseline"]["fixture"])
         rows = rows_for(results, args.candidate, args.timeout, args.cwd)
         result = kitcore.score(kit["id"], manifest_doc, rows, holdout_doc)
+        guards = kitcore.guard_failures(kit["id"], manifest_doc, rows, result, holdout_doc)
     except kitcore.Invalid as error:
         payload["errors"].append(str(error))
         payload["code"] = error.code
         return payload
 
+    failed_guards = {name: failures for name, failures in guards.items() if failures}
     payload["final"] = {
         "score": result["score"],
         "metric": result["metric"],
         "unit": result.get("unit"),
         "expected": kit["finalBaseline"].get("expected"),
         "holdout": result.get("holdout"),
+        "guards": {name: not failures for name, failures in guards.items()},
+        "guardFailures": failed_guards,
     }
+    if failed_guards:
+        payload["errors"].append("final guards failed: " + json.dumps(failed_guards))
+        payload["code"] = EXIT_BASELINE
+        return payload
     if "expected" in kit["finalBaseline"] and not numbers_equal(result["score"], kit["finalBaseline"]["expected"]):
         payload["errors"].append(
             f"final score {result['score']} does not match declared {kit['finalBaseline']['expected']}"
@@ -437,8 +458,12 @@ def run_final(kit: dict, args: argparse.Namespace) -> dict:
         entry = {"id": control.get("id"), "expect": control.get("expect"), "ok": False}
         try:
             control_rows = kitcore.load_rows(fixture_path(kit, control["fixture"]))
-            kitcore.score(kit["id"], manifest_doc, control_rows, holdout_doc)
+            control_result = kitcore.score(kit["id"], manifest_doc, control_rows, holdout_doc)
+            control_guards = kitcore.guard_failures(kit["id"], manifest_doc, control_rows, control_result, holdout_doc)
             entry["actual"] = "valid"
+            if control.get("expect") == "guard_fail":
+                guard_name = control.get("guard")
+                entry["ok"] = bool(guard_name and control_guards.get(guard_name))
         except kitcore.Invalid as error:
             entry["actual"] = "rejected"
             entry["error"] = str(error)

@@ -23,11 +23,11 @@
     },
     {
       "id": "task-update",
-      "goal": "Update the account owner to mark.",
+      "goal": "Update the account owner to alex.",
       "expect": {
         "state": {
           "status": "updated",
-          "owner": "mark"
+          "owner": "alex"
         },
         "forbidden_effects": [
           "delete_record",

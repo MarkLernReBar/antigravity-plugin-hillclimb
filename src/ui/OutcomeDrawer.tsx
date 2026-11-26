@@ -1109,9 +1109,7 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
     }
   }, [])
 
-  // One read when the drawer opens, then a quiet poll while the Live tab is the
-  // one on screen. Leaving the tab, changing key or changing track tears the
-  // timer down, so a background drawer never keeps asking.
+  // Read live data once when the selected outcome or track changes (never on unrelated tab switches).
   useEffect(() => {
     if (isOutcome === false || selected === null) {
       setLiveData(null)
@@ -1120,29 +1118,42 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
       return
     }
     let alive = true
-    const read = async (quiet: boolean): Promise<void> => {
-      if (!quiet) setLiveLoading(true)
-      try {
-        const next = await liveRef.current(selected)
+    setLiveLoading(true)
+    void liveRef.current(selected)
+      .then((next) => {
         if (!alive) return
         setLiveData(next)
         setLiveError(null)
         if (next.engine !== null) setEngine(next.engine)
-      } catch (thrown) {
+      })
+      .catch((thrown) => {
         if (!alive) return
         setLiveError(thrown instanceof Error ? thrown.message : String(thrown))
-      } finally {
-        if (alive && !quiet) setLiveLoading(false)
-      }
+      })
+      .finally(() => {
+        if (alive) setLiveLoading(false)
+      })
+    return () => {
+      alive = false
     }
-    void read(false)
-    if (tab !== 'live') {
-      return () => {
-        alive = false
-      }
-    }
+  }, [isOutcome, selected, track])
+
+  // Poll quietly only while the Live tab is actively on screen.
+  useEffect(() => {
+    if (isOutcome === false || selected === null || tab !== 'live') return
+    let alive = true
     const timer = window.setInterval(() => {
-      void read(true)
+      void liveRef.current(selected)
+        .then((next) => {
+          if (!alive) return
+          setLiveData(next)
+          setLiveError(null)
+          if (next.engine !== null) setEngine(next.engine)
+        })
+        .catch((thrown) => {
+          if (!alive) return
+          setLiveError(thrown instanceof Error ? thrown.message : String(thrown))
+        })
     }, LIVE_POLL_MS)
     return () => {
       alive = false
@@ -1235,7 +1246,10 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
       setDispatchNote(`Dispatched to the ${engine} engine.`)
       await loadLive(outcome.key)
     } catch (thrown) {
-      setError(thrown instanceof Error ? thrown.message : String(thrown))
+      const msg = thrown instanceof Error ? thrown.message : String(thrown)
+      if (msg !== 'cancelled') {
+        setError(msg)
+      }
     } finally {
       setDispatching(false)
     }
@@ -1750,6 +1764,14 @@ function EvidenceForm({ outcome, track, act, onError }: EvidenceFormProps): JSX.
   const [source, setSource] = useState('')
   const [trackValue, setTrackValue] = useState(track)
   const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    setCriterionIds(outcome.criteria.map((row) => row.id))
+  }, [outcome.key, outcome.version])
+
+  useEffect(() => {
+    setTrackValue(track)
+  }, [track])
 
   const submit = async (event: FormEvent): Promise<void> => {
     event.preventDefault()

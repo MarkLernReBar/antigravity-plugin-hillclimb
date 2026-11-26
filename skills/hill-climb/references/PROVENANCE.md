@@ -17,17 +17,17 @@ loop, tree-shaping guidance, and the practice patterns.
 
 ## What was changed
 
-- A header comment was added to each file: the upstream source, the MIT license
-  pointer, and a mapping from the remote MCP tool names the upstream text uses to
-  this plugin's local commands (`hillclimb tree`, `hillclimb act`,
-  `hillclimb sync`). The body below each header is unmodified.
-- Upstream web links are left as they are: they are the authority for anything
-  this plugin does not restate.
-- Nothing was removed. Where the upstream text describes a hosted product
-  feature this plugin does not implement (hosted accounts, API keys, uploads),
-  it is still accurate guidance for the hosted product and is marked as such
-  here rather than deleted, so a reader can tell which parts ride on the local
-  commands and which are hosted-only.
+- Vendored methodology guides (`writing.md`, `evidence.md`, `climbing.md`,
+  `practices.md`, `shaping.md`, `comments.md`, `plans.md`, `tracks.md`,
+  `roadmaps.md`, `flows.md`) were adapted for this local Antigravity plugin
+  under the MIT license in `LICENSE-mit`.
+- Hosted-only SaaS sections, remote API URLs, API keys/webhook tokens, and
+  non-existent SaaS MCP tools were removed or rewritten to use this plugin's
+  actual local `hillclimb_*` MCP tools, `hillclimb` CLI commands, and
+  `src/actions.ts` schemas.
+- `writing.md` preserves the `# Outcomes`, `# Criteria`, `# Goals`, and
+  `# Placement` sections and all 22 rubric rule codes and titles
+  (`O1`–`O6`, `C1`–`C9`, `G1`–`G4`, `P1`–`P3`) verbatim for `src/linter.ts`.
 
 
 ## Planning and coordination guides

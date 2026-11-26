@@ -24,6 +24,7 @@ import {
   installEngine,
   resolveRepoDirectory,
   scanProjectClimbs,
+  type ScanProjectClimbsOptions,
 } from "./repo-ops.js";
 import { actionSchema, type Action } from "./actions.js";
 import { lintTree } from "./linter.js";
@@ -144,6 +145,13 @@ function jsonResult(data: Record<string, unknown>, textSummary?: string) {
   };
 }
 
+function appJsonResult(data: Record<string, unknown>, textSummary = "OK") {
+  return {
+    content: [{ type: "text" as const, text: cap(textSummary) }],
+    structuredContent: data,
+  };
+}
+
 function errorResult(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   const hint = error instanceof HillClimbError ? error.hint : undefined;
@@ -159,7 +167,7 @@ function defaultSessionActor(): string {
 
 export function createHillClimbServer(repo: Repository, runtime: Runtime): McpServer {
   const autoTracker = createAutoTracker(repo);
-  const scanAndSync = (projectId: string, opts?: { force?: boolean }) => {
+  const scanAndSync = (projectId: string, opts?: ScanProjectClimbsOptions) => {
     const dir = repo.getProject(projectId)?.directory ?? null;
     const scanned = scanProjectClimbs(dir, opts);
     return autoTracker.syncScannedClimbs(projectId, scanned);
@@ -169,13 +177,14 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     if (envId && envId !== "outside-of-project" && projects.some((p) => p.id === envId)) {
       return envId;
     }
-    // Prefer a project that already has outcomes (most recently active first)
+    // Prefer a project that already has outcomes (most recently active first) using O(1) SQL metadata
+    const summaries = new Map(repo.projectSummaries().map((s) => [s.project, s]));
     let bestPopulated: { id: string; score: number } | null = null;
     for (const p of projects) {
-      const t = repo.read(p.id);
-      if (t.outcomes.length > 0 || t.goals.length > 0) {
-        const lastAt = t.activity.length > 0 ? Date.parse(t.activity[t.activity.length - 1]!.at) || 0 : 0;
-        const score = lastAt > 0 ? lastAt : t.outcomes.length;
+      const meta = summaries.get(p.id);
+      if (meta && (meta.outcomeCount > 0 || meta.goalCount > 0)) {
+        const lastAt = meta.lastActivityAt ? Date.parse(meta.lastActivityAt) || 0 : 0;
+        const score = lastAt > 0 ? lastAt : meta.outcomeCount;
         if (!bestPopulated || score > bestPopulated.score) {
           bestPopulated = { id: p.id, score };
         }
@@ -188,7 +197,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     return projects[0]?.id ?? repo.resolveProjectId();
   };
   const server = new McpServer(
-    { name: "hillclimb", version: "0.3.1" },
+    { name: "hillclimb", version: "0.4.0" },
     {
       capabilities: {
         tools: {},
@@ -256,9 +265,9 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
           ? repo.resolveProjectId(args.projectId)
           : pickDefaultProject(projects);
         const track = args.track ?? "main";
-        const repoClimbs = scanAndSync(chosen);
+        const repoClimbs = scanAndSync(chosen, { rowLimit: 25, includeNotes: false });
         const tree = repo.view(chosen, track);
-        const inboxCount = repo.projects().reduce((sum, id) => sum + repo.view(id).inbox, 0);
+        const inboxCount = repo.inboxCountTotal();
         const defaultPage = args.page ?? (tree.outcomes.length === 0 && repoClimbs.climbs.length > 0 ? "climbs" : "tree");
         const payload = {
           projects,
@@ -271,7 +280,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
           inboxCount,
         };
         const summary = `Opened Hill Climb for project "${chosen}" (${tree.outcomes.length} outcomes, ${repoClimbs.climbs.length} repo climb(s), ${tree.next.length} ready next, ${tree.inbox} inbox item(s)).`;
-        return jsonResult(payload, summary);
+        return appJsonResult(payload, summary);
       } catch (error) {
         return errorResult(error);
       }
@@ -312,14 +321,23 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
       inputSchema: {
         name: z.string().min(1).max(64).optional().describe("Climb name; omit if the repo has only one"),
         directory: z.string().min(1).max(1024).optional().describe("Absolute repository path"),
-        last: z.number().int().min(0).max(200).optional().describe("Number of log rows to include (default 15)"),
+        last: z.number().int().min(0).max(200).optional().describe("Number of log rows to include (default 10 compact, 15 full)"),
+        format: z.enum(["compact", "full"]).default("compact").describe("compact omits duplicated recent-row array from structuredContent (trail remains in text); full includes complete rows"),
       },
     },
-    async ({ name, directory, last }) => {
+    async ({ name, directory, last, format }) => {
       try {
         const dir = resolveRepoDirectory(directory);
-        const res = getClimbStatus(dir, name, last ?? 15);
-        return jsonResult({ directory: dir, engine: res.engine, ...res.summary }, res.textWithNext);
+        const rowCount = last ?? (format === "full" ? 15 : 10);
+        const res = getClimbStatus(dir, name, rowCount);
+        if (format === "full") {
+          return jsonResult({ directory: dir, engine: res.engine, ...res.summary }, res.textWithNext);
+        }
+        const { recent: _recent, ...compactSummary } = res.summary;
+        return jsonResult(
+          { directory: dir, engine: res.engine, ...compactSummary, recentCount: res.summary.recent.length },
+          res.textWithNext,
+        );
       } catch (error) {
         return errorResult(error);
       }
@@ -360,13 +378,24 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
           .boolean()
           .default(true)
           .describe("Also scan linked git worktrees and Antigravity swarm worktrees for this repo (default true)"),
+        includeRows: z
+          .boolean()
+          .default(false)
+          .describe("Include per-climb log rows in structuredContent (default false for compact output)"),
+        includeNotes: z
+          .boolean()
+          .default(false)
+          .describe("Include per-climb notes.md text in structuredContent (default false)"),
       },
     },
-    async ({ directory, includeWorktrees }) => {
+    async ({ directory, includeWorktrees, includeRows, includeNotes }) => {
       try {
         const dir = resolveRepoDirectory(directory);
         if (includeWorktrees) {
-          const scanned = scanProjectClimbs(dir);
+          const scanned = scanProjectClimbs(dir, {
+            rowLimit: includeRows ? 50 : 0,
+            includeNotes,
+          });
           const text =
             scanned.climbs.length === 0
               ? `No climbs in ${dir} (checked ${scanned.worktreesScanned} linked worktree(s)).`
@@ -377,7 +406,14 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
                       : `${c.name} (${c.isMainCheckout ? "main" : c.worktreeName}): preparing (${c.preparedFiles} staged files, awaiting climb.py init)`,
                   )
                   .join("\n");
-          return jsonResult(scanned as unknown as Record<string, unknown>, text);
+          const payload =
+            includeRows || includeNotes
+              ? (scanned as unknown as Record<string, unknown>)
+              : ({
+                  ...scanned,
+                  climbs: scanned.climbs.map(({ rows: _rows, notes: _notes, ...rest }) => rest),
+                } as unknown as Record<string, unknown>);
+          return jsonResult(payload, text);
         }
         const res = getClimbList(dir);
         return jsonResult({ directory: dir, climbs: res.climbs, prepared: res.prepared }, res.text);
@@ -452,9 +488,13 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
         directory: z.string().optional().describe("Workspace directory to resolve the project from"),
         key: z.string().optional().describe("Specific outcome key to inspect"),
         track: z.string().optional().describe("Evidence track (defaults to main)"),
+        limit: z.number().int().min(1).max(200).default(50).describe("Max ranked outcomes returned when key is omitted"),
+        offset: z.number().int().min(0).default(0).describe("Offset into ranked outcomes when key is omitted"),
+        evidenceLimit: z.number().int().min(1).max(MAX_LIMIT).default(20).describe("Max recent evidence rows when key is set"),
+        commentLimit: z.number().int().min(1).max(MAX_LIMIT).default(20).describe("Max recent comments when key is set"),
       },
     },
-    async ({ projectId, directory, key, track }) => {
+    async ({ projectId, directory, key, track, limit, offset, evidenceLimit, commentLimit }) => {
       try {
         const pid = repo.resolveProjectId(projectId, directory);
         const trackName = track ?? "main";
@@ -463,26 +503,54 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
         if (key && !s.outcomes.some((o) => o.key === key)) {
           throw new Error("Unknown outcome " + key);
         }
-        const data = key
-          ? {
-              projectId: pid,
-              track: trackName,
-              contract: s.outcomes.find((o) => o.key === key),
-              rank: s.ranked.find((o) => o.key === key),
-              plans: s.plans.filter((p) => p.key === key),
-              evidence: s.evidence.filter((e) => e.key === key && e.track === trackName),
-              comments: s.comments.filter((c) => c.key === key),
-              inbox: s.inbox,
-            }
-          : {
-              projectId: pid,
-              track: trackName,
-              goals: s.goals,
-              ranked: s.ranked.map(({ key: k, signal, blockedBy, claim }) => ({ key: k, signal, blockedBy, claim })),
-              next: s.next,
-              inbox: s.inbox,
-            };
-        return jsonResult(data);
+        if (key) {
+          const allPlans = s.plans.filter((p) => p.key === key);
+          const allEvidence = s.evidence.filter((e) => e.key === key && e.track === trackName);
+          const allComments = s.comments.filter((c) => c.key === key);
+          const plans = allPlans.slice(-5).map((p) => ({
+            ...p,
+            body: bound(p.body, MAX_TEXT).text,
+            bodyTruncated: p.body.length > MAX_TEXT,
+          }));
+          const evidence = allEvidence.slice(-evidenceLimit).map((e) => ({
+            ...e,
+            text: bound(e.text, MAX_EVIDENCE_TEXT).text,
+            textTruncated: e.text.length > MAX_EVIDENCE_TEXT,
+          }));
+          const comments = allComments.slice(-commentLimit).map((c) => ({
+            ...c,
+            text: bound(c.text, MAX_EVIDENCE_TEXT).text,
+            textTruncated: c.text.length > MAX_EVIDENCE_TEXT,
+          }));
+          return jsonResult({
+            projectId: pid,
+            track: trackName,
+            contract: s.outcomes.find((o) => o.key === key),
+            rank: s.ranked.find((o) => o.key === key),
+            plans,
+            evidence,
+            comments,
+            counts: { plans: allPlans.length, evidence: allEvidence.length, comments: allComments.length },
+            inbox: s.inbox,
+          });
+        }
+        const rankedAll = s.ranked.map(({ key: k, signal, blockedBy, claim }) => ({ key: k, signal, blockedBy, claim }));
+        const page = windowOf(rankedAll, limit, offset);
+        return jsonResult({
+          projectId: pid,
+          track: trackName,
+          goals: s.goals,
+          ranked: page.items,
+          pagination: {
+            total: page.total,
+            offset: page.offset,
+            limit: page.limit,
+            hasMore: page.hasMore,
+            nextOffset: page.nextOffset,
+          },
+          next: s.next,
+          inbox: s.inbox,
+        });
       } catch (error) {
         return errorResult(error);
       }
@@ -501,17 +569,21 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
         track: z.string().optional(),
         limit: z.number().int().min(1).max(MAX_LIMIT).default(DEFAULT_LIMIT),
         offset: z.number().int().min(0).default(0),
+        includeContract: z.boolean().default(false).describe("Include story, criteria, and dependsOn inline to save a hillclimb_outcome call"),
+        includeBlocked: z.boolean().default(false).describe("Also list unverified outcomes currently blocked by unproven dependencies"),
       },
     },
-    async ({ projectId, directory, track, limit, offset }) => {
+    async ({ projectId, directory, track, limit, offset, includeContract, includeBlocked }) => {
       try {
         const pid = repo.resolveProjectId(projectId, directory);
         const trackName = track ?? "main";
         scanAndSync(pid);
         const snapshot = repo.view(pid, trackName);
-        const rows = snapshot.next.map((wanted) => {
-          const rank = snapshot.ranked.find((r) => r.key === wanted);
-          const outcome = snapshot.outcomes.find((row) => row.key === wanted);
+        const outcomeByKey = new Map(snapshot.outcomes.map((row) => [row.key, row]));
+        const rankByKey = new Map(snapshot.ranked.map((row) => [row.key, row]));
+        const formatRow = (wanted: string) => {
+          const rank = rankByKey.get(wanted);
+          const outcome = outcomeByKey.get(wanted);
           return {
             key: wanted,
             title: outcome?.title ?? wanted,
@@ -520,14 +592,24 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
             signal: rank?.signal ?? "unverified",
             blockedBy: rank?.blockedBy ?? [],
             claim: rank?.claim ?? null,
+            ...(includeContract && outcome
+              ? { story: outcome.story, criteria: outcome.criteria, dependsOn: outcome.dependsOn }
+              : {}),
           };
-        });
+        };
+        const rows = snapshot.next.map(formatRow);
         const counts: Record<string, number> = {};
         for (const rank of snapshot.ranked) counts[rank.signal] = (counts[rank.signal] ?? 0) + 1;
+        const blocked = includeBlocked
+          ? snapshot.ranked
+              .filter((r) => r.signal !== "verified" && r.blockedBy.length > 0)
+              .map((r) => formatRow(r.key))
+          : undefined;
         return jsonResult({
           projectId: pid,
           track: trackName,
           queue: windowOf(rows, limit, offset),
+          ...(includeBlocked ? { blocked: windowOf(blocked ?? [], limit, 0) } : {}),
           outcomeCount: snapshot.outcomes.length,
           bySignal: counts,
           inbox: inboxOf(snapshot),
@@ -631,28 +713,52 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
         directory: z.string().optional(),
         action: z
           .union([z.string(), z.record(z.string(), z.unknown())])
+          .optional()
           .describe("JSON string or object with `op` and its arguments"),
+        actions: z
+          .array(z.union([z.string(), z.record(z.string(), z.unknown())]))
+          .min(1)
+          .max(50)
+          .optional()
+          .describe("Optional atomic batch of actions to apply in one transaction"),
       },
     },
-    async ({ projectId, directory, action }) => {
+    async ({ projectId, directory, action, actions }) => {
       try {
         const pid = repo.resolveProjectId(projectId, directory);
-        const raw = typeof action === "string" ? JSON.parse(action) : action;
-        const parsed = actionSchema.parse(raw);
-        if (isDecision(parsed)) {
-          throw new HillClimbError("Review this decision in the Hill Climb UI inbox (human confirmation required).", {
-            code: "human_decision_required",
-            hint: "Call hillclimb_open with page='inbox' or page='roadmap' so the user can review and confirm.",
-          });
+        const rawList = actions ?? (action !== undefined ? [action] : []);
+        if (rawList.length === 0) {
+          throw new Error("Pass `action` or a non-empty `actions` array.");
         }
-        repo.act(pid, parsed);
+        const parsedList = rawList.map((item) => {
+          const raw = typeof item === "string" ? JSON.parse(item) : item;
+          const parsed = actionSchema.parse(raw);
+          if (isDecision(parsed)) {
+            throw new HillClimbError("Review this decision in the Hill Climb UI inbox (human confirmation required).", {
+              code: "human_decision_required",
+              hint: "Call hillclimb_open with page='inbox' or page='roadmap' so the user can review and confirm.",
+            });
+          }
+          return parsed;
+        });
+        if (parsedList.length === 1) {
+          repo.act(pid, parsedList[0]!);
+        } else {
+          repo.actBatch(pid, parsedList);
+        }
         const view = repo.view(pid);
+        const createdKeys = new Set(
+          parsedList
+            .filter((p): p is Extract<Action, { op: "create_goal" | "create_outcome" }> => p.op === "create_goal" || p.op === "create_outcome")
+            .map((p) => p.key),
+        );
         return jsonResult({
           ok: true,
           projectId: pid,
+          applied: parsedList.length,
           inbox: view.inbox,
-          ...(parsed.op === "create_goal" || parsed.op === "create_outcome"
-            ? { lint: lintTree(view).findings.filter((f) => f.itemKey === parsed.key) }
+          ...(createdKeys.size > 0
+            ? { lint: lintTree(view).findings.filter((f) => createdKeys.has(f.itemKey)) }
             : {}),
         });
       } catch (error) {
@@ -1183,15 +1289,19 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
         directory: z.string().optional(),
         key: keySchema,
         engine: z.enum(["repo", "search"]),
-        rig: rigSchema.optional().describe("Provide to save a new verifier rig for the outcome's current contract version"),
+        rig: z
+          .record(z.string(), z.unknown())
+          .optional()
+          .describe("Verifier rig object ({engine:'repo', check, direction, target, guard, holdout, lock, ...} or {engine:'search', problemId, metric, higherIsBetter, target, verifier, baseline, ...}) validated against rigSchema"),
       },
     },
     async ({ projectId, directory, key, engine, rig }) => {
       try {
         const pid = repo.resolveProjectId(projectId, directory);
         if (rig) {
+          const parsedRig = rigSchema.parse(rig);
           const outcome = outcomeOf(repo.read(pid), key);
-          const saved = runtime.saveRig(pid, key, outcome.version, rig);
+          const saved = runtime.saveRig(pid, key, outcome.version, parsedRig);
           return jsonResult({ projectId: pid, key, saved, rig: runtime.getRig(pid, key, engine) });
         }
         return jsonResult({ projectId: pid, key, engine, rig: runtime.getRig(pid, key, engine) });
@@ -1505,8 +1615,8 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     async () => {
       try {
         const projects = repo.listProjects();
-        const inboxCount = repo.projects().reduce((n, id) => n + repo.view(id).inbox, 0);
-        return jsonResult({ projects, inboxCount });
+        const inboxCount = repo.inboxCountTotal();
+        return appJsonResult({ projects, inboxCount }, `${projects.length} project(s), ${inboxCount} inbox item(s)`);
       } catch (error) {
         return errorResult(error);
       }
@@ -1528,7 +1638,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     async ({ id, name, directory }) => {
       try {
         const project = repo.registerProject({ id, name, directory: directory ?? null });
-        return jsonResult({ project, projects: repo.listProjects() });
+        return appJsonResult({ project, projects: repo.listProjects() }, `Registered project ${project.id}`);
       } catch (error) {
         return errorResult(error);
       }
@@ -1547,8 +1657,11 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
       try {
         const repoClimbs = scanAndSync(projectId, { force });
         const tree = repo.view(projectId, track ?? "main");
-        const inboxCount = repo.projects().reduce((n, id) => n + repo.view(id).inbox, 0);
-        return jsonResult({ tree, repoClimbs, inboxCount });
+        const inboxCount = repo.inboxCountTotal();
+        return appJsonResult(
+          { tree, repoClimbs, inboxCount },
+          `Tree ${projectId} (${tree.outcomes.length} outcomes, ${repoClimbs.climbs.length} climb(s), ${inboxCount} inbox)`,
+        );
       } catch (error) {
         return errorResult(error);
       }
@@ -1566,7 +1679,10 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     async ({ projectId, force }) => {
       try {
         const repoClimbs = scanAndSync(projectId, { force: force ?? true });
-        return jsonResult(repoClimbs as unknown as Record<string, unknown>);
+        return appJsonResult(
+          repoClimbs as unknown as Record<string, unknown>,
+          `${repoClimbs.climbs.length} climb(s) in ${projectId}`,
+        );
       } catch (error) {
         return errorResult(error);
       }
@@ -1586,8 +1702,11 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
         autoTracker.setAutoTrackEnabled(projectId, enabled);
         const repoClimbs = scanAndSync(projectId);
         const tree = repo.view(projectId, track ?? "main");
-        const inboxCount = repo.projects().reduce((n, id) => n + repo.view(id).inbox, 0);
-        return jsonResult({ ok: true, autoTrackClimbs: enabled, tree, repoClimbs, inboxCount });
+        const inboxCount = repo.inboxCountTotal();
+        return appJsonResult(
+          { ok: true, autoTrackClimbs: enabled, tree, repoClimbs, inboxCount },
+          `Auto-track ${enabled ? "enabled" : "disabled"} for ${projectId}`,
+        );
       } catch (error) {
         return errorResult(error);
       }
@@ -1613,8 +1732,11 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
         const outcomeKey = autoTracker.trackClimb(projectId, target, { autoCreated: false });
         const repoClimbs = autoTracker.syncScannedClimbs(projectId, scanned);
         const tree = repo.view(projectId, track ?? "main");
-        const inboxCount = repo.projects().reduce((n, id) => n + repo.view(id).inbox, 0);
-        return jsonResult({ ok: true, outcomeKey, tree, repoClimbs, inboxCount });
+        const inboxCount = repo.inboxCountTotal();
+        return appJsonResult(
+          { ok: true, outcomeKey, tree, repoClimbs, inboxCount },
+          `Tracked climb ${climbId} as ${outcomeKey}`,
+        );
       } catch (error) {
         return errorResult(error);
       }
@@ -1628,19 +1750,22 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
       description: "Apply a tree action from UI (supports human-confirmed contract decisions)",
       inputSchema: {
         projectId: z.string().min(1),
-        action: actionSchema,
+        action: z.record(z.string(), z.unknown()),
         confirmed: z.boolean().optional(),
+        track: z.string().optional(),
       },
       _meta: APP_ONLY,
     },
-    async ({ projectId, action, confirmed }) => {
+    async ({ projectId, action, confirmed, track }) => {
       try {
-        if (isDecision(action) && confirmed !== true) {
+        const parsed = actionSchema.parse(action);
+        if (isDecision(parsed) && confirmed !== true) {
           throw new Error("Human confirmation required before approving/rejecting a contract change or promoting a track.");
         }
-        repo.act(projectId, action);
-        const tree = repo.view(projectId);
-        return jsonResult({ ok: true, tree });
+        repo.act(projectId, parsed);
+        const tree = repo.view(projectId, track ?? "main");
+        const inboxCount = repo.inboxCountTotal();
+        return appJsonResult({ ok: true, tree, inboxCount }, `Applied ${parsed.op} on ${projectId}`);
       } catch (error) {
         return errorResult(error);
       }
@@ -1664,7 +1789,10 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
           from: p.live ?? "missing",
           to: p.track ?? "missing",
         }));
-        return jsonResult({ rows, summary: preview.summary, canApply: preview.canApply, reason: preview.reason });
+        return appJsonResult(
+          { rows, summary: preview.summary, canApply: preview.canApply, reason: preview.reason },
+          `Promotion preview: ${preview.summary.proven}/${preview.summary.total} proven`,
+        );
       } catch (error) {
         return errorResult(error);
       }
@@ -1681,7 +1809,8 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     },
     async ({ projectId, key, engine }) => {
       try {
-        return jsonResult({ rig: runtime.getRig(projectId, key, engine) });
+        const rig = runtime.getRig(projectId, key, engine);
+        return appJsonResult({ rig }, rig ? `Rig loaded for ${key} (${engine})` : `No ${engine} rig for ${key}`);
       } catch (error) {
         return errorResult(error);
       }
@@ -1697,14 +1826,15 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
         projectId: z.string().min(1),
         key: z.string().min(1),
         version: z.number().int().positive(),
-        rig: rigSchema,
+        rig: z.record(z.string(), z.unknown()),
       },
       _meta: APP_ONLY,
     },
     async ({ projectId, key, version, rig }) => {
       try {
-        const saved = runtime.saveRig(projectId, key, version, rig);
-        return jsonResult({ ok: true, saved });
+        const parsedRig = rigSchema.parse(rig);
+        const saved = runtime.saveRig(projectId, key, version, parsedRig);
+        return appJsonResult({ ok: true, saved }, `Saved ${parsedRig.engine} rig for ${key} v${version}`);
       } catch (error) {
         return errorResult(error);
       }
@@ -1728,7 +1858,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     async ({ projectId, key, engine, track, deferWorkerLaunch }) => {
       try {
         const result = await runtime.dispatch(projectId, key, engine, track, { deferWorkerLaunch });
-        return jsonResult(result as unknown as Record<string, unknown>);
+        return appJsonResult(result as unknown as Record<string, unknown>, `Dispatched ${result.runId} for ${key}`);
       } catch (error) {
         return errorResult(error);
       }
@@ -1746,7 +1876,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     async ({ runId, conversationId }) => {
       try {
         const run = runtime.attachWorker(runId, conversationId);
-        return jsonResult({ ok: true, run });
+        return appJsonResult({ ok: true, run }, `Attached ${conversationId} to ${runId}`);
       } catch (error) {
         return errorResult(error);
       }
@@ -1768,10 +1898,10 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
           const dir = repo.getProject(projectId)?.directory ?? null;
           const fallback = autoTracker.liveForOutcome(projectId, key, dir);
           if (fallback) {
-            return jsonResult(fallback as unknown as Record<string, unknown>);
+            return appJsonResult(fallback as unknown as Record<string, unknown>, `Live fallback for ${key}`);
           }
         }
-        return jsonResult(live as unknown as Record<string, unknown>);
+        return appJsonResult(live as unknown as Record<string, unknown>, `Live status for ${key}`);
       } catch (error) {
         return errorResult(error);
       }
@@ -1789,7 +1919,10 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     async ({ projectId }) => {
       try {
         const report = await runtime.reconcile(projectId);
-        return jsonResult(report as unknown as Record<string, unknown>);
+        return appJsonResult(
+          report as unknown as Record<string, unknown>,
+          `Reconciled ${report.scanned} run(s): ${report.applied} applied`,
+        );
       } catch (error) {
         return errorResult(error);
       }
@@ -1809,7 +1942,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
         const dir = repo.getProject(projectId)?.directory;
         if (!dir) throw new Error(`Project ${projectId} has no registered workspace directory.`);
         const res = await writeMirror(dir, repo.view(projectId));
-        return jsonResult(res);
+        return appJsonResult(res, `Synced ${res.files} files to ${res.root}`);
       } catch (error) {
         return errorResult(error);
       }
@@ -1827,7 +1960,10 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     async ({ projectId }) => {
       try {
         const result = lintTree(repo.read(projectId));
-        return jsonResult(result as unknown as Record<string, unknown>);
+        return appJsonResult(
+          result as unknown as Record<string, unknown>,
+          `Lint ${result.passed ? "passed" : "failed"} (${result.errorCount} errors, ${result.warningCount} warnings)`,
+        );
       } catch (error) {
         return errorResult(error);
       }
@@ -1857,11 +1993,7 @@ if (isEntrypoint) {
 
   const shutdown = () => {
     runtime.stop();
-    try {
-      db.close();
-    } catch {
-      // ignore
-    }
+    repo.close();
     process.exit(0);
   };
   process.on("SIGINT", shutdown);

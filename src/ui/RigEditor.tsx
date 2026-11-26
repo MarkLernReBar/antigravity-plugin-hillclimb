@@ -72,6 +72,50 @@ export function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'"'"'`)}'`
 }
 
+/** Minimal POSIX shlex tokenizer for round-tripping kit commands back into the editor. */
+export function splitShellArgs(command: string): string[] {
+  const tokens: string[] = []
+  let current = ''
+  let inToken = false
+  let quote: "'" | '"' | null = null
+  for (let i = 0; i < command.length; i++) {
+    const ch = command[i]!
+    if (quote === "'") {
+      if (ch === "'") quote = null
+      else current += ch
+      continue
+    }
+    if (quote === '"') {
+      if (ch === '"') {
+        quote = null
+      } else if (ch === '\\' && i + 1 < command.length) {
+        current += command[++i]!
+      } else {
+        current += ch
+      }
+      continue
+    }
+    if (/\s/.test(ch)) {
+      if (inToken) {
+        tokens.push(current)
+        current = ''
+        inToken = false
+      }
+      continue
+    }
+    inToken = true
+    if (ch === "'" || ch === '"') {
+      quote = ch
+    } else if (ch === '\\' && i + 1 < command.length) {
+      current += command[++i]!
+    } else {
+      current += ch
+    }
+  }
+  if (inToken) tokens.push(current)
+  return tokens
+}
+
 export interface KitInputs {
   kitRoot: string
   /** The project's data directory: its own kit.json, manifest, holdout, fixtures. */
@@ -118,6 +162,8 @@ function substitute(
 export interface KitCommands {
   score: string
   guards: Record<string, string>
+  /** Single-pass command validating every guard in one candidate run. */
+  allGuards: string
   /** The holdout invocation: scored on the held-out split, run by its own command. */
   holdout: string | null
   /** The preflight the worker runs before `init`; the shipped CLI is the whole proof. */
@@ -128,6 +174,7 @@ export function kitCommands(kit: KitMeta, inputs: KitInputs): KitCommands {
   const score = substitute(kit.check, kit, inputs, inputs.candidate, null)
   const guards: Record<string, string> = {}
   for (const guard of kit.guards) guards[guard] = `${score} --guard ${shellQuote(guard)}`
+  const allGuards = `${score} --all-guards`
   const preflight = [
     'python3',
     shellQuote(`${trimSlash(inputs.kitRoot)}/preflight.py`),
@@ -144,6 +191,7 @@ export function kitCommands(kit: KitMeta, inputs: KitInputs): KitCommands {
   return {
     score,
     guards,
+    allGuards,
     holdout:
       kit.holdout === undefined
         ? null
@@ -288,14 +336,76 @@ export function draftForKit(draft: Draft, kit: KitMeta): Draft {
   }
 }
 
+/** Reconstruct kit editor fields from a saved kit-configured RepoRig so re-editing preserves kit mode. */
+function detectKitFromRig(existing: RepoRig): Partial<Draft> | null {
+  if (!existing.preflight) return null
+  const tokens = splitShellArgs(existing.preflight)
+  const preflightIdx = tokens.findIndex((t) => t === 'preflight')
+  if (preflightIdx < 1) return null
+  const scriptPath = tokens[preflightIdx - 1] ?? ''
+  if (!scriptPath.endsWith('preflight.py')) return null
+  const flagValue = (flag: string): string => {
+    const idx = tokens.indexOf(flag, preflightIdx + 1)
+    return idx >= 0 && idx + 1 < tokens.length ? tokens[idx + 1]! : ''
+  }
+  const kitId = flagValue('--kit')
+  const kit = kitById(kitId)
+  if (!kit) return null
+  const dataDir = flagValue('--data')
+  const candidate = flagValue('--candidate')
+  const holdoutCandidate = flagValue('--holdout-candidate')
+  if (!dataDir || !candidate) return null
+  const kitRoot = scriptPath.replace(/\/preflight\.py$/, '') || DEFAULT_KIT_ROOT
+  const guards: Record<string, boolean> = {}
+  for (const g of kit.guards) guards[g] = false
+  let sawGuardFlag = false
+  for (const cmd of existing.guard) {
+    const gTokens = splitShellArgs(cmd)
+    if (gTokens.includes('--all-guards')) {
+      for (const g of kit.guards) guards[g] = true
+      sawGuardFlag = true
+    }
+    for (let i = 0; i < gTokens.length - 1; i++) {
+      if (gTokens[i] === '--guard' && gTokens[i + 1]! in guards) {
+        guards[gTokens[i + 1]!] = true
+        sawGuardFlag = true
+      }
+    }
+  }
+  if (!sawGuardFlag) {
+    for (const g of kit.guards) guards[g] = true
+  }
+  let holdoutPath = ''
+  if (existing.holdout) {
+    const hTokens = splitShellArgs(existing.holdout)
+    const hIdx = hTokens.indexOf('--holdout')
+    const explicit = hIdx >= 0 && hIdx + 1 < hTokens.length ? hTokens[hIdx + 1]! : ''
+    const defaultHoldout = `${trimSlash(dataDir)}/${kit.data.holdout}`
+    if (explicit && explicit !== defaultHoldout) {
+      holdoutPath = explicit
+    }
+  }
+  return {
+    kit: kit.id,
+    kitRoot,
+    dataDir,
+    candidate,
+    holdoutCandidate,
+    holdoutPath,
+    guards,
+  }
+}
+
 /** A stored rig as the editor's strings. */
 export function seedDraft(existing: Rig | null, engine: 'repo' | 'search'): Draft {
   const draft = emptyDraft(engine)
   if (existing === null) return draft
   const covered = (): Record<string, boolean> => Object.fromEntries((existing.criterionIds ?? []).map((id) => [id, true]))
   if (existing.engine === 'repo') {
+    const kitFields = detectKitFromRig(existing)
     return {
       ...draft,
+      ...(kitFields ?? {}),
       covers: covered(),
       preflight: existing.preflight ?? '',
       // Without a recorded meaning, read it off what the stored rig does: a
@@ -380,7 +490,7 @@ export function selectedGuards(draft: Draft, kit: KitMeta): string[] {
   return kit.guards.filter((guard) => draft.guards[guard] === true)
 }
 
-const MIN_GAIN = /^\d+(?:\.\d+)?%?$/
+const MIN_GAIN = /^(?:\d+(?:\.\d*)?|\.\d+)%?$/
 const BUDGET = /^\d+(?:\.\d+)?[smh]$/
 const PROBLEM_ID = /^[a-z0-9][a-z0-9._-]*$/
 
@@ -499,7 +609,13 @@ export function buildRig(draft: Draft, outcome: Outcome, existing: Rig | null, k
 
   if (draft.engine === 'repo') {
     const check = commands === null ? linesOf(draft.check) : [commands.score]
-    const guard = commands === null ? linesOf(draft.guard) : selectedGuards(draft, kit!).map((name) => commands.guards[name])
+    const pickedGuards = kit === null ? [] : selectedGuards(draft, kit)
+    const guard =
+      commands === null
+        ? linesOf(draft.guard)
+        : pickedGuards.length === kit!.guards.length
+          ? [commands.allGuards]
+          : pickedGuards.map((name) => commands.guards[name]!)
     const holdout = commands === null ? draft.holdout.trim() : (commands.holdout ?? '')
     const lock = kit === null ? linesOf(draft.lock) : lockPaths(kit, inputs)
     const preflight = kit === null ? draft.preflight.trim() : commands!.preflight
@@ -595,7 +711,14 @@ export function budgetPreview(draft: Draft, kit: KitMeta | null): BudgetLine[] {
             (steps === null ? '' : ` → up to ${(runs + 1) * steps} scoring runs`),
       known: runs !== null,
     })
-    out.push({ label: 'Guard runs', detail: `${guards} guard command${guards === 1 ? '' : 's'} on every kept step`, known: true })
+    const allKitGuards = kit !== null && guards === kit.guards.length && guards > 1
+    out.push({
+      label: 'Guard runs',
+      detail: allKitGuards
+        ? `1 single-pass guard command (${guards} checks) on every kept step`
+        : `${guards} guard command${guards === 1 ? '' : 's'} on every kept step`,
+      known: true,
+    })
     if (draft.paired) out.push({ label: 'Paired measurement', detail: 'candidate and incumbent are measured alternately in the same step', known: true })
     out.push({
       label: 'Wall clock',

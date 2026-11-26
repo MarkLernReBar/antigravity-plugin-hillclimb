@@ -1,5 +1,8 @@
 #!/usr/bin/env node
-import { createRepository, defaultDataDir, openDatabase } from "./repository.js";
+import { realpathSync } from "node:fs";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { createRepository, defaultDataDir, openDatabase, type Repository } from "./repository.js";
 import { createRuntime } from "./runtime.js";
 import {
   ENGINE_COMMANDS,
@@ -21,7 +24,9 @@ import { ingestJunitReport, postTestEvidenceBundle } from "./ci-ingest.js";
 import { runStudyPreview, runStudyReport } from "./studies.js";
 import { HillClimbError } from "./errors.js";
 
-function parseArgs(argv: string[]) {
+const BOOLEAN_FLAGS = new Set(["json", "apply", "help"]);
+
+export function parseArgs(argv: string[]) {
   const positionals: string[] = [];
   const options: Record<string, string | boolean> = {};
   for (let i = 0; i < argv.length; i++) {
@@ -36,12 +41,16 @@ function parseArgs(argv: string[]) {
         options[token.slice(2, eq)] = token.slice(eq + 1);
       } else {
         const key = token.slice(2);
-        const next = argv[i + 1];
-        if (next !== undefined && !next.startsWith("--")) {
-          options[key] = next;
-          i++;
-        } else {
+        if (BOOLEAN_FLAGS.has(key)) {
           options[key] = true;
+        } else {
+          const next = argv[i + 1];
+          if (next !== undefined && !next.startsWith("--") && next !== "-h") {
+            options[key] = next;
+            i++;
+          } else {
+            options[key] = true;
+          }
         }
       }
     } else if (token === "-h") {
@@ -108,10 +117,26 @@ async function main(): Promise<number> {
     return 0;
   }
 
-  const dataDir = str(options["data-dir"]) ?? defaultDataDir();
-  const db = openDatabase(dataDir);
-  const repo = createRepository(db);
-  const runtime = createRuntime(repo, { automatic: false });
+  const dbState: { repo: Repository | null } = { repo: null };
+  const ensureRepo = (): Repository => {
+    if (!dbState.repo) {
+      const dataDir = str(options["data-dir"]) ?? defaultDataDir();
+      const db = openDatabase(dataDir);
+      try {
+        const created = createRepository(db);
+        createRuntime(created, { automatic: false });
+        dbState.repo = created;
+      } catch (error) {
+        try {
+          db.close();
+        } catch {
+          // ignore close error
+        }
+        throw error;
+      }
+    }
+    return dbState.repo;
+  };
 
   try {
     switch (command) {
@@ -176,9 +201,10 @@ async function main(): Promise<number> {
         return 0;
       }
       case "projects": {
+        const activeRepo = ensureRepo();
         const registerDir = str(options.register);
         if (registerDir) {
-          const registered = repo.registerProject({
+          const registered = activeRepo.registerProject({
             id: str(options.id),
             name: str(options.name),
             directory: registerDir,
@@ -186,12 +212,13 @@ async function main(): Promise<number> {
           console.log(JSON.stringify(registered, null, 2));
           return 0;
         }
-        console.log(JSON.stringify(repo.listProjects(), null, 2));
+        console.log(JSON.stringify(activeRepo.listProjects(), null, 2));
         return 0;
       }
       case "tree": {
-        const project = repo.resolveProjectId(str(options.project), str(options.dir));
-        const view = repo.view(project, str(options.track) ?? "main");
+        const activeRepo = ensureRepo();
+        const project = activeRepo.resolveProjectId(str(options.project), str(options.dir));
+        const view = activeRepo.view(project, str(options.track) ?? "main");
         const outcomeKey = str(options.outcome);
         if (!outcomeKey) {
           console.log(JSON.stringify(view, null, 2));
@@ -217,15 +244,16 @@ async function main(): Promise<number> {
       case "act": {
         const rawAction = positionals[0];
         if (!rawAction) throw new HillClimbError("Pass a JSON action object as the positional argument.", { code: "missing_action" });
-        const project = repo.resolveProjectId(str(options.project), str(options.dir));
         const action = actionSchema.parse(JSON.parse(rawAction));
         if (action.op === "approve_change" || action.op === "reject_change" || action.op === "promote_track") {
           throw new HillClimbError("Review this decision in the Hill Climb UI inbox (human confirmation required).", {
             code: "human_decision_required",
           });
         }
-        repo.act(project, action);
-        const view = repo.view(project);
+        const activeRepo = ensureRepo();
+        const project = activeRepo.resolveProjectId(str(options.project), str(options.dir));
+        activeRepo.act(project, action);
+        const view = activeRepo.view(project);
         console.log(
           JSON.stringify(
             {
@@ -243,32 +271,35 @@ async function main(): Promise<number> {
         return 0;
       }
       case "lint": {
-        const project = repo.resolveProjectId(str(options.project), str(options.dir));
-        const findings = lintTree(repo.read(project));
+        const activeRepo = ensureRepo();
+        const project = activeRepo.resolveProjectId(str(options.project), str(options.dir));
+        const findings = lintTree(activeRepo.read(project));
         console.log(JSON.stringify(findings, null, 2));
         return findings.passed ? 0 : 1;
       }
       case "sync": {
-        const project = repo.resolveProjectId(str(options.project), str(options.dir));
-        const info = repo.getProject(project);
+        const activeRepo = ensureRepo();
+        const project = activeRepo.resolveProjectId(str(options.project), str(options.dir));
+        const info = activeRepo.getProject(project);
         const dir = str(options.dir) ?? info?.directory;
         if (!dir) {
           throw new HillClimbError(`Project ${project} has no local directory; pass --dir <repo>.`, {
             code: "missing_directory",
           });
         }
-        const res = await writeMirror(dir, repo.view(project));
+        const res = await writeMirror(dir, activeRepo.view(project));
         console.log(JSON.stringify(res, null, 2));
         return 0;
       }
       case "ingest-junit": {
         const report = str(options.report);
         if (!report) throw new HillClimbError("Pass --report <file>.", { code: "missing_report" });
-        const project = repo.resolveProjectId(str(options.project), str(options.dir));
-        const res = ingestJunitReport(repo, {
+        const activeRepo = ensureRepo();
+        const project = activeRepo.resolveProjectId(str(options.project), str(options.dir));
+        const res = ingestJunitReport(activeRepo, {
           project,
           report,
-          directory: str(options.dir) ?? repo.getProject(project)?.directory ?? process.cwd(),
+          directory: str(options.dir) ?? activeRepo.getProject(project)?.directory ?? process.cwd(),
           format: (str(options.format) ?? "auto") as "auto" | "junit" | "json" | "text",
           source: str(options.source),
           track: str(options.track),
@@ -283,11 +314,12 @@ async function main(): Promise<number> {
       case "post-test-evidence": {
         const bundle = str(options.bundle);
         if (!bundle) throw new HillClimbError("Pass --bundle <file>.", { code: "missing_bundle" });
-        const project = repo.resolveProjectId(str(options.project), str(options.dir));
-        const res = postTestEvidenceBundle(repo, {
+        const activeRepo = ensureRepo();
+        const project = activeRepo.resolveProjectId(str(options.project), str(options.dir));
+        const res = postTestEvidenceBundle(activeRepo, {
           project,
           bundle,
-          directory: str(options.dir) ?? repo.getProject(project)?.directory ?? process.cwd(),
+          directory: str(options.dir) ?? activeRepo.getProject(project)?.directory ?? process.cwd(),
           track: str(options.track),
           limit: num(options.limit),
           apply: bool(options.apply),
@@ -328,17 +360,28 @@ async function main(): Promise<number> {
         });
     }
   } finally {
-    db.close();
+    dbState.repo?.close();
   }
 }
 
-main()
-  .then((code) => {
-    process.exitCode = code;
-  })
-  .catch((error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error);
-    const hint = error instanceof HillClimbError ? error.hint : undefined;
-    console.error(hint ? `${message}\n${hint}` : message);
-    process.exitCode = 1;
-  });
+function isMainEntrypoint(metaUrl: string): boolean {
+  if (!process.argv[1]) return false;
+  try {
+    return realpathSync(fileURLToPath(metaUrl)) === realpathSync(process.argv[1]);
+  } catch {
+    return resolve(fileURLToPath(metaUrl)) === resolve(process.argv[1]);
+  }
+}
+
+if (isMainEntrypoint(import.meta.url)) {
+  main()
+    .then((code) => {
+      process.exitCode = code;
+    })
+    .catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      const hint = error instanceof HillClimbError ? error.hint : undefined;
+      console.error(hint ? `${message}\n${hint}` : message);
+      process.exitCode = 1;
+    });
+}

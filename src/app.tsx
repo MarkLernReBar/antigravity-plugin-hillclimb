@@ -106,7 +106,7 @@ function HillClimbApp() {
     resolve: () => void;
     reject: (error: Error) => void;
   } | null>(null);
-  const initialLoadedProjectRef = useRef<string | null>(null);
+  const initialLoadedRef = useRef<{ projectId: string; track: string } | null>(null);
 
   const [confirmDecision, setConfirmDecision] = useState<{
     action: Action;
@@ -150,6 +150,19 @@ function HillClimbApp() {
         setInboxCount(res.inboxCount);
       } catch (e) {
         setTreeError(errMsg(e));
+      }
+    },
+    [callTool],
+  );
+
+  const pollRepoClimbs = useCallback(
+    async (pid: string, force = false) => {
+      if (!pid) return;
+      try {
+        const res = await callTool<RepoClimbsPayload>("app_repo_climbs", { projectId: pid, force });
+        setRepoClimbs(res);
+      } catch {
+        // non-fatal during quiet poll
       }
     },
     [callTool],
@@ -225,7 +238,7 @@ function HillClimbApp() {
 
   // Connect once using the MCP Apps SDK, registering handlers BEFORE connect().
   useEffect(() => {
-    const app = new App({ name: "Hill Climb", version: "0.3.0" }, {});
+    const app = new App({ name: "Hill Climb", version: "0.4.0" }, {});
     appRef.current = app;
 
     const applyThemeFromContext = (ctx: ReturnType<App["getHostContext"]>) => {
@@ -253,7 +266,9 @@ function HillClimbApp() {
         if (data.track) setTrack(data.track);
         if (data.tree) {
           setTree(data.tree);
-          if (data.projectId) initialLoadedProjectRef.current = data.projectId;
+          if (data.projectId) {
+            initialLoadedRef.current = { projectId: data.projectId, track: data.track ?? "main" };
+          }
         }
         if (data.repoClimbs) setRepoClimbs(data.repoClimbs);
         if (typeof data.inboxCount === "number") setInboxCount(data.inboxCount);
@@ -288,21 +303,44 @@ function HillClimbApp() {
   // Reload tree whenever project/track changes (skipping redundant double-fetch right after ontoolresult)
   useEffect(() => {
     if (!connected || !project) return;
-    if (initialLoadedProjectRef.current === project && track === "main" && tree !== null) {
-      initialLoadedProjectRef.current = null;
+    const init = initialLoadedRef.current;
+    if (init && init.projectId === project && init.track === track && tree !== null) {
+      initialLoadedRef.current = null;
       return;
     }
-    initialLoadedProjectRef.current = null;
+    initialLoadedRef.current = null;
     void loadTree(project, track);
   }, [connected, project, track, loadTree]);
 
-  // Quiet background poll without forcing a re-scan on every tab switch
+  // Quiet background poll: lightweight climbs-only RPC on the Climbs tab, tree poll elsewhere
   useEffect(() => {
     if (!connected || !project) return;
-    const intervalMs = page === "climbs" ? 10_000 : 30_000;
-    const timer = setInterval(() => void loadTree(project, track), intervalMs);
+    if (page === "climbs") {
+      const timer = setInterval(() => void pollRepoClimbs(project, false), 10_000);
+      return () => clearInterval(timer);
+    }
+    const timer = setInterval(() => void loadTree(project, track), 30_000);
     return () => clearInterval(timer);
-  }, [connected, project, track, page, loadTree]);
+  }, [connected, project, track, page, loadTree, pollRepoClimbs]);
+
+  // Escape-key dismissal for custom modal dialogs
+  useEffect(() => {
+    if (!confirmDecision && !addProjectOpen && !lintReport) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (confirmDecision) {
+        const pending = confirmDecision;
+        setConfirmDecision(null);
+        pending.resolve(false);
+      } else if (addProjectOpen) {
+        setAddProjectOpen(false);
+      } else if (lintReport) {
+        setLintReport(null);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [confirmDecision, addProjectOpen, lintReport]);
 
   const askConfirmation = useCallback(
     async (action: Action): Promise<boolean> => {
@@ -342,15 +380,16 @@ function HillClimbApp() {
         confirmed = await askConfirmation(action);
         if (!confirmed) throw new Error("Decision cancelled. The contract is unchanged.");
       }
-      const res = await callTool<{ ok: true; tree: Snapshot }>("app_act", {
+      const res = await callTool<{ ok: true; tree: Snapshot; inboxCount?: number }>("app_act", {
         projectId: project,
         action,
         confirmed,
+        track,
       });
       setTree(res.tree);
-      await loadProjects();
+      if (typeof res.inboxCount === "number") setInboxCount(res.inboxCount);
     },
-    [project, askConfirmation, callTool, loadProjects],
+    [project, track, askConfirmation, callTool],
   );
 
   const preview = useCallback(
@@ -390,7 +429,7 @@ function HillClimbApp() {
 
   const dispatch = useCallback(
     async (key: string, engine: "repo" | "search") => {
-      const rigRes = await callTool<{ rig: Rig | null }>("app_get_rig", {
+      let rigRes = await callTool<{ rig: Rig | null }>("app_get_rig", {
         projectId: project,
         key,
         engine,
@@ -398,10 +437,24 @@ function HillClimbApp() {
       if (!rigRes.rig) {
         const outcome = tree?.outcomes.find((item) => item.key === key);
         if (!outcome) throw new Error("Refresh the outcome before configuring a verifier.");
-        await new Promise<void>((resolve, reject) => {
-          setEditor({ outcome, engine, existing: null, resolve, reject });
-        }).catch(() => undefined);
-        throw new Error("Configure the scoring and holdout checks before starting the first climb.");
+        try {
+          await new Promise<void>((resolve, reject) => {
+            setEditor({ outcome, engine, existing: null, resolve, reject });
+          });
+        } catch (err) {
+          if (errMsg(err) === "cancelled") {
+            throw new Error("cancelled");
+          }
+          throw err;
+        }
+        rigRes = await callTool<{ rig: Rig | null }>("app_get_rig", {
+          projectId: project,
+          key,
+          engine,
+        });
+        if (!rigRes.rig) {
+          throw new Error("Configure the scoring and holdout checks before starting the first climb.");
+        }
       }
 
       const client = appRef.current;
@@ -746,6 +799,7 @@ function HillClimbApp() {
               <button
                 type="button"
                 className="hc-btn"
+                autoFocus
                 onClick={() => {
                   const pending = confirmDecision;
                   setConfirmDecision(null);
@@ -771,7 +825,15 @@ function HillClimbApp() {
       ) : null}
 
       {addProjectOpen ? (
-        <div className="hill-modal-backdrop" role="dialog" aria-modal="true" aria-label="Register project">
+        <div
+          className="hill-modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Register project"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setAddProjectOpen(false);
+          }}
+        >
           <form className="hill-modal" onSubmit={(e) => void handleRegisterProject(e)}>
             <h2>Register Hill Climb project</h2>
             <p className="hc-hint">Link a local git repository so Hill Climb can sync `.hillclimb/`, run verifiers, and dispatch climbs.</p>
@@ -779,6 +841,7 @@ function HillClimbApp() {
               <label htmlFor="hc-new-proj-name">Project name</label>
               <input
                 id="hc-new-proj-name"
+                autoFocus
                 value={newProjName}
                 onChange={(e) => setNewProjName(e.target.value)}
                 placeholder="e.g. my-app"
@@ -806,7 +869,15 @@ function HillClimbApp() {
       ) : null}
 
       {lintReport ? (
-        <div className="hill-modal-backdrop" role="dialog" aria-modal="true" aria-label="Contract lint report">
+        <div
+          className="hill-modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Contract lint report"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setLintReport(null);
+          }}
+        >
           <div className="hill-modal">
             <h2>
               Contract Lint — {lintReport.passed ? "Passed" : `${lintReport.errorCount} error(s)`} ·{" "}
@@ -829,7 +900,7 @@ function HillClimbApp() {
               </div>
             )}
             <div className="hill-modal-footer">
-              <button type="button" className="hc-btn hc-btn-primary" onClick={() => setLintReport(null)}>
+              <button type="button" className="hc-btn hc-btn-primary" autoFocus onClick={() => setLintReport(null)}>
                 Close
               </button>
             </div>

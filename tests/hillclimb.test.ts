@@ -8,7 +8,7 @@ import { describe, it } from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { createRepository, openDatabase } from "../src/repository.js";
-import { createRuntime } from "../src/runtime.js";
+import { conversationServiceGuardReason, createRuntime } from "../src/runtime.js";
 import { createAutoTracker } from "../src/auto-track.js";
 import { clearScanCache, getClimbCard, getClimbList, getClimbStatus, getClimbVerdict, installEngine, redactSecrets, scanProjectClimbs } from "../src/repo-ops.js";
 import { actionSchema } from "../src/actions.js";
@@ -16,6 +16,8 @@ import { lintTree } from "../src/linter.js";
 import { writeMirror } from "../src/mirror.js";
 import { ingestJunitReport } from "../src/ci-ingest.js";
 import { runStudyPreview } from "../src/studies.js";
+import { buildRig, draftForKit, emptyDraft, kitById, seedDraft, validateDraft } from "../src/ui/RigEditor.js";
+import type { Outcome } from "../src/model.js";
 
 const PLUGIN_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -576,6 +578,401 @@ experiments:
     } finally {
       rmSync(repoDir, { recursive: true, force: true });
       rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
+
+  it("M1 regressions: no phantom main-checkout claims, legacy DB migration/sanitization, bestCommit, CLI boolean flags, and ConversationService safeguard", () => {
+    const repoDir = tempDir("hc-m1-repo-");
+    const dataDir = tempDir("hc-m1-data-");
+    try {
+      initGitRepo(repoDir);
+      installEngine(repoDir);
+      writeFileSync(join(repoDir, "check.py"), "import app\nprint(app.value())\n", "utf8");
+      const climbPy = join(repoDir, ".hill-climb", "engine", "climb.py");
+      execFileSync(
+        "python3",
+        [
+          climbPy,
+          "init",
+          "main-climb",
+          "--goal",
+          "Drop value to zero",
+          "--check",
+          "SEARCH_AUTH_TOKEN=topsecret123 python3 -B check.py",
+          "--direction",
+          "min",
+          "--target",
+          "0",
+          "--lock",
+          "check.py",
+        ],
+        { cwd: repoDir, encoding: "utf8" },
+      );
+
+      // 1. Card redacts inline secrets
+      const card = getClimbCard(repoDir, "main-climb");
+      assert.ok(!card.text.includes("topsecret123"), "card text must redact secrets");
+      assert.ok(!JSON.stringify(card.data).includes("topsecret123"), "card data must redact secrets");
+
+      // 2. Legacy v0 DB migration backfills hc_tree_meta and redacts stored secrets without bumping outcome.version
+      const db = openDatabase(dataDir);
+      db.exec("CREATE TABLE IF NOT EXISTS hc_trees(project TEXT PRIMARY KEY, body TEXT NOT NULL)");
+      db.exec("PRAGMA user_version = 0;");
+      const legacyTree = {
+        charter: "",
+        goals: [{ key: "G-1", parentGoalKey: null, title: "Goal", brief: "Brief", rank: 1, created: "2026-01-01T00:00:00Z", updated: "2026-01-01T00:00:00Z" }],
+        outcomes: [{
+          key: "LEGACY-1",
+          goalKey: "G-1",
+          version: 1,
+          title: "Legacy outcome",
+          story: "Uses SEARCH_AUTH_TOKEN=legacy-secret-xyz",
+          criteria: [{ id: "c1", given: "g", when: "API_KEY=leak999 run", then: "passes" }],
+          dependsOn: [],
+          rank: 1,
+          recheckDays: null,
+          created: "2026-01-01T00:00:00Z",
+          updated: "2026-01-01T00:00:00Z",
+        }],
+        changes: [],
+        evidence: [],
+        claims: [],
+        plans: [],
+        comments: [{ id: "q1", key: "LEGACY-1", parentId: null, text: "Open question?", options: ["A", "B"], answer: null, created: "2026-01-01T00:00:00Z" }],
+        tracks: [{ name: "main", description: "", created: "2026-01-01T00:00:00Z" }],
+        releases: [],
+        flows: [],
+        activity: [],
+      };
+      db.prepare("INSERT INTO hc_trees(project, body) VALUES(?, ?)").run("legacy-proj", JSON.stringify(legacyTree));
+
+      const repo = createRepository(db);
+      const migrated = repo.read("legacy-proj");
+      assert.equal(migrated.outcomes[0]?.version, 1, "migration must preserve outcome.version");
+      assert.ok(!migrated.outcomes[0]!.story.includes("legacy-secret-xyz"));
+      assert.ok(!migrated.outcomes[0]!.criteria[0]!.when.includes("leak999"));
+      assert.equal(repo.inboxCountTotal(), 1, "O(1) inboxCountTotal must reflect backfilled open question");
+      assert.ok(repo.projectSummaries().some((s) => s.project === "legacy-proj" && s.outcomeCount === 1));
+
+      // 3. Auto-tracking a main-checkout climb NEVER phantom-claims it to 'main checkout'
+      repo.registerProject({ id: "main-proj", name: "Main Proj", directory: repoDir });
+      const tracker = createAutoTracker(repo);
+      const scanned = scanProjectClimbs(repoDir, { force: true });
+      assert.ok(scanned.climbs[0]?.bestCommit, "bestCommit must be populated from card.best.commit");
+      tracker.syncScannedClimbs("main-proj", scanned);
+      const view = repo.view("main-proj");
+      const ranked = view.ranked.find((r) => r.key === "MAIN-CLIMB");
+      assert.equal(ranked?.claim, null, "main checkout climb must NOT create phantom 4h auto-claim");
+      assert.ok(view.next.includes("MAIN-CLIMB"), "unclaimed main checkout outcome must remain in next queue");
+      assert.ok(
+        view.evidence.some((e) => e.key === "MAIN-CLIMB" && e.source.includes(`@${scanned.climbs[0]!.bestCommit!.slice(0, 7)}`)),
+        "auto-tracked evidence source must include @<commit>",
+      );
+
+      // 4. O(n) redaction performance sanity check on 100k chars
+      const big = `API_KEY=${"x".repeat(50_000)} ${"a".repeat(50_000)}`;
+      const t0 = performance.now();
+      const redactedBig = redactSecrets(big);
+      const dt = performance.now() - t0;
+      assert.ok(redactedBig.includes("API_KEY=<redacted>"));
+      assert.ok(dt < 100, `Expected O(n) redaction <100ms, got ${dt.toFixed(2)}ms`);
+
+      // 5. CLI boolean flags (--json) do not swallow positional JSON args
+      repo.close();
+      const cliRes = spawnSync(
+        "node",
+        [
+          join(PLUGIN_ROOT, "dist", "cli.mjs"),
+          "act",
+          "--project",
+          "main-proj",
+          "--data-dir",
+          dataDir,
+          "--json",
+          JSON.stringify({ op: "create_goal", key: "G-CLI", title: "CLI Goal", brief: "Test boolean flag", rank: 5 }),
+        ],
+        { encoding: "utf8" },
+      );
+      assert.equal(cliRes.status, 0, `CLI act with --json failed: ${cliRes.stderr}`);
+      assert.equal(JSON.parse(cliRes.stdout).ok, true);
+
+      // 6. ConversationService safeguard blocks env, option, test harnesses, and tempdirs
+      const prevDisable = process.env.HILLCLIMB_DISABLE_CONVERSATION_SERVICE;
+      try {
+        process.env.HILLCLIMB_DISABLE_CONVERSATION_SERVICE = "1";
+        assert.equal(
+          conversationServiceGuardReason({ directory: "/opt/real-project", disableConversationService: false }),
+          "disabled_by_env",
+        );
+        delete process.env.HILLCLIMB_DISABLE_CONVERSATION_SERVICE;
+        assert.equal(
+          conversationServiceGuardReason({ directory: "/opt/real-project", disableConversationService: true }),
+          "disabled_by_option",
+        );
+        assert.equal(
+          conversationServiceGuardReason({ directory: repoDir, disableConversationService: false }),
+          "blocked_test_harness",
+        );
+      } finally {
+        if (prevDisable === undefined) delete process.env.HILLCLIMB_DISABLE_CONVERSATION_SERVICE;
+        else process.env.HILLCLIMB_DISABLE_CONVERSATION_SERVICE = prevDisable;
+      }
+    } finally {
+      rmSync(repoDir, { recursive: true, force: true });
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
+
+  it("M2 regressions: slim tools/list, compact hillclimb_list, bounded hillclimb_tree, batch hillclimb_act, app_act track preservation, and RigEditor kit round-trip", async () => {
+    const repoDir = tempDir("hc-m2-repo-");
+    const dataDir = tempDir("hc-m2-data-");
+    try {
+      initGitRepo(repoDir);
+      installEngine(repoDir);
+      writeFileSync(join(repoDir, "check.py"), "import app\nprint(app.value())\n", "utf8");
+      execFileSync(
+        "python3",
+        [
+          join(repoDir, ".hill-climb", "engine", "climb.py"),
+          "init",
+          "perf-climb",
+          "--goal",
+          "Reduce score",
+          "--check",
+          "python3 -B check.py",
+          "--direction",
+          "min",
+          "--target",
+          "0",
+          "--lock",
+          "check.py",
+        ],
+        { cwd: repoDir, encoding: "utf8" },
+      );
+      writeFileSync(join(repoDir, ".hill-climb", "perf-climb", "notes.md"), "N".repeat(8000), "utf8");
+
+      const transport = new StdioClientTransport({
+        command: "node",
+        args: [join(PLUGIN_ROOT, "dist", "mcp-server.mjs"), "--data-dir", dataDir],
+        env: {
+          ...process.env,
+          ANTIGRAVITY_LS_ADDRESS: "",
+          ANTIGRAVITY_CSRF_TOKEN: "",
+          HILLCLIMB_DISABLE_CONVERSATION_SERVICE: "1",
+        },
+      });
+      const client = new Client({ name: "hillclimb-m2-test", version: "1.0.0" });
+      await client.connect(transport);
+
+      try {
+        // 1. tools/list schema size significantly reduced from v0.3.1 baseline (39,566 B)
+        const tools = await client.listTools();
+        const toolsBytes = Buffer.byteLength(JSON.stringify(tools.tools), "utf8");
+        assert.ok(toolsBytes < 30_000, `Expected slimmed tools/list < 30KB, got ${toolsBytes} bytes`);
+
+        // 2. Compact hillclimb_list omits rows/notes by default, includeRows restores them
+        const compactList = await client.callTool({ name: "hillclimb_list", arguments: { directory: repoDir } });
+        assert.ok(!compactList.isError);
+        const compactPayload = compactList.structuredContent as { climbs: Array<Record<string, unknown>> };
+        assert.equal(compactPayload.climbs.length, 1);
+        assert.equal("rows" in compactPayload.climbs[0]!, false);
+        assert.equal("notes" in compactPayload.climbs[0]!, false);
+
+        const fullList = await client.callTool({
+          name: "hillclimb_list",
+          arguments: { directory: repoDir, includeRows: true, includeNotes: true },
+        });
+        const fullPayload = fullList.structuredContent as { climbs: Array<{ rows?: unknown[]; notes?: string }> };
+        assert.ok((fullPayload.climbs[0]?.rows?.length ?? 0) >= 1);
+        assert.ok((fullPayload.climbs[0]?.notes?.length ?? 0) > 1000);
+
+        // 3. Atomic batch hillclimb_act + decision rejection
+        await client.callTool({
+          name: "hillclimb_projects",
+          arguments: { registerDirectory: repoDir, id: "m2-proj", name: "M2" },
+        });
+        const batchRes = await client.callTool({
+          name: "hillclimb_act",
+          arguments: {
+            projectId: "m2-proj",
+            actions: [
+              { op: "create_goal", key: "G-M2", parentGoalKey: null, title: "Fast API", brief: "Keep latency low", rank: 1 },
+              {
+                op: "create_outcome",
+                key: "HC-BASE",
+                goalKey: "G-M2",
+                contract: {
+                  title: "Base outcome",
+                  story: "Story base",
+                  criteria: [{ id: "c1", given: "g", when: "w", then: "t" }],
+                  dependsOn: [],
+                  rank: 1,
+                  recheckDays: null,
+                },
+              },
+              {
+                op: "create_outcome",
+                key: "HC-DEP",
+                goalKey: "G-M2",
+                contract: {
+                  title: "Dependent outcome",
+                  story: "Story dep",
+                  criteria: [{ id: "c1", given: "g", when: "w", then: "t" }],
+                  dependsOn: ["HC-BASE"],
+                  rank: 2,
+                  recheckDays: null,
+                },
+              },
+              { op: "create_track", name: "staging", description: "Staging track" },
+            ],
+          },
+        });
+        assert.ok(!batchRes.isError);
+        assert.equal((batchRes.structuredContent as { applied: number }).applied, 4);
+
+        // 4. hillclimb_next_outcomes supports includeContract + includeBlocked
+        const nextRes = await client.callTool({
+          name: "hillclimb_next_outcomes",
+          arguments: { projectId: "m2-proj", includeContract: true, includeBlocked: true },
+        });
+        assert.ok(!nextRes.isError);
+        const nextData = nextRes.structuredContent as {
+          queue: { items: Array<{ key: string; criteria?: unknown[] }> };
+          blocked?: { items: Array<{ key: string; blockedBy: string[] }> };
+        };
+        const baseItem = nextData.queue.items.find((i) => i.key === "HC-BASE");
+        assert.ok(baseItem?.criteria && baseItem.criteria.length === 1, "includeContract must inline criteria");
+        assert.ok(
+          nextData.blocked?.items.some((b) => b.key === "HC-DEP" && b.blockedBy.includes("HC-BASE")),
+          "includeBlocked must surface blocked outcomes",
+        );
+
+        // 5. hillclimb_tree pagination + app_tree concise text summary + app_act preserves non-main track & returns inboxCount
+        const treePage = await client.callTool({
+          name: "hillclimb_tree",
+          arguments: { projectId: "m2-proj", limit: 1, offset: 0 },
+        });
+        const treePageData = treePage.structuredContent as { ranked: unknown[]; pagination: { hasMore: boolean; total: number } };
+        assert.equal(treePageData.ranked.length, 1);
+        assert.equal(treePageData.pagination.hasMore, true);
+
+        const appTree = await client.callTool({ name: "app_tree", arguments: { projectId: "m2-proj", track: "staging" } });
+        const appTreeText = (appTree.content as Array<{ text?: string }>)[0]?.text ?? "";
+        assert.ok(appTreeText.length < 500, `app_tree text must be concise summary, got ${appTreeText.length} chars`);
+
+        const appActRes = await client.callTool({
+          name: "app_act",
+          arguments: {
+            projectId: "m2-proj",
+            track: "staging",
+            action: {
+              op: "add_evidence",
+              key: "HC-BASE",
+              version: 1,
+              kind: "confirms",
+              criterionIds: ["c1"],
+              text: "Verified on staging",
+              source: "test://staging",
+              track: "staging",
+            },
+          },
+        });
+        assert.ok(!appActRes.isError);
+        const appActData = appActRes.structuredContent as {
+          tree: { ranked: Array<{ key: string; signal: string }> };
+          inboxCount: number;
+        };
+        assert.equal(
+          appActData.tree.ranked.find((r) => r.key === "HC-BASE")?.signal,
+          "verified",
+          "app_act must return snapshot on the requested non-main track",
+        );
+        assert.equal(typeof appActData.inboxCount, "number");
+
+        // Runtime Zod validation still enforced on slimmed app_act & hillclimb_rig schemas
+        const badRig = await client.callTool({
+          name: "hillclimb_rig",
+          arguments: { projectId: "m2-proj", key: "HC-BASE", engine: "repo", rig: { engine: "repo", check: [] } },
+        });
+        assert.equal(badRig.isError, true, "hillclimb_rig must still reject invalid rig via rigSchema");
+      } finally {
+        await client.close();
+      }
+
+      // 6. RigEditor single-pass --all-guards, MIN_GAIN (.5 / .5%), and kit round-trip via seedDraft
+      const kit = kitById("correctness")!;
+      const outcome: Outcome = {
+        key: "HC-KIT",
+        goalKey: "G-1",
+        version: 1,
+        title: "Kit outcome",
+        story: "Story",
+        criteria: [{ id: "c1", given: "g", when: "w", then: "t" }],
+        dependsOn: [],
+        rank: 1,
+        recheckDays: null,
+        created: "2026-01-01T00:00:00Z",
+        updated: "2026-01-01T00:00:00Z",
+      };
+      let draft = draftForKit(emptyDraft("repo"), kit);
+      draft = {
+        ...draft,
+        covers: { c1: true },
+        target: "100",
+        minGain: ".5%",
+        dataDir: "eval-data",
+        candidate: "python3 run_val.py",
+        holdoutCandidate: "python3 run_holdout.py",
+      };
+      assert.deepEqual(validateDraft(draft, outcome, kit, null), []);
+      const built = buildRig(draft, outcome, null, kit);
+      assert.equal(built.errors.length, 0);
+      assert.ok(built.rig && built.rig.engine === "repo");
+      assert.equal(built.rig.guard.length, 1, "all kit guards selected must emit single-pass --all-guards");
+      assert.ok(built.rig.guard[0]!.includes("--all-guards"));
+
+      const seeded = seedDraft(built.rig, "repo");
+      assert.equal(seeded.kit, "correctness", "seedDraft must recover kit id from saved rig");
+      assert.equal(seeded.dataDir, "eval-data");
+      assert.equal(seeded.candidate, "python3 run_val.py");
+      assert.equal(seeded.holdoutCandidate, "python3 run_holdout.py");
+      assert.equal(Object.values(seeded.guards).every(Boolean), true);
+    } finally {
+      rmSync(repoDir, { recursive: true, force: true });
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
+
+  it("M3/M4 regressions: Python --lock ., \\r scores, judge.py braces, zero __pycache__ in all 5 kits, and scrubbed CI helpers", () => {
+    const repoDir = tempDir("hc-m3-repo-");
+    try {
+      initGitRepo(repoDir);
+      installEngine(repoDir);
+      const climbPy = join(repoDir, ".hill-climb", "engine", "climb.py");
+      // 1. \r progress bar before bare score + --lock . handling
+      writeFileSync(join(repoDir, "check.py"), "import sys, app\nsys.stdout.write('50%\\r' + str(app.value()) + '\\n')\n", "utf8");
+      execFileSync(
+        "python3",
+        [climbPy, "init", "cr-test", "--goal", "Zero", "--check", "python3 check.py", "--direction", "min", "--target", "0", "--lock", "check.py"],
+        { cwd: repoDir, encoding: "utf8" },
+      );
+      assert.equal(getClimbStatus(repoDir, "cr-test").summary.baseline, 2);
+
+      // 2. All 5 benchmark kits pass preflight without generating __pycache__
+      for (const kitId of ["correctness", "latency-cost", "retrieval", "agent-outcomes", "tuning"]) {
+        const res = spawnSync("python3", [join(PLUGIN_ROOT, "assets", "kits", "preflight.py"), "preflight", "--kit", kitId], {
+          encoding: "utf8",
+        });
+        assert.equal(res.status, 0, `preflight failed for ${kitId}: ${res.stderr}`);
+      }
+      assert.equal(existsSync(join(PLUGIN_ROOT, "assets", "kits", "__pycache__")), false, "preflight must not emit __pycache__");
+
+      // 3. CI helper scrubbed of non-standard external wrapper CLI references
+      const ciScript = readFileSync(join(PLUGIN_ROOT, "assets", "ci", "hillclimb-evidence.mjs"), "utf8");
+      assert.doesNotMatch(ciScript, /\bbb\s+hillclimb\b/, "CI script must use standalone hillclimb CLI");
+      assert.doesNotMatch(ciScript, /\bBB_PROJECT_ID\b/, "CI script must use HILLCLIMB_PROJECT_ID");
+    } finally {
+      rmSync(repoDir, { recursive: true, force: true });
     }
   });
 });

@@ -251,7 +251,11 @@ body,
     display: none;
   }
   .hc-outline-tags {
-    display: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    font-size: 10px;
+    grid-column: 2 / -1;
   }
 }
 

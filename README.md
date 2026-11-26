@@ -19,7 +19,7 @@ Active climbs in your repository and Antigravity swarm worktrees are **automatic
   - **Outcome Drawer:** Full contract + criteria, ancestor goal briefs, field-by-field change proposal diffs, live score trajectory + candidate lineage DAG + MAP-Elites island grid, verifier evidence ledger (with copy-for-PR export), plans, and comment threads.
   - **Verifier Rig Editor:** Guided 5-kit configurator (`correctness`, `latency-cost`, `retrieval`, `agent-outcomes`, `tuning`), manual repo climb rigs, and optional evolutionary search (`hillclimb.sh`: `greedy`, `openevolve`, `gepa`, `random`/`optuna`) with 4-currency budget previews.
   - **Inbox, Roadmap & Flows:** Human-confirmed contract approvals, release readiness & scenario comparisons, track promotion previews, and criterion-linked HTML flows with pins.
-- **28 Agent-Facing MCP Tools (`hillclimb_*`):** Repo climbs (`hillclimb_setup`, `hillclimb_status`, `hillclimb_card`, `hillclimb_list`, `hillclimb_log`), contract trees (`hillclimb_projects`, `hillclimb_tree`, `hillclimb_next_outcomes`, `hillclimb_outcome`, `hillclimb_act`, `hillclimb_propose_change`, `hillclimb_lint_tree`, `hillclimb_claim`, `hillclimb_release`, `hillclimb_plan_write`, `hillclimb_comment`, `hillclimb_inbox`, `hillclimb_add_evidence`, `hillclimb_set_status`, `hillclimb_sync`), verifier rigs & dispatch (`hillclimb_rig`, `hillclimb_search_start`, `hillclimb_search_status`, `hillclimb_search_summit`), CI JUnit evidence ingestion (`hillclimb_ingest_junit`, `hillclimb_post_test_evidence`), and equal-budget studies (`hillclimb_study_preview`, `hillclimb_study_report`).
+- **29 Agent-Facing MCP Tools (`hillclimb_*`):** Interactive UI (`hillclimb_open`), repo climbs (`hillclimb_setup`, `hillclimb_status`, `hillclimb_card`, `hillclimb_list`, `hillclimb_log`), contract trees (`hillclimb_projects`, `hillclimb_tree`, `hillclimb_next_outcomes`, `hillclimb_outcome`, `hillclimb_act`, `hillclimb_propose_change`, `hillclimb_lint_tree`, `hillclimb_claim`, `hillclimb_release`, `hillclimb_plan_write`, `hillclimb_comment`, `hillclimb_inbox`, `hillclimb_add_evidence`, `hillclimb_set_status`, `hillclimb_sync`), verifier rigs & dispatch (`hillclimb_rig`, `hillclimb_search_start`, `hillclimb_search_status`, `hillclimb_search_summit`), CI JUnit evidence ingestion (`hillclimb_ingest_junit`, `hillclimb_post_test_evidence`), and equal-budget studies (`hillclimb_study_preview`, `hillclimb_study_report`).
 - **22-Rule Contract Linter:** Catches vague, untestable, or circular outcome contracts before work begins.
 - **Standalone CLI (`bin/hillclimb`):** Zero-dependency shell CLI for scripts and CI pipelines.
 - **Skill & Always-On Rules (`skills/hill-climb/`, `rules/AGENTS.md`):** Methodology guides and guardrails enforcing locked checks, human contract ownership, and evidence-backed status.
@@ -68,11 +68,11 @@ Open **Hill Climb** from the Antigravity sidebar (or ask your agent: *"Open Hill
 Ask your agent:
 > *"Set up Hill Climb in this repo and help me build a locked check and climb card for `<metric>`."*
 
-Or run directly from the terminal:
+Or run directly from the terminal (if `hillclimb` is not on your `PATH`, use `<plugin-dir>/bin/hillclimb` or `node <plugin-dir>/dist/cli.mjs`):
 
 ```bash
 # Install .hill-climb/engine/ and benchmark kits (ignored via .git/info/exclude)
-~/.gemini/config/plugins/hillclimb/bin/hillclimb setup --dir /path/to/repo
+hillclimb setup --dir /path/to/repo
 
 # Initialize a locked climb
 python3 .hill-climb/engine/climb.py init my-climb \
@@ -86,7 +86,7 @@ python3 .hill-climb/engine/climb.py init my-climb \
 python3 .hill-climb/engine/climb.py try "Fix edge case in parser"
 
 # Read status without re-running checks
-~/.gemini/config/plugins/hillclimb/bin/hillclimb status --dir /path/to/repo
+hillclimb status --dir /path/to/repo
 ```
 
 Every active climb automatically appears in both **Climbs** and **Outcomes** in the Hill Climb UI.
@@ -94,7 +94,7 @@ Every active climb automatically appears in both **Climbs** and **Outcomes** in 
 ### 3. Ingest CI test evidence (optional)
 
 ```bash
-~/.gemini/config/plugins/hillclimb/bin/hillclimb ingest-junit \
+hillclimb ingest-junit \
   --report junit.xml \
   --project <project-id> \
   --dir /path/to/repo \

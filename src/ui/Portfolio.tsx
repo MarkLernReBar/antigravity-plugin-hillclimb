@@ -920,8 +920,8 @@ function Roadmap({
   const [releaseDate, setReleaseDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [releaseScenario, setReleaseScenario] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [compareA, setCompareA] = useState(0);
-  const [compareB, setCompareB] = useState(1);
+  const [compareAId, setCompareAId] = useState<string | null>(null);
+  const [compareBId, setCompareBId] = useState<string | null>(null);
 
   const selected = new Set(picked);
   const signature = `${newTrack.trim()}\u0000${picked.join(",")}`;
@@ -931,9 +931,11 @@ function Roadmap({
     () => data.releases.map((release) => ({ release })).sort((a, b) => (b.release.date || "").localeCompare(a.release.date || "")),
     [data.releases],
   );
-  const releaseKeys = releases.map((entry, index) => `${index}:${entry.release.name}`);
-  const releaseA = releases[compareA]?.release ?? releases[0]?.release;
-  const releaseB = releases[compareB]?.release ?? releases[1]?.release;
+  const releaseIds = releases.map(({ release }) => `${release.name}\u0000${release.scenario}\u0000${release.date}`);
+  const resolvedAId = compareAId !== null && releaseIds.includes(compareAId) ? compareAId : (releaseIds[0] ?? "");
+  const resolvedBId = compareBId !== null && releaseIds.includes(compareBId) ? compareBId : (releaseIds[1] ?? "");
+  const releaseA = releases[releaseIds.indexOf(resolvedAId)]?.release;
+  const releaseB = releases[releaseIds.indexOf(resolvedBId)]?.release;
   const comparison = releaseA !== undefined && releaseB !== undefined ? compareScenarios(data, releaseA, releaseB) : null;
 
   const toggle = (key: string): void => {
@@ -971,7 +973,7 @@ function Roadmap({
             const rows = releaseReadiness(data, release);
             const counts = readinessCounts(rows);
             const percent = counts.total === 0 ? 0 : Math.round((counts.ready / counts.total) * 100);
-            const key = releaseKeys[index] ?? `${index}:${release.name}`;
+            const key = releaseIds[index] ?? `${index}:${release.name}`;
             const isOpen = expanded[key] === true;
             return (
               <article className="pf-card" key={key}>
@@ -1319,11 +1321,11 @@ function Roadmap({
               <select
                 id="pf-compare-a"
                 className="pf-select"
-                value={compareA}
-                onChange={(event) => setCompareA(Number(event.target.value))}
+                value={resolvedAId}
+                onChange={(event) => setCompareAId(event.target.value)}
               >
                 {releases.map(({ release }, index) => (
-                  <option key={releaseKeys[index]} value={index}>
+                  <option key={releaseIds[index]} value={releaseIds[index]}>
                     {release.name} · {release.scenario}
                   </option>
                 ))}
@@ -1335,11 +1337,11 @@ function Roadmap({
               <select
                 id="pf-compare-b"
                 className="pf-select"
-                value={compareB}
-                onChange={(event) => setCompareB(Number(event.target.value))}
+                value={resolvedBId}
+                onChange={(event) => setCompareBId(event.target.value)}
               >
                 {releases.map(({ release }, index) => (
-                  <option key={releaseKeys[index]} value={index}>
+                  <option key={releaseIds[index]} value={releaseIds[index]}>
                     {release.name} · {release.scenario}
                   </option>
                 ))}
@@ -1438,6 +1440,7 @@ function FrameCard({
     data,
   )[0];
   const hue = criterionHue(frame.criterionId);
+  const isolatedHtml = useMemo(() => isolateHtml(frame.html), [frame.html]);
 
   const capture = (event: ReactMouseEvent<HTMLDivElement>): void => {
     if (!pinning) return;
@@ -1473,7 +1476,7 @@ function FrameCard({
           sandbox={FRAME_SANDBOX}
           referrerPolicy="no-referrer"
           loading="lazy"
-          srcDoc={isolateHtml(frame.html)}
+          srcDoc={isolatedHtml}
         />
         <div
           ref={overlay}
@@ -1719,14 +1722,14 @@ function Flows({
   busy: string | null;
   select: (key: string | null) => void;
 }): ReactNode {
-  const [active, setActive] = useState(0);
+  const [activeName, setActiveName] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [frames, setFrames] = useState<FrameDraft[]>([]);
   const outcomes = useMemo(
     () => data.outcomes.slice().sort((a, b) => a.title.localeCompare(b.title)),
     [data.outcomes],
   );
-  const flow = data.flows[active] ?? data.flows[0] ?? null;
+  const flow = (activeName !== null ? data.flows.find((entry) => entry.name === activeName) : undefined) ?? data.flows[0] ?? null;
   const groups = flow === null ? [] : pinsByCriterion(flow, data);
 
   const addFrame = (): void => {
@@ -1764,7 +1767,7 @@ function Flows({
                   type="button"
                   className={`pf-flow-item${entry === flow ? " is-active" : ""}`}
                   aria-pressed={entry === flow}
-                  onClick={() => setActive(index)}
+                  onClick={() => setActiveName(entry.name)}
                 >
                   <span className="pf-flow-name">{entry.name}</span>
                   <span className="pf-muted pf-small">
@@ -1864,12 +1867,13 @@ function Flows({
             onSubmit={(event) => {
               event.preventDefault();
               if (!canCreate) return;
+              const createdName = name.trim();
               void run(
                 "create-flow",
                 async () => {
                   await act({
                     op: "create_flow",
-                    name: name.trim(),
+                    name: createdName,
                     frames: frames.map((frame) => ({
                       title: frame.title.trim(),
                       key: frame.key,
@@ -1878,12 +1882,12 @@ function Flows({
                     })),
                   });
                 },
-                `Flow ${name.trim()} created.`,
+                `Flow ${createdName} created.`,
               ).then((ok) => {
                 if (ok) {
                   setName("");
                   setFrames([]);
-                  setActive(Math.max(0, data.flows.length));
+                  setActiveName(createdName);
                 }
               });
             }}

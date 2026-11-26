@@ -7,3 +7,5 @@ node_modules/
 .hillclimb/
 coverage/
 *.log
+__pycache__/
+*.py[cod]

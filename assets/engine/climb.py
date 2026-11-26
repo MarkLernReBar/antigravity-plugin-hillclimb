@@ -20,7 +20,9 @@ import statistics
 import subprocess
 import sys
 import tarfile
+import threading
 import time
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -34,15 +36,38 @@ FILE_LIMIT = 512_000
 KIT_LIMIT = 2_000_000
 COMMIT_LIMIT = 10_000_000
 STATE_WARN = 200_000_000
-KIT_KEYS = ("name", "goal", "check", "direction", "guards", "holdout", "lock", "runs", "paired", "min_gain", "timeout", "after", "max_steps", "max_hours", "hard", "repos", "score", "baseline", "score_mode")
+KIT_KEYS = ("name", "goal", "check", "direction", "guards", "holdout", "lock", "runs", "paired", "min_gain", "timeout", "after", "max_steps", "max_hours", "hard", "repos", "score", "baseline", "score_mode", "holdout_once")
 LEGACY_SCORE_MODE = "failure-count"
 SCORE_MODES = ("numeric", LEGACY_SCORE_MODE)
 SLOW_STEP = 120
 MORE = "Stop and report. If the user gives more, run: climb.py budget --hours N, --steps N, or --off"
 
+_ACTIVE_LOCK = threading.Lock()
+_ACTIVE_PGS = set()
+
 
 class Fail(Exception):
     pass
+
+
+class Interrupted(BaseException):
+    def __init__(self, signum):
+        super().__init__(f"interrupted by signal {signum}")
+        self.signum = signum
+
+
+def _kill_pg(pid):
+    try:
+        os.killpg(pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError, OSError):
+        pass
+
+
+def kill_active_pgs():
+    with _ACTIVE_LOCK:
+        pids = list(_ACTIVE_PGS)
+    for pid in pids:
+        _kill_pg(pid)
 
 
 def git(*args, check=True, cwd=None):
@@ -105,34 +130,87 @@ def append(folder, row):
 
 def rows(folder):
     path = folder / "log.jsonl"
-    return [json.loads(line) for line in path.read_text().splitlines() if line] if path.exists() else []
+    if not path.exists():
+        return []
+    items = []
+    for lineno, line in enumerate(path.read_text().splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError as error:
+            raise Fail(f"Corrupt JSON in {path} at line {lineno}: {error.msg}") from None
+        if not isinstance(item, dict):
+            raise Fail(f"Corrupt log entry in {path} at line {lineno}: expected JSON object")
+        items.append(item)
+    return items
 
 
 def tail(text, lines=15):
     return "\n".join(text.strip().splitlines()[-lines:])
 
 
-def run(command, timeout):
+def _decode_pipe(data):
+    if not data:
+        return ""
+    text = data.decode("utf-8", errors="replace") if isinstance(data, bytes) else data
+    return text.replace("\r\n", "\n")
+
+
+def _run(command, timeout, env=None):
+    run_env = None
+    if env is not None:
+        run_env = os.environ.copy()
+        for key, value in env.items():
+            if value is None:
+                run_env.pop(key, None)
+            else:
+                run_env[key] = value
     process = subprocess.Popen(
-        command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True
+        command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        start_new_session=True, env=run_env,
     )
+    with _ACTIVE_LOCK:
+        _ACTIVE_PGS.add(process.pid)
     try:
-        stdout, stderr = process.communicate(timeout=timeout)
-    except subprocess.TimeoutExpired:
-        stdout = None
-    try:
-        os.killpg(process.pid, signal.SIGKILL)
-    except ProcessLookupError:
-        pass
-    if stdout is None:
-        process.communicate()
-        return None
-    return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
+        try:
+            raw_out, raw_err = process.communicate(timeout=timeout)
+            stdout, stderr = _decode_pipe(raw_out), _decode_pipe(raw_err)
+            return subprocess.CompletedProcess(command, process.returncode, stdout, stderr), stdout, stderr
+        except subprocess.TimeoutExpired:
+            _kill_pg(process.pid)
+            try:
+                raw_out, raw_err = process.communicate(timeout=5)
+            except subprocess.TimeoutExpired:
+                raw_out, raw_err = b"", b""
+            return None, _decode_pipe(raw_out), _decode_pipe(raw_err)
+    except BaseException:
+        _kill_pg(process.pid)
+        try:
+            process.communicate(timeout=2)
+        except (subprocess.TimeoutExpired, OSError):
+            pass
+        raise
+    finally:
+        with _ACTIVE_LOCK:
+            _ACTIVE_PGS.discard(process.pid)
 
 
-def together(commands, timeout):
+def run(command, timeout, env=None):
+    return _run(command, timeout, env=env)[0]
+
+
+def _together(commands, timeout, env=None):
     with ThreadPoolExecutor() as pool:
-        return list(pool.map(lambda command: run(command, timeout), commands))
+        try:
+            return list(pool.map(lambda command: _run(command, timeout, env=env), commands))
+        except BaseException:
+            kill_active_pgs()
+            raise
+
+
+def together(commands, timeout, env=None):
+    return [result for result, _, _ in _together(commands, timeout, env=env)]
 
 
 def read_score(result, pattern, mode=LEGACY_SCORE_MODE):
@@ -142,10 +220,13 @@ def read_score(result, pattern, mode=LEGACY_SCORE_MODE):
     if numeric and result.returncode:
         raise Fail(f"check exited {result.returncode}, so the run cannot win under --score-mode numeric\n{tail(text)}")
     if pattern:
-        lines = [line for line in text.splitlines() if re.search(pattern, line)]
+        raw_lines = [line.rstrip("\r").split("\r")[-1] for line in text.split("\n")]
+        lines = [line for line in raw_lines if re.search(pattern, line)]
         if lines:
             found = [group for match in re.finditer(pattern, lines[-1])
                      for group in (match.groups() if match.re.groups else [match.group()]) if group is not None]
+            if not found:
+                raise Fail(f"--score matched {lines[-1].strip()!r} but captured no value")
             values = [value.replace(",", "") for value in found]
             if not all(NUMBER.fullmatch(value) for value in values):
                 raise Fail(f"--score matched {found!r} in {lines[-1].strip()!r}, which is not a number")
@@ -154,7 +235,8 @@ def read_score(result, pattern, mode=LEGACY_SCORE_MODE):
                 bad = [value for value, scored in zip(values, numbers) if not math.isfinite(scored)]
                 if bad:
                     raise Fail(f"--score matched {bad[0]!r} in {lines[-1].strip()!r}, which is not a finite number")
-            return sum(numbers)
+            total = sum(numbers)
+            return total if math.isfinite(total) else None
         if not result.returncode:
             if numeric:
                 raise Fail(
@@ -166,16 +248,22 @@ def read_score(result, pattern, mode=LEGACY_SCORE_MODE):
         raise Fail(f"check exited {result.returncode} and printed nothing that matches --score\n{tail(text)}")
     if result.returncode:
         raise Fail(f"check exited {result.returncode}\n{tail(text)}")
-    lines = ANSI.sub("", result.stdout).strip().splitlines()
-    if not lines or not NUMBER.fullmatch(lines[-1].strip()):
+    raw_out = ANSI.sub("", result.stdout)
+    lines = [
+        part
+        for line in raw_out.split("\n")
+        for part in [line.rstrip("\r").split("\r")[-1].strip()]
+        if part
+    ]
+    if not lines or not NUMBER.fullmatch(lines[-1]):
         raise Fail(f"the last line of check output must be the score\n{tail(text)}")
     score = float(lines[-1])
-    if numeric and not math.isfinite(score):
-        raise Fail(f"the last line of check output is not a finite number: {lines[-1].strip()!r}")
+    if not math.isfinite(score):
+        raise Fail(f"the last line of check output is not a finite number: {lines[-1]!r}")
     return score
 
 
-def measure(checks, runs, timeout, output=None, patterns=None, mode=LEGACY_SCORE_MODE):
+def measure(checks, runs, timeout, output=None, patterns=None, mode=LEGACY_SCORE_MODE, env=None):
     patterns = patterns or [None]
     if len(patterns) not in (1, len(checks)):
         raise Fail(f"Give one --score for all checks, or one per check: {len(patterns)} for {len(checks)} checks.")
@@ -183,14 +271,24 @@ def measure(checks, runs, timeout, output=None, patterns=None, mode=LEGACY_SCORE
     scores, seconds = [], []
     for attempt in range(runs + (runs > 1)):
         start = time.monotonic()
-        results = together(checks, timeout)
+        outcomes = _together(checks, timeout, env=env)
         seconds.append(time.monotonic() - start)
+        results = [result for result, _, _ in outcomes]
         if output:
-            output.write_text("\n".join(f"$ {command}\n{result.stdout}{result.stderr}" for command, result in zip(checks, results) if result))
+            chunks = []
+            for command, (result, out, err) in zip(checks, outcomes):
+                if result is not None:
+                    chunks.append(f"$ {command}\n{result.stdout}{result.stderr}")
+                else:
+                    chunks.append(f"$ {command}\n[timed out after {timeout}s]\n{out}{err}")
+            output.write_text("\n".join(chunks))
         if None in results:
             raise Fail(f"check timed out after {timeout}s: {checks[results.index(None)]}")
-        score = sum(read_score(result, pattern, mode) for result, pattern in zip(results, patterns))
-        if mode == "numeric" and not math.isfinite(score):
+        values = [read_score(result, pattern, mode) for result, pattern in zip(results, patterns)]
+        if any(value is None for value in values):
+            raise Fail("the check score is not a finite number")
+        score = sum(values)
+        if not math.isfinite(score):
             raise Fail(f"the checks add up to {score!r}, which is not a finite number")
         if runs > 1 and attempt == 0:
             seconds.pop()
@@ -205,41 +303,72 @@ def switch_trees(trees):
         git("read-tree", "-u", "--reset", tree, cwd=path)
 
 
-def paired(folder, card):
+def paired(folder, card, cache_env=None):
+    if card["best"]["score"] == 0:
+        raise Fail("--paired needs a score that is never 0")
     trees = {}
     for path in checkouts(card):
         git("add", "-A", cwd=path)
         trees[str(path)] = git("write-tree", cwd=path)
-    (folder / "pending-tree").write_text(json.dumps(trees) + "\n")
+    pending = folder / "pending-tree"
+    pending.write_text(json.dumps(trees) + "\n")
+    base_log = folder / "last-base.txt"
+    no_cache_env = {"HILLCLIMB_CACHE_FILE": None, "HILLCLIMB_CACHE_TOKEN": None}
     base, new, seconds = [], [], []
-    for turn in range(card["runs"] + card["runs"] % 2):
-        order = [(trees, new), (dict.fromkeys(trees, "HEAD"), base)]
-        for side, scores in order if turn % 2 == 0 else order[::-1]:
-            switch_trees(side)
-            score, _, took = measure(card["check"], 1, card["timeout"], folder / "last.txt" if side is trees else None, card["score"], score_mode(card))
-            if card["lock"] and fingerprint(card["lock"]) != card["fingerprint"]:
-                raise Fail("the check changed a locked file")
-            scores.append(score)
-            seconds.append(took)
-    switch_trees(trees)
-    (folder / "pending-tree").unlink()
+    try:
+        for turn in range(card["runs"] + card["runs"] % 2):
+            order = [(trees, new), (dict.fromkeys(trees, "HEAD"), base)]
+            for side, scores in order if turn % 2 == 0 else order[::-1]:
+                switch_trees(side)
+                log_target = folder / "last.txt" if side is trees else base_log
+                step_env = cache_env if side is trees else no_cache_env
+                try:
+                    score, _, took = measure(card["check"], 1, card["timeout"], log_target, card["score"], score_mode(card), env=step_env)
+                except Fail:
+                    if side is not trees and base_log.exists():
+                        shutil.copyfile(base_log, folder / "last.txt")
+                    raise
+                if card["lock"] and fingerprint(card["lock"]) != card["fingerprint"]:
+                    raise Fail("the check changed a locked file")
+                scores.append(score)
+                seconds.append(took)
+        switch_trees(trees)
+        for path in trees:
+            git("reset", "-q", cwd=path)
+        pending.unlink(missing_ok=True)
+    except BaseException as exc:
+        if not isinstance(exc, Fail):
+            kill_active_pgs()
+            try:
+                switch_trees(trees)
+                for path in trees:
+                    git("reset", "-q", cwd=path)
+                pending.unlink(missing_ok=True)
+            except BaseException:
+                pass
+        raise
+    finally:
+        base_log.unlink(missing_ok=True)
     new, base = statistics.median(new), statistics.median(base)
-    if base == 0:
+    if base == 0 or card["best"]["score"] == 0:
         raise Fail("--paired needs a score that is never 0")
     return card["best"]["score"] * new / base, [base, new], sum(seconds) / len(seconds)
 
 
-def failing_guards(guards, timeout):
+def failing_guards(guards, timeout, env=None):
     for command in guards:
-        result = run(command, timeout)
+        result, out, err = _run(command, timeout, env=env)
         if result is None:
-            return command, f"timed out after {timeout}s"
+            snippet = tail(out + err)
+            return command, f"timed out after {timeout}s" + (f"\n{snippet}" if snippet else "")
         if result.returncode:
             return command, tail(result.stdout + result.stderr)
     return None
 
 
 def ignored(files, folder):
+    if not files:
+        return set()
     found = subprocess.run(["git", "check-ignore", "--stdin"], input="\n".join(map(str, files)), cwd=folder,
                            capture_output=True, text=True).stdout
     return set(found.splitlines())
@@ -252,11 +381,33 @@ def fingerprint(paths):
         target = root / name
         if not target.exists():
             raise Fail(f"Locked path does not exist: {name}")
-        files = [target] if target.is_file() else sorted(p for p in target.rglob("*") if p.is_file())
-        skip = set() if ".hill-climb" in target.parts else ignored(files, target.parent)
+        if target.is_file():
+            files = [target]
+            skip = set() if ".hill-climb" in target.parts else ignored(files, target.parent)
+        else:
+            prune = {".git", "__pycache__"}
+            check_ignore = ".hill-climb" not in target.parts
+            if check_ignore:
+                prune.add(".hill-climb")
+            files = []
+            for dirpath, dirnames, filenames in os.walk(target):
+                kept = [d for d in sorted(dirnames) if d not in prune]
+                if check_ignore and kept:
+                    dir_paths = [f"{os.path.join(dirpath, d)}/" for d in kept]
+                    bad_dirs = ignored(dir_paths, target)
+                    kept = [d for d, dp in zip(kept, dir_paths) if dp not in bad_dirs]
+                dirnames[:] = kept
+                for fname in sorted(filenames):
+                    candidate = Path(dirpath) / fname
+                    if candidate.is_file():
+                        files.append(candidate)
+            files.sort()
+            skip = set() if not check_ignore else ignored(files, target)
         for path in files:
+            if str(path) in skip:
+                continue
             digest.update(os.path.relpath(path, root).encode())
-            digest.update(b"ignored" if str(path) in skip else path.read_bytes())
+            digest.update(path.read_bytes())
     return digest.hexdigest()
 
 
@@ -296,7 +447,12 @@ def bar(text, baseline, direction):
 
 
 def outside(paths, allowed):
-    return [path for path in paths if not any(path == lock or path.startswith(lock.rstrip("/") + "/") for lock in allowed)]
+    def inside(path, lock):
+        norm = lock.rstrip("/")
+        if norm == ".":
+            return path != ".." and not path.startswith("../")
+        return path == norm or path.startswith(norm + "/")
+    return [path for path in paths if not any(inside(path, lock) for lock in allowed)]
 
 
 def number(value):
@@ -305,9 +461,13 @@ def number(value):
 
 def interrupted(folder):
     trees = json.loads((folder / "pending-tree").read_text())
-    restore = " && ".join(shlex.join(["git", "-C", path, "read-tree", "-u", "--reset", tree]) for path, tree in trees.items())
+    restore = " && ".join(
+        f"{shlex.join(['git', '-C', path, 'read-tree', '-u', '--reset', tree])} && "
+        f"{shlex.join(['git', '-C', path, 'reset', '-q'])}"
+        for path, tree in trees.items()
+    )
     return (f"A paired step was cut off and the tree may hold the old code. Restore the edit with: "
-            f"{restore} && rm {folder / 'pending-tree'}")
+            f"{restore} && {shlex.join(['rm', str(folder / 'pending-tree')])}")
 
 
 def gaining(steps):
@@ -472,23 +632,33 @@ def init_command(meta):
         if meta.get(key) is not None:
             words += [flag, str(meta[key])]
     words += ["--after", meta["after"], "--runs", str(meta["runs"]), "--min-gain", str(meta["min_gain"]), "--timeout", str(meta["timeout"])]
-    for flag in ("paired", "hard"):
+    for flag in ("paired", "hard", "holdout_once"):
         if meta.get(flag):
-            words.append(f"--{flag}")
+            words.append(f"--{flag.replace('_', '-')}")
     for lock in meta["lock"]:
         words += ["--lock", lock]
     return shlex.join(words)
 
 
+def _cache_env(folder, token):
+    return {
+        "HILLCLIMB_CACHE_FILE": str(folder / "candidate-cache.json"),
+        "HILLCLIMB_CACHE_TOKEN": token,
+    }
+
+
 def run_holdout(folder, card, reason):
     if not card["holdout"]:
         return None
-    score, _, _ = measure([card["holdout"]], card["runs"], card["timeout"], None, None, score_mode(card))
+    no_cache = {"HILLCLIMB_CACHE_FILE": None, "HILLCLIMB_CACHE_TOKEN": None}
+    score, _, _ = measure([card["holdout"]], 1, card["timeout"], None, None, score_mode(card), env=no_cache)
     append(folder, {"kind": "holdout", "score": score, "visible": card["best"]["score"], "why": reason})
     return score
 
 
 def cmd_init(args):
+    if args.runs < 1:
+        raise Fail("--runs must be at least 1")
     if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,40}", args.name):
         raise Fail("Use a short lowercase name with dashes, like build-speed.")
     folder = climbs_dir() / args.name
@@ -504,6 +674,14 @@ def cmd_init(args):
         if top in roots:
             raise Fail(f"--repo {path} is already part of this climb.")
         roots.append(top)
+    if not args.here:
+        for path in roots:
+            probe = subprocess.run(
+                ["git", "show-ref", "--verify", "--quiet", f"refs/heads/climb/{args.name}"],
+                cwd=path,
+            )
+            if probe.returncode == 0:
+                raise Fail(f"Branch 'climb/{args.name}' already exists in {path}. Pick another name or delete the old branch.")
     changed = changed_files(roots)
     stray = outside(changed, lock)
     if stray:
@@ -512,11 +690,18 @@ def cmd_init(args):
             + ", ".join(stray[:5])
         )
     folder.mkdir(parents=True, exist_ok=True)
-    score, spread, seconds = measure(args.check, args.runs, args.timeout, folder / "best.txt", args.score, mode)
-    target = bar(args.target, score, args.direction)
-    failed = failing_guards(args.guard or [], args.timeout)
-    if failed:
-        raise Fail(f"A guard already fails before the climb starts: {failed[0]}\n{failed[1]}")
+    cache_path = folder / "candidate-cache.json"
+    cache_env = _cache_env(folder, uuid.uuid4().hex)
+    try:
+        score, spread, seconds = measure(args.check, args.runs, args.timeout, folder / "best.txt", args.score, mode, env=cache_env)
+        if args.paired and score == 0:
+            raise Fail("--paired needs a score that is never 0")
+        target = bar(args.target, score, args.direction)
+        failed = failing_guards(args.guard or [], args.timeout, env=cache_env)
+        if failed:
+            raise Fail(f"A guard already fails before the climb starts: {failed[0]}\n{failed[1]}")
+    finally:
+        cache_path.unlink(missing_ok=True)
     changed = changed_files(roots)
     big = too_big(changed)
     if big:
@@ -544,6 +729,7 @@ def cmd_init(args):
         "min_gain": args.min_gain,
         "timeout": args.timeout,
         "holdout": args.holdout,
+        "holdout_once": bool(args.holdout_once),
         "lock": lock,
         "fingerprint": locked,
         "max_steps": args.max_steps,
@@ -565,7 +751,7 @@ def cmd_init(args):
     card["best"] = {"score": score, "commit": card["start_commit"], "step": 0}
     save(folder, card)
     append(folder, {"kind": "baseline", "score": score, "spread": spread, "seconds": round(seconds, 2)})
-    holdout = run_holdout(folder, card, "baseline")
+    holdout = None if card["holdout_once"] else run_holdout(folder, card, "baseline")
     also = f" in {len(roots)} repos" if len(roots) > 1 else ""
     print(f"Climb {args.name} started on {card['branch']}{also}. Check output: {folder / 'best.txt'}")
     print(save_kit(folder, card))
@@ -628,32 +814,37 @@ def cmd_try(args):
     step = len(steps) + 1
     best = card["best"]["score"]
     row = {"kind": "step", "step": step, "idea": args.idea}
+    cache_path = folder / "candidate-cache.json"
+    cache_env = _cache_env(folder, uuid.uuid4().hex)
     try:
-        if card.get("paired"):
-            score, row["pair"], seconds = paired(folder, card)
-        else:
-            score, _, seconds = measure(card["check"], card["runs"], card["timeout"], folder / "last.txt", card["score"], score_mode(card))
-    except Fail as error:
-        undo(card)
-        (folder / "pending-tree").unlink(missing_ok=True)
-        lines = str(error).splitlines()
-        why = lines[0] if len(lines) == 1 else f"{lines[0]}: {lines[-1].strip()[:120]}"
-        append(folder, {**row, "result": "broke", "why": why})
-        print(f"step {step} broke   {args.idea}\n{error}\nUndone. Full output: {folder / 'last.txt'}")
-        return
-    row.update(score=score, seconds=round(seconds, 2))
-    held = score >= best if card["direction"] == "max" else score <= best
-    if not (better(card, score, best) or args.fix and held):
-        undo(card)
-        append(folder, {**row, "result": "undone", "why": "score got worse" if args.fix else "no gain"})
-        print(f"step {step} undone  {number(score)} (best {number(best)})  {args.idea}\nOutput: {folder / 'last.txt'}")
-        return
-    failed = failing_guards(card["guards"], card["timeout"])
-    if failed:
-        undo(card)
-        append(folder, {**row, "result": "undone", "why": f"guard failed: {failed[0]}"})
-        print(f"step {step} undone  {number(score)} but guard failed: {failed[0]}\n{failed[1]}")
-        return
+        try:
+            if card.get("paired"):
+                score, row["pair"], seconds = paired(folder, card, cache_env=cache_env)
+            else:
+                score, _, seconds = measure(card["check"], card["runs"], card["timeout"], folder / "last.txt", card["score"], score_mode(card), env=cache_env)
+        except Fail as error:
+            undo(card)
+            (folder / "pending-tree").unlink(missing_ok=True)
+            lines = str(error).splitlines()
+            why = lines[0] if len(lines) == 1 else f"{lines[0]}: {lines[-1].strip()[:120]}"
+            append(folder, {**row, "result": "broke", "why": why})
+            print(f"step {step} broke   {args.idea}\n{error}\nUndone. Full output: {folder / 'last.txt'}")
+            return
+        row.update(score=score, seconds=round(seconds, 2))
+        held = score >= best if card["direction"] == "max" else score <= best
+        if not (better(card, score, best) or args.fix and held):
+            undo(card)
+            append(folder, {**row, "result": "undone", "why": "score got worse" if args.fix else "no gain"})
+            print(f"step {step} undone  {number(score)} (best {number(best)})  {args.idea}\nOutput: {folder / 'last.txt'}")
+            return
+        failed = failing_guards(card["guards"], card["timeout"], env=cache_env)
+        if failed:
+            undo(card)
+            append(folder, {**row, "result": "undone", "why": f"guard failed: {failed[0]}"})
+            print(f"step {step} undone  {number(score)} but guard failed: {failed[0]}\n{failed[1]}")
+            return
+    finally:
+        cache_path.unlink(missing_ok=True)
     try:
         moved = card["lock"] and fingerprint(card["lock"]) != card["fingerprint"]
     except Fail:
@@ -677,7 +868,7 @@ def cmd_try(args):
     append(folder, {**row, "result": "kept", "gain": better(card, score, best)})
     print(f"step {step} kept    {number(score)} (was {number(best)}, start {number(card['baseline'])})  {args.idea}")
     if reached(card, score):
-        holdout = run_holdout(folder, card, "bar reached")
+        holdout = None if card.get("holdout_once") else run_holdout(folder, card, "bar reached")
         print(f"BAR REACHED: {number(score)} meets {number(card['target'])}. The card says: {card['after']}.")
         if holdout is not None:
             print(f"Holdout now {number(holdout)}. Compare it with the holdout baseline before you claim a win.")
@@ -749,6 +940,8 @@ def cmd_holdout(args):
     card = load(folder)
     if not card["holdout"]:
         raise Fail("This climb has no holdout check.")
+    if card.get("holdout_once") and any(row.get("kind") == "holdout" for row in rows(folder)):
+        raise Fail("Holdout was already read once for this --holdout-once climb.")
     print(f"Holdout {number(run_holdout(folder, card, args.why))}, visible best {number(card['best']['score'])}.")
 
 
@@ -774,11 +967,17 @@ def cmd_relock(args):
     stray = outside(changed_files(checkouts(card)), card["lock"])
     if stray:
         raise Fail("Relock changes only the locked check files. Undo or try these first: " + ", ".join(stray[:5]))
-    failed = failing_guards(card["guards"], card["timeout"])
-    if failed:
-        raise Fail(f"A guard fails with the changed check: {failed[0]}\n{failed[1]}")
-    commit(checkouts(card), f"climb({card['name']}): fix the check\n\n{args.why}")
-    score, _, _ = measure(card["check"], card["runs"], card["timeout"], folder / "best.txt", card["score"], score_mode(card))
+    cache_path = folder / "candidate-cache.json"
+    guard_env = _cache_env(folder, uuid.uuid4().hex)
+    measure_env = _cache_env(folder, uuid.uuid4().hex)
+    try:
+        failed = failing_guards(card["guards"], card["timeout"], env=guard_env)
+        if failed:
+            raise Fail(f"A guard fails with the changed check: {failed[0]}\n{failed[1]}")
+        commit(checkouts(card), f"climb({card['name']}): fix the check\n\n{args.why}")
+        score, _, _ = measure(card["check"], card["runs"], card["timeout"], folder / "best.txt", card["score"], score_mode(card), env=measure_env)
+    finally:
+        cache_path.unlink(missing_ok=True)
     card["fingerprint"] = fingerprint(card["lock"])
     card["best"] = {"score": score, "commit": git("rev-parse", "HEAD"), "step": len([r for r in rows(folder) if r["kind"] == "step"])}
     save(folder, card)
@@ -916,6 +1115,8 @@ def parse(argv):
     init.add_argument("--min-gain", default="0", help="smallest change that counts, a number or a percent like 2%%")
     init.add_argument("--timeout", type=int, default=1800, help="seconds per check run")
     init.add_argument("--holdout", help="check on cases the climber never sees")
+    init.add_argument("--holdout-once", action="store_true",
+                      help="skip automatic holdout runs on init/try and allow one post-selection holdout read")
     init.add_argument("--lock", action="append", help="file or folder the climber may not edit")
     init.add_argument("--max-steps", type=int, help="soft limit: past it, steps go on while they still gain")
     init.add_argument("--max-hours", type=float, help="soft limit in hours since init, like --max-steps")
@@ -974,28 +1175,54 @@ def parse(argv):
     return parser.parse_args(argv)
 
 
+def _on_signal(signum, _frame):
+    raise Interrupted(signum)
+
+
 def main(argv=None):
     args = parse(argv)
+    held = None
+    prev_handlers = {}
+    is_main = threading.current_thread() is threading.main_thread()
     try:
-        os.chdir(repo())
-        home = Path(".hill-climb/home")
-        if args.command != "init" and home.is_file() and not list(climbs_dir().glob("*/card.json")):
-            os.chdir(home.read_text().strip())
-        held = None if args.command in ("status", "list", "kits") else hold_lock()
-    except Fail as error:
-        print(error, file=sys.stderr)
-        return 1
-    handlers = {
-        "init": cmd_init, "try": cmd_try, "status": cmd_status, "holdout": cmd_holdout,
-        "raise": cmd_raise, "relock": cmd_relock, "review": cmd_review, "budget": cmd_budget, "drop": cmd_drop, "list": cmd_list,
-        "save": cmd_save, "kits": cmd_kits, "reuse": cmd_reuse,
-    }
-    try:
-        handlers[args.command](args)
-    except (Fail, ValueError) as error:
-        print(error, file=sys.stderr)
-        return 1
-    return 0
+        if is_main:
+            for sig in (signal.SIGINT, signal.SIGTERM):
+                prev_handlers[sig] = signal.getsignal(sig)
+                signal.signal(sig, _on_signal)
+        try:
+            os.chdir(repo())
+            home = Path(".hill-climb/home")
+            if args.command != "init" and home.is_file() and not list(climbs_dir().glob("*/card.json")):
+                os.chdir(home.read_text().strip())
+            held = None if args.command in ("status", "list", "kits") else hold_lock()
+        except Fail as error:
+            print(error, file=sys.stderr)
+            return 1
+        handlers = {
+            "init": cmd_init, "try": cmd_try, "status": cmd_status, "holdout": cmd_holdout,
+            "raise": cmd_raise, "relock": cmd_relock, "review": cmd_review, "budget": cmd_budget, "drop": cmd_drop, "list": cmd_list,
+            "save": cmd_save, "kits": cmd_kits, "reuse": cmd_reuse,
+        }
+        try:
+            handlers[args.command](args)
+        except (Fail, ValueError) as error:
+            print(error, file=sys.stderr)
+            return 1
+        return 0
+    except Interrupted as error:
+        kill_active_pgs()
+        print(f"Interrupted (signal {error.signum}).", file=sys.stderr)
+        return 128 + error.signum
+    except KeyboardInterrupt:
+        kill_active_pgs()
+        print("Interrupted.", file=sys.stderr)
+        return 130
+    finally:
+        if is_main:
+            for sig, prev in prev_handlers.items():
+                signal.signal(sig, prev)
+        if held is not None:
+            held.close()
 
 
 if __name__ == "__main__":

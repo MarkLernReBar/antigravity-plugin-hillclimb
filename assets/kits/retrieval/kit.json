@@ -26,7 +26,7 @@
     "holdout": "holdout.json",
     "sample": true,
     "label": "SAMPLE FIXTURE — replace with real judged queries and documents",
-    "result": "JSONL rows: {\"query\": \"...\", \"docs\": [\"doc-id\", ...], \"latency_ms\": 40}"
+    "resultFormat": "JSONL rows: {\"query\": \"...\", \"docs\": [\"doc-id\", ...], \"latency_ms\": 40}"
   },
   "baseline": {
     "fixture": "fixtures/sample-good.jsonl",

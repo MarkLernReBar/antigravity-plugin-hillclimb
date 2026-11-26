@@ -88,7 +88,7 @@ limit, `6` the candidate failed, `7` usage error.
 | `knownBad` | controls: `{id, fixture, expect, guard?}` |
 | `finalControls` | controls for the private read (tuning) |
 | `repeats` | `{runs, maxSpread, why}` |
-| `data` | `{manifest, holdout, sample, label, resultFormat}` |
+| `data` | `{manifest, holdout, sample, label?, resultFormat / result}` |
 | `notes` | the discipline this kit encodes |
 
 `expect` is `worse`, `rejected` or `guard_fail`. A sample kit sets
@@ -96,9 +96,10 @@ limit, `6` the candidate failed, `7` usage error.
 
 ## Project data
 
-A project folder carries its own `kit.json` beside its manifest and fixtures.
+A custom `--data <dir>` folder carries its own `kit.json` (with `data.sample: false`),
+`cases.json`, `holdout.json` (when the kit has a holdout), and `fixtures/`.
 Project paths resolve relative to that folder. It must declare its own
-`baseline`, `knownBad` and `repeats`; the packaged controls are examples and
+`baseline`, `knownBad`, and `repeats`; the packaged controls are examples and
 never stand in for real data. `--data` without a project `kit.json` is an error
 unless `--allow-sample` explicitly accepts the labelled sample.
 
@@ -125,16 +126,24 @@ Packaged sample fixtures, as measured by `preflight.py preflight --kit <id>`:
 | agent-outcomes | 3 tasks | 7 |
 | tuning | 11.8 ms validation | 8 visible + 2 final |
 
-The project fixtures under `tests/fixtures/project-<id>/` are separate real
-instances with different ids and values. They prove the loader, not the sample
-numbers.
+Custom project data passes the same preflight checks via `--data <dir>` when
+`<dir>` contains `kit.json` (`data.sample: false`), `cases.json`, and
+`fixtures/` with project-specific `baseline`, `knownBad`, and `repeats`.
 
-## Tests
+## Verification & Tests
+
+Run preflight checks directly against the bundled kits (or installed `.hill-climb/kits/`):
 
 ```sh
-npx tsx --test tests/kits.test.ts
+# verify any kit's baseline, known-bad controls, and repeat spread
+python3 -B assets/kits/preflight.py preflight --kit correctness --json
+python3 -B assets/kits/preflight.py final --kit tuning --json
+# for custom project data (kit.json with data.sample: false), pass --data <dir>
+
+# run the plugin integration test suite (tests/hillclimb.test.ts)
+npm test
 ```
 
-The suite covers the five kits, project-data preflight for all five, the
-command grammar, the tuning split, noise handling, and the rejection cases
-(missing, duplicate, nonfinite, incomplete, wrong, out-of-bounds, leakage).
+`preflight.py` verifies baseline scoring, known-bad rejection cases (missing,
+duplicate, nonfinite, incomplete, wrong, out-of-bounds, leakage), repeat spread,
+command generation, and the tuning visible/final split.

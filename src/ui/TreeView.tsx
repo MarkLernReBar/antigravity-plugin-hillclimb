@@ -1312,7 +1312,7 @@ export function TreeView(props: ViewProps): JSX.Element {
     })
     observer.observe(element)
     return () => observer.disconnect()
-  }, [mode, emptyTree])
+  }, [])
 
   const fit = useCallback(() => {
     if (size === null) return
@@ -1361,6 +1361,15 @@ export function TreeView(props: ViewProps): JSX.Element {
   }, [emptyTree, mode])
 
   const pan = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null)
+  const panRaf = useRef<number | null>(null)
+  const panPending = useRef<{ tx: number; ty: number } | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (panRaf.current !== null) cancelAnimationFrame(panRaf.current)
+    }
+  }, [])
+
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>): void => {
     if (event.button !== 0) return
     const target = event.target as HTMLElement
@@ -1371,10 +1380,27 @@ export function TreeView(props: ViewProps): JSX.Element {
   const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>): void => {
     const start = pan.current
     if (start === null) return
-    setView({ ...view, tx: start.tx + (event.clientX - start.x), ty: start.ty + (event.clientY - start.y) })
+    panPending.current = {
+      tx: start.tx + (event.clientX - start.x),
+      ty: start.ty + (event.clientY - start.y),
+    }
+    if (panRaf.current !== null) return
+    panRaf.current = requestAnimationFrame(() => {
+      panRaf.current = null
+      const next = panPending.current
+      if (next === null) return
+      setViewState((current) =>
+        current.tx === next.tx && current.ty === next.ty ? current : { ...current, tx: next.tx, ty: next.ty },
+      )
+    })
   }
   const onPointerUp = (): void => {
     pan.current = null
+    panPending.current = null
+    if (panRaf.current !== null) {
+      cancelAnimationFrame(panRaf.current)
+      panRaf.current = null
+    }
   }
 
   const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {

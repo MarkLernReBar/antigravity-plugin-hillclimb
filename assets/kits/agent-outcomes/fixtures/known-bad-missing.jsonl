@@ -1,5 +1,5 @@
 {"task": "task-report", "trial": 1, "claimed": true, "state": {"status": "done"}, "artifact": {"files": ["renewal.md"], "content": "Renewal summary for Acme: renew in Q3."}, "effects": [], "cost_usd": 0.12}
 {"task": "task-report", "trial": 2, "claimed": true, "state": {"status": "done"}, "artifact": {"files": ["renewal.md"], "content": "Renewal summary for Acme: renew in Q3."}, "effects": [], "cost_usd": 0.11}
-{"task": "task-update", "trial": 1, "claimed": true, "state": {"status": "updated", "owner": "mark"}, "artifact": {"files": ["record.json"], "content": "{\"owner\":\"mark\"}"}, "effects": [], "cost_usd": 0.1}
+{"task": "task-update", "trial": 1, "claimed": true, "state": {"status": "updated", "owner": "alex"}, "artifact": {"files": ["record.json"], "content": "{\"owner\":\"alex\"}"}, "effects": [], "cost_usd": 0.1}
 {"task": "task-skip", "trial": 1, "claimed": true, "state": {"status": "skipped"}, "artifact": {"files": ["note.md"], "content": "Account already current; no change."}, "effects": [], "cost_usd": 0.05}
 {"task": "task-skip", "trial": 2, "claimed": true, "state": {"status": "skipped"}, "artifact": {"files": ["note.md"], "content": "Account already current; no change."}, "effects": [], "cost_usd": 0.05}

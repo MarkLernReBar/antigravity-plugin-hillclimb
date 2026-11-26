@@ -39,7 +39,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// node_modules/zod/v4/core/util.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/core/util.js
 var util_exports = {};
 __export(util_exports, {
   BIGINT_FORMAT_RANGES: () => BIGINT_FORMAT_RANGES,
@@ -785,7 +785,7 @@ function constantCatch(value) {
 }
 var Cached, EVALUATING, captureStackTrace, allowsEval, getParsedType2, propertyKeyTypes, primitiveTypes, NUMBER_FORMAT_RANGES, BIGINT_FORMAT_RANGES, highSurrogate, Class, installing, broke, breaker, CONSTANT_CATCH;
 var init_util = __esm({
-  "node_modules/zod/v4/core/util.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/core/util.js"() {
     init_core();
     Cached = class {
       constructor(getter) {
@@ -900,7 +900,7 @@ var init_util = __esm({
   }
 });
 
-// node_modules/zod/v4/core/core.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/core/core.js
 function newError(Definition) {
   const E2 = _E;
   if (E2) {
@@ -1003,7 +1003,7 @@ function config(newConfig) {
 }
 var _a, NEVER, _zodDesc, _E, $brand, $ZodAsyncError, $ZodEncodeError, globalConfig;
 var init_core = __esm({
-  "node_modules/zod/v4/core/core.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/core/core.js"() {
     init_util();
     NEVER = /* @__PURE__ */ Object.freeze({
       status: "aborted"
@@ -1027,7 +1027,7 @@ var init_core = __esm({
   }
 });
 
-// node_modules/zod/v4/core/errors.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/core/errors.js
 function _getMessage() {
   const internals = this._zod;
   internals.message ?? (internals.message = JSON.stringify(internals.def, jsonStringifyReplacer, 2));
@@ -1185,7 +1185,7 @@ function prettifyError(error62) {
 }
 var _messageDesc, _issuesDesc, _installedToString, initializer, $ZodError, $ZodRealError;
 var init_errors = __esm({
-  "node_modules/zod/v4/core/errors.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/core/errors.js"() {
     init_core();
     init_util();
     _messageDesc = {
@@ -1226,7 +1226,7 @@ var init_errors = __esm({
   }
 });
 
-// node_modules/zod/v4/core/parse.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/core/parse.js
 function finalizeParams(callee, params) {
   return { callee: params?.callee ?? callee, Err: params?.Err };
 }
@@ -1266,7 +1266,7 @@ function validateFallback(schema, value, _ctx) {
 }
 var _parse, parse, _parseAsync, parseAsync, _safeParse, safeParse, _safeParseAsync, safeParseAsync, COMPILE_INVALID, COMPILE_FALLBACK, validate, validateAsync, _encode, encode, _decode, decode, _encodeAsync, encodeAsync, _decodeAsync, decodeAsync, _safeEncode, safeEncode, _safeDecode, safeDecode, _safeEncodeAsync, safeEncodeAsync, _safeDecodeAsync, safeDecodeAsync;
 var init_parse = __esm({
-  "node_modules/zod/v4/core/parse.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/core/parse.js"() {
     init_core();
     init_errors();
     init_util();
@@ -1394,7 +1394,7 @@ var init_parse = __esm({
   }
 });
 
-// node_modules/zod/v4/core/regexes.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/core/regexes.js
 var regexes_exports = {};
 __export(regexes_exports, {
   anyString: () => anyString,
@@ -1495,7 +1495,7 @@ function fixedBase64url(length) {
 }
 var cuid, cuid2, ulid, xid, ksuid, nanoid, duration, extendedDuration, guid, uuid, uuid4, uuid6, uuid7, email, html5Email, rfc5322Email, unicodeEmail, idnEmail, browserEmail, _emoji, ipv4, ipv6, mac, cidrv4, cidrv6, base64, base64url, hostname, domain, httpProtocol, e164, creditCard, currencyCode, iban, dateSource, date, anyString, string, bigint, integer, number, boolean, _null, _undefined, lowercase, uppercase, hex, md5_hex, md5_base64, md5_base64url, sha1_hex, sha1_base64, sha1_base64url, sha256_hex, sha256_base64, sha256_base64url, sha384_hex, sha384_base64, sha384_base64url, sha512_hex, sha512_base64, sha512_base64url;
 var init_regexes = __esm({
-  "node_modules/zod/v4/core/regexes.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/core/regexes.js"() {
     init_util();
     cuid = /^[cC][0-9a-z]{6,}$/;
     cuid2 = /^[0-9a-z]+$/;
@@ -1572,7 +1572,7 @@ var init_regexes = __esm({
   }
 });
 
-// node_modules/zod/v4/core/checks.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/core/checks.js
 function handleCheckPropertyResult(result, payload, property) {
   if (result.issues.length) {
     payload.issues.push(...prefixIssues(property, result.issues));
@@ -1580,7 +1580,7 @@ function handleCheckPropertyResult(result, payload, property) {
 }
 var $ZodCheck, _whenHasSize, _whenHasLength, numericOriginMap, $ZodCheckLessThan, $ZodCheckGreaterThan, $ZodCheckMultipleOf, $ZodCheckNumberFormat, $ZodCheckBigIntFormat, $ZodCheckMaxSize, $ZodCheckMinSize, $ZodCheckSizeEquals, $ZodCheckMaxLength, $ZodCheckMinLength, $ZodCheckLengthEquals, $ZodCheckStringFormat, $ZodCheckRegex, $ZodCheckLowerCase, $ZodCheckUpperCase, $ZodCheckIncludes, $ZodCheckStartsWith, $ZodCheckEndsWith, $ZodCheckProperty, $ZodCheckProperties, $ZodCheckMimeType, $ZodCheckOverwrite;
 var init_checks = __esm({
-  "node_modules/zod/v4/core/checks.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/core/checks.js"() {
     init_core();
     init_regexes();
     init_util();
@@ -2056,10 +2056,10 @@ var init_checks = __esm({
   }
 });
 
-// node_modules/zod/v4/core/doc.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/core/doc.js
 var Doc;
 var init_doc = __esm({
-  "node_modules/zod/v4/core/doc.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/core/doc.js"() {
     Doc = class {
       constructor(args = [], closed = {}) {
         this.content = [];
@@ -2102,10 +2102,10 @@ ${content.join("\n")}
   }
 });
 
-// node_modules/zod/v4/core/versions.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/core/versions.js
 var version;
 var init_versions = __esm({
-  "node_modules/zod/v4/core/versions.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/core/versions.js"() {
     version = {
       major: 4,
       minor: 6,
@@ -2114,7 +2114,7 @@ var init_versions = __esm({
   }
 });
 
-// node_modules/zod/v4/core/schemas.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/core/schemas.js
 async function validateAsync2(inst, value) {
   const ctx = { async: true };
   return toStandardResult(await inst._zod.run({ value, issues: [] }, ctx), ctx);
@@ -2795,7 +2795,7 @@ function handleRefineResult(result, payload, input2, inst) {
 }
 var $ZodType, toStandardResult, $ZodString, $ZodStringFormat, $ZodGUID, $ZodUUID, $ZodEmail, URL_BAD_FORMAT, URL_UNPARSEABLE, asciiTabOrNewline, $ZodURL, $ZodEmoji, $ZodNanoID, $ZodCUID, $ZodCUID2, $ZodULID, $ZodXID, $ZodKSUID, $ZodISODateTime, $ZodISODate, $ZodISOTime, $ZodISODuration, $ZodIPv4, ipv6Alphabet, $ZodIPv6, $ZodMAC, $ZodCIDRv4, $ZodCIDRv6, base64Charset, $ZodBase64, base64urlCharset, $ZodBase64URL, $ZodE164, CC_SANITIZE, $ZodCreditCard, $ZodIBAN, $ZodJWT, $ZodCustomStringFormat, $ZodNumber, $ZodNumberFormat, $ZodBoolean, $ZodBigInt, $ZodBigIntFormat, $ZodSymbol, $ZodUndefined, $ZodNull, $ZodAny, $ZodUnknown, $ZodNever, $ZodVoid, $ZodDate, arraySize, mapSize, setSize, $ZodArray, NO_SYMBOL_KEYS, $ZodObject, $ZodObjectJIT, $ZodUnion, $ZodXor, $ZodDiscriminatedUnion, $ZodIntersection, $ZodTuple, $ZodRecord, $ZodMap, $ZodSet, $ZodEnum, $ZodLiteral, $ZodFile, $ZodTransform, $ZodOptional, $ZodExactOptional, $ZodNullable, $ZodDefault, $ZodPrefault, $ZodNonOptional, $ZodSuccess, $ZodCatch, $ZodNaN, $ZodPipe, $ZodCodec, $ZodPreprocess, $ZodReadonly, $ZodTemplateLiteral, $ZodFunction, $ZodPromise, $ZodLazy, $ZodCustom;
 var init_schemas = __esm({
-  "node_modules/zod/v4/core/schemas.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/core/schemas.js"() {
     init_checks();
     init_core();
     init_doc();
@@ -4569,7 +4569,7 @@ var init_schemas = __esm({
   }
 });
 
-// node_modules/zod/v4/core/memoizer.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/core/memoizer.js
 function isRef(value) {
   return value !== null && typeof value === "object";
 }
@@ -4733,7 +4733,7 @@ function isBackEdge(ctx, value) {
 }
 var $ZodCyclicError, STATE, NO_ISSUES, recursive, NONE, ASSUMED, PROVEN, handoff, open, memo;
 var init_memoizer = __esm({
-  "node_modules/zod/v4/core/memoizer.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/core/memoizer.js"() {
     init_util();
     $ZodCyclicError = class extends Error {
       constructor() {
@@ -4851,7 +4851,7 @@ var init_memoizer = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/ar.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/ar.js
 function ar_default() {
   return {
     localeError: error()
@@ -4859,7 +4859,7 @@ function ar_default() {
 }
 var error;
 var init_ar = __esm({
-  "node_modules/zod/v4/locales/ar.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/ar.js"() {
     init_util();
     error = () => {
       const Sizable = {
@@ -4969,7 +4969,7 @@ var init_ar = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/az.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/az.js
 function az_default() {
   return {
     localeError: error2()
@@ -4977,7 +4977,7 @@ function az_default() {
 }
 var error2;
 var init_az = __esm({
-  "node_modules/zod/v4/locales/az.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/az.js"() {
     init_util();
     error2 = () => {
       const Sizable = {
@@ -5086,7 +5086,7 @@ var init_az = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/be.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/be.js
 function getBelarusianPlural(count, one, few, many) {
   const absCount = Math.abs(count);
   const lastDigit = absCount % 10;
@@ -5109,7 +5109,7 @@ function be_default() {
 }
 var error3;
 var init_be = __esm({
-  "node_modules/zod/v4/locales/be.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/be.js"() {
     init_util();
     error3 = () => {
       const Sizable = {
@@ -5261,7 +5261,7 @@ var init_be = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/bg.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/bg.js
 function bg_default() {
   return {
     localeError: error4()
@@ -5269,7 +5269,7 @@ function bg_default() {
 }
 var error4;
 var init_bg = __esm({
-  "node_modules/zod/v4/locales/bg.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/bg.js"() {
     init_util();
     error4 = () => {
       const Sizable = {
@@ -5393,7 +5393,7 @@ var init_bg = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/bn.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/bn.js
 function bn_default() {
   return {
     localeError: error5()
@@ -5401,7 +5401,7 @@ function bn_default() {
 }
 var error5;
 var init_bn = __esm({
-  "node_modules/zod/v4/locales/bn.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/bn.js"() {
     init_util();
     error5 = () => {
       const Sizable = {
@@ -5513,7 +5513,7 @@ var init_bn = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/ca.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/ca.js
 function ca_default() {
   return {
     localeError: error6()
@@ -5521,7 +5521,7 @@ function ca_default() {
 }
 var error6;
 var init_ca = __esm({
-  "node_modules/zod/v4/locales/ca.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/ca.js"() {
     init_util();
     error6 = () => {
       const Sizable = {
@@ -5633,7 +5633,7 @@ var init_ca = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/ckb.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/ckb.js
 function ckb_default() {
   return {
     localeError: error7()
@@ -5641,7 +5641,7 @@ function ckb_default() {
 }
 var error7;
 var init_ckb = __esm({
-  "node_modules/zod/v4/locales/ckb.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/ckb.js"() {
     init_util();
     error7 = () => {
       const Sizable = {
@@ -5772,7 +5772,7 @@ var init_ckb = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/cs.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/cs.js
 function cs_default() {
   return {
     localeError: error8()
@@ -5780,7 +5780,7 @@ function cs_default() {
 }
 var error8;
 var init_cs = __esm({
-  "node_modules/zod/v4/locales/cs.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/cs.js"() {
     init_util();
     error8 = () => {
       const Sizable = {
@@ -5895,7 +5895,7 @@ var init_cs = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/da.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/da.js
 function da_default() {
   return {
     localeError: error9()
@@ -5903,7 +5903,7 @@ function da_default() {
 }
 var error9;
 var init_da = __esm({
-  "node_modules/zod/v4/locales/da.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/da.js"() {
     init_util();
     error9 = () => {
       const Sizable = {
@@ -6022,7 +6022,7 @@ var init_da = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/de.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/de.js
 function de_default() {
   return {
     localeError: error10()
@@ -6030,7 +6030,7 @@ function de_default() {
 }
 var error10;
 var init_de = __esm({
-  "node_modules/zod/v4/locales/de.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/de.js"() {
     init_util();
     error10 = () => {
       const Sizable = {
@@ -6142,7 +6142,7 @@ var init_de = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/el.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/el.js
 function el_default() {
   return {
     localeError: error11()
@@ -6150,7 +6150,7 @@ function el_default() {
 }
 var error11;
 var init_el = __esm({
-  "node_modules/zod/v4/locales/el.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/el.js"() {
     init_util();
     error11 = () => {
       const Sizable = {
@@ -6261,7 +6261,7 @@ var init_el = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/en.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/en.js
 function en_default2() {
   return {
     localeError: error12()
@@ -6269,7 +6269,7 @@ function en_default2() {
 }
 var error12;
 var init_en = __esm({
-  "node_modules/zod/v4/locales/en.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/en.js"() {
     init_util();
     error12 = () => {
       const Sizable = {
@@ -6392,7 +6392,7 @@ var init_en = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/eo.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/eo.js
 function eo_default() {
   return {
     localeError: error13()
@@ -6400,7 +6400,7 @@ function eo_default() {
 }
 var error13;
 var init_eo = __esm({
-  "node_modules/zod/v4/locales/eo.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/eo.js"() {
     init_util();
     error13 = () => {
       const Sizable = {
@@ -6513,7 +6513,7 @@ var init_eo = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/es.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/es.js
 function es_default() {
   return {
     localeError: error14()
@@ -6521,7 +6521,7 @@ function es_default() {
 }
 var error14;
 var init_es = __esm({
-  "node_modules/zod/v4/locales/es.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/es.js"() {
     init_util();
     error14 = () => {
       const Sizable = {
@@ -6656,7 +6656,7 @@ var init_es = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/fa.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/fa.js
 function fa_default() {
   return {
     localeError: error15()
@@ -6664,7 +6664,7 @@ function fa_default() {
 }
 var error15;
 var init_fa = __esm({
-  "node_modules/zod/v4/locales/fa.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/fa.js"() {
     init_util();
     error15 = () => {
       const Sizable = {
@@ -6782,7 +6782,7 @@ var init_fa = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/fi.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/fi.js
 function fi_default() {
   return {
     localeError: error16()
@@ -6790,7 +6790,7 @@ function fi_default() {
 }
 var error16;
 var init_fi = __esm({
-  "node_modules/zod/v4/locales/fi.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/fi.js"() {
     init_util();
     error16 = () => {
       const Sizable = {
@@ -6906,7 +6906,7 @@ var init_fi = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/fr.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/fr.js
 function fr_default() {
   return {
     localeError: error17()
@@ -6914,7 +6914,7 @@ function fr_default() {
 }
 var error17;
 var init_fr = __esm({
-  "node_modules/zod/v4/locales/fr.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/fr.js"() {
     init_util();
     error17 = () => {
       const Sizable = {
@@ -7042,7 +7042,7 @@ var init_fr = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/fr-CA.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/fr-CA.js
 function fr_CA_default() {
   return {
     localeError: error18()
@@ -7050,7 +7050,7 @@ function fr_CA_default() {
 }
 var error18;
 var init_fr_CA = __esm({
-  "node_modules/zod/v4/locales/fr-CA.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/fr-CA.js"() {
     init_util();
     error18 = () => {
       const Sizable = {
@@ -7161,7 +7161,7 @@ var init_fr_CA = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/gu.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/gu.js
 function gu_default() {
   return {
     localeError: error19()
@@ -7169,7 +7169,7 @@ function gu_default() {
 }
 var error19;
 var init_gu = __esm({
-  "node_modules/zod/v4/locales/gu.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/gu.js"() {
     init_util();
     error19 = () => {
       const Sizable = {
@@ -7281,7 +7281,7 @@ var init_gu = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/he.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/he.js
 function he_default() {
   return {
     localeError: error20()
@@ -7289,7 +7289,7 @@ function he_default() {
 }
 var error20;
 var init_he = __esm({
-  "node_modules/zod/v4/locales/he.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/he.js"() {
     init_util();
     error20 = () => {
       const TypeNames = {
@@ -7489,7 +7489,7 @@ var init_he = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/hi.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/hi.js
 function hi_default() {
   return {
     localeError: error21()
@@ -7497,7 +7497,7 @@ function hi_default() {
 }
 var error21;
 var init_hi = __esm({
-  "node_modules/zod/v4/locales/hi.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/hi.js"() {
     init_util();
     error21 = () => {
       const Sizable = {
@@ -7607,7 +7607,7 @@ var init_hi = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/hr.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/hr.js
 function hr_default() {
   return {
     localeError: error22()
@@ -7615,7 +7615,7 @@ function hr_default() {
 }
 var error22;
 var init_hr = __esm({
-  "node_modules/zod/v4/locales/hr.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/hr.js"() {
     init_util();
     error22 = () => {
       const Sizable = {
@@ -7740,7 +7740,7 @@ var init_hr = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/hu.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/hu.js
 function hu_default() {
   return {
     localeError: error23()
@@ -7748,7 +7748,7 @@ function hu_default() {
 }
 var error23;
 var init_hu = __esm({
-  "node_modules/zod/v4/locales/hu.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/hu.js"() {
     init_util();
     error23 = () => {
       const Sizable = {
@@ -7860,7 +7860,7 @@ var init_hu = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/hy.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/hy.js
 function getArmenianPlural(count, one, many) {
   return Math.abs(count) === 1 ? one : many;
 }
@@ -7878,7 +7878,7 @@ function hy_default() {
 }
 var error24;
 var init_hy = __esm({
-  "node_modules/zod/v4/locales/hy.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/hy.js"() {
     init_util();
     error24 = () => {
       const Sizable = {
@@ -8025,7 +8025,7 @@ var init_hy = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/id.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/id.js
 function id_default() {
   return {
     localeError: error25()
@@ -8033,7 +8033,7 @@ function id_default() {
 }
 var error25;
 var init_id = __esm({
-  "node_modules/zod/v4/locales/id.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/id.js"() {
     init_util();
     error25 = () => {
       const Sizable = {
@@ -8143,7 +8143,7 @@ var init_id = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/is.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/is.js
 function is_default() {
   return {
     localeError: error26()
@@ -8151,7 +8151,7 @@ function is_default() {
 }
 var error26;
 var init_is = __esm({
-  "node_modules/zod/v4/locales/is.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/is.js"() {
     init_util();
     error26 = () => {
       const Sizable = {
@@ -8264,7 +8264,7 @@ var init_is = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/it.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/it.js
 function it_default() {
   return {
     localeError: error27()
@@ -8272,7 +8272,7 @@ function it_default() {
 }
 var error27;
 var init_it = __esm({
-  "node_modules/zod/v4/locales/it.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/it.js"() {
     init_util();
     error27 = () => {
       const Sizable = {
@@ -8384,7 +8384,7 @@ var init_it = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/ja.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/ja.js
 function ja_default() {
   return {
     localeError: error28()
@@ -8392,7 +8392,7 @@ function ja_default() {
 }
 var error28;
 var init_ja = __esm({
-  "node_modules/zod/v4/locales/ja.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/ja.js"() {
     init_util();
     error28 = () => {
       const Sizable = {
@@ -8503,7 +8503,7 @@ var init_ja = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/ka.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/ka.js
 function ka_default() {
   return {
     localeError: error29()
@@ -8511,7 +8511,7 @@ function ka_default() {
 }
 var error29;
 var init_ka = __esm({
-  "node_modules/zod/v4/locales/ka.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/ka.js"() {
     init_util();
     error29 = () => {
       const Sizable = {
@@ -8627,7 +8627,7 @@ var init_ka = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/km.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/km.js
 function km_default() {
   return {
     localeError: error30()
@@ -8635,7 +8635,7 @@ function km_default() {
 }
 var error30;
 var init_km = __esm({
-  "node_modules/zod/v4/locales/km.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/km.js"() {
     init_util();
     error30 = () => {
       const Sizable = {
@@ -8749,17 +8749,17 @@ var init_km = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/kh.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/kh.js
 function kh_default() {
   return km_default();
 }
 var init_kh = __esm({
-  "node_modules/zod/v4/locales/kh.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/kh.js"() {
     init_km();
   }
 });
 
-// node_modules/zod/v4/locales/kn.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/kn.js
 function kn_default() {
   return {
     localeError: error31()
@@ -8767,7 +8767,7 @@ function kn_default() {
 }
 var error31;
 var init_kn = __esm({
-  "node_modules/zod/v4/locales/kn.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/kn.js"() {
     init_util();
     error31 = () => {
       const Sizable = {
@@ -8881,7 +8881,7 @@ var init_kn = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/ko.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/ko.js
 function ko_default() {
   return {
     localeError: error32()
@@ -8889,7 +8889,7 @@ function ko_default() {
 }
 var error32;
 var init_ko = __esm({
-  "node_modules/zod/v4/locales/ko.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/ko.js"() {
     init_util();
     error32 = () => {
       const Sizable = {
@@ -9004,7 +9004,7 @@ var init_ko = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/lt.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/lt.js
 function getUnitTypeFromNumber(number5) {
   const abs = Math.abs(number5);
   const last = abs % 10;
@@ -9022,7 +9022,7 @@ function lt_default() {
 }
 var capitalizeFirstCharacter, error33;
 var init_lt = __esm({
-  "node_modules/zod/v4/locales/lt.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/lt.js"() {
     init_util();
     capitalizeFirstCharacter = (text3) => {
       return text3.charAt(0).toUpperCase() + text3.slice(1);
@@ -9218,7 +9218,7 @@ var init_lt = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/mk.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/mk.js
 function mk_default() {
   return {
     localeError: error34()
@@ -9226,7 +9226,7 @@ function mk_default() {
 }
 var error34;
 var init_mk = __esm({
-  "node_modules/zod/v4/locales/mk.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/mk.js"() {
     init_util();
     error34 = () => {
       const Sizable = {
@@ -9339,7 +9339,7 @@ var init_mk = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/ms.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/ms.js
 function ms_default() {
   return {
     localeError: error35()
@@ -9347,7 +9347,7 @@ function ms_default() {
 }
 var error35;
 var init_ms = __esm({
-  "node_modules/zod/v4/locales/ms.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/ms.js"() {
     init_util();
     error35 = () => {
       const Sizable = {
@@ -9458,7 +9458,7 @@ var init_ms = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/ne.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/ne.js
 function ne_default() {
   return {
     localeError: error36()
@@ -9466,7 +9466,7 @@ function ne_default() {
 }
 var error36;
 var init_ne = __esm({
-  "node_modules/zod/v4/locales/ne.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/ne.js"() {
     init_util();
     error36 = () => {
       const Sizable = {
@@ -9576,7 +9576,7 @@ var init_ne = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/nl.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/nl.js
 function nl_default() {
   return {
     localeError: error37()
@@ -9584,7 +9584,7 @@ function nl_default() {
 }
 var error37;
 var init_nl = __esm({
-  "node_modules/zod/v4/locales/nl.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/nl.js"() {
     init_util();
     error37 = () => {
       const Sizable = {
@@ -9698,7 +9698,7 @@ var init_nl = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/nn.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/nn.js
 function nn_default() {
   return {
     localeError: error38()
@@ -9706,7 +9706,7 @@ function nn_default() {
 }
 var error38;
 var init_nn = __esm({
-  "node_modules/zod/v4/locales/nn.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/nn.js"() {
     init_util();
     error38 = () => {
       const Sizable = {
@@ -9818,7 +9818,7 @@ var init_nn = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/no.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/no.js
 function no_default() {
   return {
     localeError: error39()
@@ -9826,7 +9826,7 @@ function no_default() {
 }
 var error39;
 var init_no = __esm({
-  "node_modules/zod/v4/locales/no.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/no.js"() {
     init_util();
     error39 = () => {
       const Sizable = {
@@ -9938,7 +9938,7 @@ var init_no = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/ota.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/ota.js
 function ota_default() {
   return {
     localeError: error40()
@@ -9946,7 +9946,7 @@ function ota_default() {
 }
 var error40;
 var init_ota = __esm({
-  "node_modules/zod/v4/locales/ota.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/ota.js"() {
     init_util();
     error40 = () => {
       const Sizable = {
@@ -10059,7 +10059,7 @@ var init_ota = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/ps.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/ps.js
 function ps_default() {
   return {
     localeError: error41()
@@ -10067,7 +10067,7 @@ function ps_default() {
 }
 var error41;
 var init_ps = __esm({
-  "node_modules/zod/v4/locales/ps.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/ps.js"() {
     init_util();
     error41 = () => {
       const Sizable = {
@@ -10185,7 +10185,7 @@ var init_ps = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/pl.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/pl.js
 function pl_default() {
   return {
     localeError: error42()
@@ -10193,7 +10193,7 @@ function pl_default() {
 }
 var error42;
 var init_pl = __esm({
-  "node_modules/zod/v4/locales/pl.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/pl.js"() {
     init_util();
     error42 = () => {
       const Sizable = {
@@ -10306,7 +10306,7 @@ var init_pl = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/pt.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/pt.js
 function pt_default() {
   return {
     localeError: error43()
@@ -10314,7 +10314,7 @@ function pt_default() {
 }
 var error43;
 var init_pt = __esm({
-  "node_modules/zod/v4/locales/pt.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/pt.js"() {
     init_util();
     error43 = () => {
       const Sizable = {
@@ -10456,7 +10456,7 @@ var init_pt = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/pt-BR.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/pt-BR.js
 function pt_BR_default() {
   return {
     localeError: error44()
@@ -10464,7 +10464,7 @@ function pt_BR_default() {
 }
 var error44;
 var init_pt_BR = __esm({
-  "node_modules/zod/v4/locales/pt-BR.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/pt-BR.js"() {
     init_util();
     error44 = () => {
       const Sizable = {
@@ -10607,7 +10607,7 @@ var init_pt_BR = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/ro.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/ro.js
 function ro_default() {
   return {
     localeError: error45()
@@ -10615,7 +10615,7 @@ function ro_default() {
 }
 var error45;
 var init_ro = __esm({
-  "node_modules/zod/v4/locales/ro.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/ro.js"() {
     init_util();
     error45 = () => {
       const Sizable = {
@@ -10736,7 +10736,7 @@ var init_ro = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/ru.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/ru.js
 function getRussianPlural(count, one, few, many) {
   const absCount = Math.abs(count);
   const lastDigit = absCount % 10;
@@ -10759,7 +10759,7 @@ function ru_default() {
 }
 var error46;
 var init_ru = __esm({
-  "node_modules/zod/v4/locales/ru.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/ru.js"() {
     init_util();
     error46 = () => {
       const Sizable = {
@@ -10911,7 +10911,7 @@ var init_ru = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/sk.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/sk.js
 function sk_default() {
   return {
     localeError: error47()
@@ -10919,7 +10919,7 @@ function sk_default() {
 }
 var error47;
 var init_sk = __esm({
-  "node_modules/zod/v4/locales/sk.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/sk.js"() {
     init_util();
     error47 = () => {
       const Sizable = {
@@ -11034,7 +11034,7 @@ var init_sk = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/sl.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/sl.js
 function sl_default() {
   return {
     localeError: error48()
@@ -11042,7 +11042,7 @@ function sl_default() {
 }
 var error48;
 var init_sl = __esm({
-  "node_modules/zod/v4/locales/sl.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/sl.js"() {
     init_util();
     error48 = () => {
       const Sizable = {
@@ -11155,7 +11155,7 @@ var init_sl = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/sv.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/sv.js
 function sv_default() {
   return {
     localeError: error49()
@@ -11163,7 +11163,7 @@ function sv_default() {
 }
 var error49;
 var init_sv = __esm({
-  "node_modules/zod/v4/locales/sv.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/sv.js"() {
     init_util();
     error49 = () => {
       const Sizable = {
@@ -11277,7 +11277,7 @@ var init_sv = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/ta.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/ta.js
 function ta_default() {
   return {
     localeError: error50()
@@ -11285,7 +11285,7 @@ function ta_default() {
 }
 var error50;
 var init_ta = __esm({
-  "node_modules/zod/v4/locales/ta.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/ta.js"() {
     init_util();
     error50 = () => {
       const Sizable = {
@@ -11399,7 +11399,7 @@ var init_ta = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/tg.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/tg.js
 function tg_default() {
   return {
     localeError: error51()
@@ -11407,7 +11407,7 @@ function tg_default() {
 }
 var error51;
 var init_tg = __esm({
-  "node_modules/zod/v4/locales/tg.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/tg.js"() {
     init_util();
     error51 = () => {
       const Sizable = {
@@ -11522,7 +11522,7 @@ var init_tg = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/th.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/th.js
 function th_default() {
   return {
     localeError: error52()
@@ -11530,7 +11530,7 @@ function th_default() {
 }
 var error52;
 var init_th = __esm({
-  "node_modules/zod/v4/locales/th.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/th.js"() {
     init_util();
     error52 = () => {
       const Sizable = {
@@ -11644,7 +11644,7 @@ var init_th = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/tk.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/tk.js
 function tk_default() {
   return {
     localeError: error53()
@@ -11652,7 +11652,7 @@ function tk_default() {
 }
 var error53;
 var init_tk = __esm({
-  "node_modules/zod/v4/locales/tk.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/tk.js"() {
     init_util();
     error53 = () => {
       const Sizable = {
@@ -11758,7 +11758,7 @@ var init_tk = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/tr.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/tr.js
 function tr_default() {
   return {
     localeError: error54()
@@ -11766,7 +11766,7 @@ function tr_default() {
 }
 var error54;
 var init_tr = __esm({
-  "node_modules/zod/v4/locales/tr.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/tr.js"() {
     init_util();
     error54 = () => {
       const Sizable = {
@@ -11875,7 +11875,7 @@ var init_tr = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/uk.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/uk.js
 function uk_default() {
   return {
     localeError: error55()
@@ -11883,7 +11883,7 @@ function uk_default() {
 }
 var error55;
 var init_uk = __esm({
-  "node_modules/zod/v4/locales/uk.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/uk.js"() {
     init_util();
     error55 = () => {
       const Sizable = {
@@ -11995,17 +11995,17 @@ var init_uk = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/ua.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/ua.js
 function ua_default() {
   return uk_default();
 }
 var init_ua = __esm({
-  "node_modules/zod/v4/locales/ua.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/ua.js"() {
     init_uk();
   }
 });
 
-// node_modules/zod/v4/locales/ur.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/ur.js
 function ur_default() {
   return {
     localeError: error56()
@@ -12013,7 +12013,7 @@ function ur_default() {
 }
 var error56;
 var init_ur = __esm({
-  "node_modules/zod/v4/locales/ur.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/ur.js"() {
     init_util();
     error56 = () => {
       const Sizable = {
@@ -12127,7 +12127,7 @@ var init_ur = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/uz.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/uz.js
 function uz_default() {
   return {
     localeError: error57()
@@ -12135,7 +12135,7 @@ function uz_default() {
 }
 var error57;
 var init_uz = __esm({
-  "node_modules/zod/v4/locales/uz.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/uz.js"() {
     init_util();
     error57 = () => {
       const Sizable = {
@@ -12247,7 +12247,7 @@ var init_uz = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/vi.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/vi.js
 function vi_default() {
   return {
     localeError: error58()
@@ -12255,7 +12255,7 @@ function vi_default() {
 }
 var error58;
 var init_vi = __esm({
-  "node_modules/zod/v4/locales/vi.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/vi.js"() {
     init_util();
     error58 = () => {
       const Sizable = {
@@ -12367,7 +12367,7 @@ var init_vi = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/zh-CN.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/zh-CN.js
 function zh_CN_default() {
   return {
     localeError: error59()
@@ -12375,7 +12375,7 @@ function zh_CN_default() {
 }
 var error59;
 var init_zh_CN = __esm({
-  "node_modules/zod/v4/locales/zh-CN.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/zh-CN.js"() {
     init_util();
     error59 = () => {
       const Sizable = {
@@ -12488,7 +12488,7 @@ var init_zh_CN = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/zh-TW.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/zh-TW.js
 function zh_TW_default() {
   return {
     localeError: error60()
@@ -12496,7 +12496,7 @@ function zh_TW_default() {
 }
 var error60;
 var init_zh_TW = __esm({
-  "node_modules/zod/v4/locales/zh-TW.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/zh-TW.js"() {
     init_util();
     error60 = () => {
       const Sizable = {
@@ -12607,7 +12607,7 @@ var init_zh_TW = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/yo.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/yo.js
 function yo_default() {
   return {
     localeError: error61()
@@ -12615,7 +12615,7 @@ function yo_default() {
 }
 var error61;
 var init_yo = __esm({
-  "node_modules/zod/v4/locales/yo.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/yo.js"() {
     init_util();
     error61 = () => {
       const Sizable = {
@@ -12726,7 +12726,7 @@ var init_yo = __esm({
   }
 });
 
-// node_modules/zod/v4/locales/index.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/locales/index.js
 var locales_exports = {};
 __export(locales_exports, {
   ar: () => ar_default,
@@ -12794,7 +12794,7 @@ __export(locales_exports, {
   zhTW: () => zh_TW_default
 });
 var init_locales = __esm({
-  "node_modules/zod/v4/locales/index.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/locales/index.js"() {
     init_ar();
     init_az();
     init_be();
@@ -12861,13 +12861,13 @@ var init_locales = __esm({
   }
 });
 
-// node_modules/zod/v4/core/registries.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/core/registries.js
 function registry() {
   return new $ZodRegistry();
 }
 var _a2, $output, $input, $ZodRegistry, globalRegistry;
 var init_registries = __esm({
-  "node_modules/zod/v4/core/registries.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/core/registries.js"() {
     $output = /* @__PURE__ */ Symbol("ZodOutput");
     $input = /* @__PURE__ */ Symbol("ZodInput");
     $ZodRegistry = class {
@@ -12915,7 +12915,7 @@ var init_registries = __esm({
   }
 });
 
-// node_modules/zod/v4/core/compile.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/core/compile.js
 function compileValidator(schema, parser) {
   try {
     return compileFn(schema, { assertOnly: true });
@@ -14477,7 +14477,7 @@ function generateTransformCheck(doc, ctx, schema, accessor) {
 }
 var INVALID2, FALLBACK_FLAG, ZodCompileAsyncError, ZodCompileUnsupportedError, WHEN_DEFAULTED_CHECKS, PATTERN_IS_COMPLETE;
 var init_compile = __esm({
-  "node_modules/zod/v4/core/compile.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/core/compile.js"() {
     init_core();
     init_doc();
     init_memoizer();
@@ -14536,7 +14536,7 @@ var init_compile = __esm({
   }
 });
 
-// node_modules/zod/v4/core/api.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/core/api.js
 function snapshotChecks(def) {
   if (def.checks)
     def.checks = [...def.checks];
@@ -15589,7 +15589,7 @@ function _stringFormat(Class2, format, fnOrRegex, _params = {}) {
 }
 var TimePrecision;
 var init_api = __esm({
-  "node_modules/zod/v4/core/api.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/core/api.js"() {
     init_checks();
     init_registries();
     init_schemas();
@@ -15604,7 +15604,7 @@ var init_api = __esm({
   }
 });
 
-// node_modules/zod/v4/core/to-json-schema.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/core/to-json-schema.js
 function assignProps(target, ...sources) {
   for (const source of sources) {
     for (const key2 of Reflect.ownKeys(source)) {
@@ -16120,7 +16120,7 @@ function isTransforming(_schema, _ctx) {
 }
 var FOLDABLE_KEYS, UNION_KEYS, createToJSONSchemaMethod, createStandardJSONSchemaMethod;
 var init_to_json_schema = __esm({
-  "node_modules/zod/v4/core/to-json-schema.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/core/to-json-schema.js"() {
     init_registries();
     init_util();
     FOLDABLE_KEYS = /* @__PURE__ */ new Set(["type", "properties", "required", "additionalProperties"]);
@@ -16141,7 +16141,7 @@ var init_to_json_schema = __esm({
   }
 });
 
-// node_modules/zod/v4/core/json-schema-processors.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/core/json-schema-processors.js
 function aggregateChecks(schema) {
   const agg = {};
   const def = schema._zod.def;
@@ -16291,7 +16291,7 @@ function toJSONSchema(input2, params) {
 }
 var narrowMin, narrowMax, narrowBoth, addDivisor, addPattern, intersectMime, setFormat, minContributor, maxContributor, formatContributor, contributors, formatMap, exactPatterns, exactPattern, stringProcessor, numberProcessor, booleanProcessor, bigintProcessor, symbolProcessor, nullProcessor, undefinedProcessor, voidProcessor, neverProcessor, anyProcessor, unknownProcessor, dateProcessor, enumProcessor, literalProcessor, nanProcessor, templateLiteralProcessor, fileProcessor, successProcessor, customProcessor, functionProcessor, transformProcessor, mapProcessor, setProcessor, arrayProcessor, objectProcessor, unionProcessor, intersectionProcessor, tupleProcessor, pendingRecords, recordProcessor, nullableProcessor, nonoptionalProcessor, UNREPRESENTABLE_DEFAULT, defaultProcessor, prefaultProcessor, catchProcessor, pipeProcessor, readonlyProcessor, promiseProcessor, optionalProcessor, lazyProcessor, allProcessors;
 var init_json_schema_processors = __esm({
-  "node_modules/zod/v4/core/json-schema-processors.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/core/json-schema-processors.js"() {
     init_regexes();
     init_schemas();
     init_to_json_schema();
@@ -16898,10 +16898,10 @@ var init_json_schema_processors = __esm({
   }
 });
 
-// node_modules/zod/v4/core/json-schema-generator.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/core/json-schema-generator.js
 var JSONSchemaGenerator;
 var init_json_schema_generator = __esm({
-  "node_modules/zod/v4/core/json-schema-generator.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/core/json-schema-generator.js"() {
     init_json_schema_processors();
     init_to_json_schema();
     JSONSchemaGenerator = class {
@@ -16983,14 +16983,14 @@ var init_json_schema_generator = __esm({
   }
 });
 
-// node_modules/zod/v4/core/json-schema.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/core/json-schema.js
 var json_schema_exports = {};
 var init_json_schema = __esm({
-  "node_modules/zod/v4/core/json-schema.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/core/json-schema.js"() {
   }
 });
 
-// node_modules/zod/v4/core/index.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/core/index.js
 var core_exports2 = {};
 __export(core_exports2, {
   $ZodAny: () => $ZodAny,
@@ -17307,7 +17307,7 @@ __export(core_exports2, {
   withParser: () => withParser
 });
 var init_core2 = __esm({
-  "node_modules/zod/v4/core/index.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/core/index.js"() {
     init_core();
     init_parse();
     init_errors();
@@ -17330,7 +17330,7 @@ var init_core2 = __esm({
   }
 });
 
-// node_modules/zod/v4/core/visit.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/core/visit.js
 function visit(schema, fnOrHandlers) {
   const fn = typeof fnOrHandlers === "function" ? fnOrHandlers : (node2, rewritten) => {
     const h2 = fnOrHandlers[node2._zod.def.type];
@@ -17485,14 +17485,14 @@ function visit(schema, fnOrHandlers) {
 }
 var RESOLVING;
 var init_visit = __esm({
-  "node_modules/zod/v4/core/visit.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/core/visit.js"() {
     init_schemas();
     init_util();
     RESOLVING = Symbol("z.visit/resolving");
   }
 });
 
-// node_modules/zod/v4/classic/checks.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/classic/checks.js
 var checks_exports2 = {};
 __export(checks_exports2, {
   endsWith: () => _endsWith,
@@ -17527,12 +17527,12 @@ __export(checks_exports2, {
   uppercase: () => _uppercase
 });
 var init_checks2 = __esm({
-  "node_modules/zod/v4/classic/checks.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/classic/checks.js"() {
     init_core2();
   }
 });
 
-// node_modules/zod/v4/classic/errors.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/classic/errors.js
 function _lazyMethod(proto, key2, make) {
   Object.defineProperty(proto, key2, {
     configurable: true,
@@ -17549,7 +17549,7 @@ function _lazyMethod(proto, key2, make) {
 }
 var _installedErrorProtos, initializer2, ZodError2, ZodRealError;
 var init_errors2 = __esm({
-  "node_modules/zod/v4/classic/errors.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/classic/errors.js"() {
     init_core2();
     init_core2();
     init_util();
@@ -17586,10 +17586,10 @@ var init_errors2 = __esm({
   }
 });
 
-// node_modules/zod/v4/classic/parse.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/classic/parse.js
 var parse2, parseAsync2, safeParse3, safeParseAsync3, encode2, decode2, encodeAsync2, decodeAsync2, safeEncode2, safeDecode2, safeEncodeAsync2, safeDecodeAsync2;
 var init_parse2 = __esm({
-  "node_modules/zod/v4/classic/parse.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/classic/parse.js"() {
     init_core2();
     init_errors2();
     init_core2();
@@ -17608,7 +17608,7 @@ var init_parse2 = __esm({
   }
 });
 
-// node_modules/zod/v4/classic/schemas.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/classic/schemas.js
 var schemas_exports2 = {};
 __export(schemas_exports2, {
   ZodAny: () => ZodAny2,
@@ -18282,7 +18282,7 @@ function preprocess(fn, schema) {
 }
 var ZodType2, _ZodString, ZodString2, ZodStringFormat, ZodISODateTime, ZodISODate, ZodISOTime, ZodISODuration, ZodEmail, ZodGUID, ZodUUID, ZodURL, ZodEmoji, ZodNanoID, ZodCUID, ZodCUID2, ZodULID, ZodXID, ZodKSUID, ZodIPv4, ZodMAC, ZodIPv6, ZodCIDRv4, ZodCIDRv6, ZodBase64, ZodBase64URL, ZodE164, ZodCreditCard, ZodIBAN, ZodJWT, ZodCustomStringFormat, ZodNumber2, ZodNumberFormat, ZodBoolean2, ZodBigInt2, ZodBigIntFormat, ZodSymbol2, ZodUndefined2, ZodNull2, ZodAny2, ZodUnknown2, ZodNever2, ZodVoid2, ZodDate2, ZodArray2, ZodObject2, ZodUnion2, ZodXor, ZodDiscriminatedUnion2, ZodIntersection2, ZodTuple2, ZodRecord2, ZodMap2, ZodSet2, ZodEnum2, ZodLiteral2, ZodFile, ZodTransform, ZodOptional2, ZodExactOptional, ZodNullable2, ZodDefault2, ZodPrefault, ZodNonOptional, ZodSuccess, ZodCatch2, ZodNaN2, ZodPipe, ZodCodec, ZodPreprocess, ZodReadonly2, ZodTemplateLiteral, ZodLazy2, ZodPromise2, ZodFunction2, ZodCustom, describe2, meta2, ZodInstanceOf, stringbool;
 var init_schemas2 = __esm({
-  "node_modules/zod/v4/classic/schemas.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/classic/schemas.js"() {
     init_core2();
     init_core2();
     init_json_schema_processors();
@@ -19265,7 +19265,7 @@ var init_schemas2 = __esm({
   }
 });
 
-// node_modules/zod/v4/classic/compat.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/classic/compat.js
 function setErrorMap(map2) {
   config({
     customError: map2
@@ -19276,7 +19276,7 @@ function getErrorMap2() {
 }
 var ZodIssueCode2, ZodFirstPartyTypeKind2;
 var init_compat = __esm({
-  "node_modules/zod/v4/classic/compat.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/classic/compat.js"() {
     init_core2();
     ZodIssueCode2 = {
       invalid_type: "invalid_type",
@@ -19296,7 +19296,7 @@ var init_compat = __esm({
   }
 });
 
-// node_modules/zod/v4/classic/iso.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/classic/iso.js
 var iso_exports2 = {};
 __export(iso_exports2, {
   ZodISODate: () => ZodISODate,
@@ -19321,14 +19321,14 @@ function duration2(params) {
   return _isoDuration(ZodISODuration, params);
 }
 var init_iso = __esm({
-  "node_modules/zod/v4/classic/iso.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/classic/iso.js"() {
     init_core2();
     init_schemas2();
     init_schemas2();
   }
 });
 
-// node_modules/zod/v4/classic/from-json-schema.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/classic/from-json-schema.js
 function detectVersion(schema, defaultTarget) {
   const $schema = schema.$schema;
   if ($schema === "https://json-schema.org/draft/2020-12/schema") {
@@ -19959,7 +19959,7 @@ function fromJSONSchema(schema, params) {
 }
 var z, RECOGNIZED_KEYS, SCHEMA_KEYWORDS, SCHEMA_MAP_KEYWORDS, fullTime;
 var init_from_json_schema = __esm({
-  "node_modules/zod/v4/classic/from-json-schema.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/classic/from-json-schema.js"() {
     init_registries();
     init_util();
     init_checks2();
@@ -20071,7 +20071,7 @@ var init_from_json_schema = __esm({
   }
 });
 
-// node_modules/zod/v4/classic/deep-partial.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/classic/deep-partial.js
 function deepPartial(schema) {
   return visit(schema, {
     object: (s2) => s2.partial(),
@@ -20083,13 +20083,13 @@ function deepPartial(schema) {
   });
 }
 var init_deep_partial = __esm({
-  "node_modules/zod/v4/classic/deep-partial.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/classic/deep-partial.js"() {
     init_visit();
     init_schemas2();
   }
 });
 
-// node_modules/zod/v4/classic/in-out.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/classic/in-out.js
 function withChecks(side, checks) {
   if (!checks?.length)
     return side;
@@ -20119,14 +20119,14 @@ function output(schema) {
   });
 }
 var init_in_out = __esm({
-  "node_modules/zod/v4/classic/in-out.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/classic/in-out.js"() {
     init_util();
     init_visit();
     init_schemas2();
   }
 });
 
-// node_modules/zod/v4/classic/coerce.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/classic/coerce.js
 var coerce_exports2 = {};
 __export(coerce_exports2, {
   bigint: () => bigint3,
@@ -20151,13 +20151,13 @@ function date4(params) {
   return _coercedDate(ZodDate2, params);
 }
 var init_coerce = __esm({
-  "node_modules/zod/v4/classic/coerce.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/classic/coerce.js"() {
     init_core2();
     init_schemas2();
   }
 });
 
-// node_modules/zod/v4/classic/external.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/classic/external.js
 var external_exports = {};
 __export(external_exports, {
   $brand: () => $brand,
@@ -20420,7 +20420,7 @@ __export(external_exports, {
   xor: () => xor
 });
 var init_external = __esm({
-  "node_modules/zod/v4/classic/external.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/classic/external.js"() {
     init_core2();
     init_schemas2();
     init_checks2();
@@ -20439,24 +20439,24 @@ var init_external = __esm({
   }
 });
 
-// node_modules/zod/v4/classic/index.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/classic/index.js
 var init_classic = __esm({
-  "node_modules/zod/v4/classic/index.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/classic/index.js"() {
     init_external();
     init_external();
   }
 });
 
-// node_modules/zod/v4/index.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/index.js
 var init_v4 = __esm({
-  "node_modules/zod/v4/index.js"() {
+  "../../../config/plugins/hillclimb/node_modules/zod/v4/index.js"() {
     init_classic();
   }
 });
 
-// node_modules/ajv/dist/compile/codegen/code.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/compile/codegen/code.js
 var require_code = __commonJS({
-  "node_modules/ajv/dist/compile/codegen/code.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/compile/codegen/code.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.regexpCode = exports.getEsmExportName = exports.getProperty = exports.safeStringify = exports.stringify = exports.strConcat = exports.addCodeArg = exports.str = exports._ = exports.nil = exports._Code = exports.Name = exports.IDENTIFIER = exports._CodeOrName = void 0;
@@ -20608,9 +20608,9 @@ var require_code = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/codegen/scope.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/compile/codegen/scope.js
 var require_scope = __commonJS({
-  "node_modules/ajv/dist/compile/codegen/scope.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/compile/codegen/scope.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.ValueScope = exports.ValueScopeName = exports.Scope = exports.varKinds = exports.UsedValueState = void 0;
@@ -20753,9 +20753,9 @@ var require_scope = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/codegen/index.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/compile/codegen/index.js
 var require_codegen = __commonJS({
-  "node_modules/ajv/dist/compile/codegen/index.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/compile/codegen/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.or = exports.and = exports.not = exports.CodeGen = exports.operators = exports.varKinds = exports.ValueScopeName = exports.ValueScope = exports.Scope = exports.Name = exports.regexpCode = exports.stringify = exports.getProperty = exports.nil = exports.strConcat = exports.str = exports._ = void 0;
@@ -21473,9 +21473,9 @@ var require_codegen = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/util.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/compile/util.js
 var require_util = __commonJS({
-  "node_modules/ajv/dist/compile/util.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/compile/util.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.checkStrictMode = exports.getErrorPath = exports.Type = exports.useFunc = exports.setEvaluated = exports.evaluatedPropsToName = exports.mergeEvaluated = exports.eachItem = exports.unescapeJsonPointer = exports.escapeJsonPointer = exports.escapeFragment = exports.unescapeFragment = exports.schemaRefOrVal = exports.schemaHasRulesButRef = exports.schemaHasRules = exports.checkUnknownRules = exports.alwaysValidSchema = exports.toHash = void 0;
@@ -21640,9 +21640,9 @@ var require_util = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/names.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/compile/names.js
 var require_names = __commonJS({
-  "node_modules/ajv/dist/compile/names.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/compile/names.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -21679,9 +21679,9 @@ var require_names = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/errors.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/compile/errors.js
 var require_errors = __commonJS({
-  "node_modules/ajv/dist/compile/errors.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/compile/errors.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.extendErrors = exports.resetErrorsCount = exports.reportExtraError = exports.reportError = exports.keyword$DataError = exports.keywordError = void 0;
@@ -21801,9 +21801,9 @@ var require_errors = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/validate/boolSchema.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/compile/validate/boolSchema.js
 var require_boolSchema = __commonJS({
-  "node_modules/ajv/dist/compile/validate/boolSchema.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/compile/validate/boolSchema.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.boolOrEmptySchema = exports.topBoolOrEmptySchema = void 0;
@@ -21852,9 +21852,9 @@ var require_boolSchema = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/rules.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/compile/rules.js
 var require_rules = __commonJS({
-  "node_modules/ajv/dist/compile/rules.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/compile/rules.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.getRules = exports.isJSONType = void 0;
@@ -21883,9 +21883,9 @@ var require_rules = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/validate/applicability.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/compile/validate/applicability.js
 var require_applicability = __commonJS({
-  "node_modules/ajv/dist/compile/validate/applicability.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/compile/validate/applicability.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.shouldUseRule = exports.shouldUseGroup = exports.schemaHasRulesForType = void 0;
@@ -21906,9 +21906,9 @@ var require_applicability = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/validate/dataType.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/compile/validate/dataType.js
 var require_dataType = __commonJS({
-  "node_modules/ajv/dist/compile/validate/dataType.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/compile/validate/dataType.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.reportTypeError = exports.checkDataTypes = exports.checkDataType = exports.coerceAndCheckDataType = exports.getJSONTypes = exports.getSchemaTypes = exports.DataType = void 0;
@@ -22090,9 +22090,9 @@ var require_dataType = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/validate/defaults.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/compile/validate/defaults.js
 var require_defaults = __commonJS({
-  "node_modules/ajv/dist/compile/validate/defaults.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/compile/validate/defaults.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.assignDefaults = void 0;
@@ -22127,9 +22127,9 @@ var require_defaults = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/code.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/code.js
 var require_code2 = __commonJS({
-  "node_modules/ajv/dist/vocabularies/code.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/code.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.validateUnion = exports.validateArray = exports.usePattern = exports.callValidateCode = exports.schemaProperties = exports.allSchemaProperties = exports.noPropertyInData = exports.propertyInData = exports.isOwnProperty = exports.hasPropFunc = exports.reportMissingProp = exports.checkMissingProp = exports.checkReportMissingProp = void 0;
@@ -22260,9 +22260,9 @@ var require_code2 = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/validate/keyword.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/compile/validate/keyword.js
 var require_keyword = __commonJS({
-  "node_modules/ajv/dist/compile/validate/keyword.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/compile/validate/keyword.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.validateKeywordUsage = exports.validSchemaType = exports.funcKeywordCode = exports.macroKeywordCode = void 0;
@@ -22378,9 +22378,9 @@ var require_keyword = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/validate/subschema.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/compile/validate/subschema.js
 var require_subschema = __commonJS({
-  "node_modules/ajv/dist/compile/validate/subschema.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/compile/validate/subschema.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.extendSubschemaMode = exports.extendSubschemaData = exports.getSubschema = void 0;
@@ -22461,9 +22461,9 @@ var require_subschema = __commonJS({
   }
 });
 
-// node_modules/fast-deep-equal/index.js
+// ../../../config/plugins/hillclimb/node_modules/fast-deep-equal/index.js
 var require_fast_deep_equal = __commonJS({
-  "node_modules/fast-deep-equal/index.js"(exports, module) {
+  "../../../config/plugins/hillclimb/node_modules/fast-deep-equal/index.js"(exports, module) {
     "use strict";
     module.exports = function equal(a, b) {
       if (a === b) return true;
@@ -22496,9 +22496,9 @@ var require_fast_deep_equal = __commonJS({
   }
 });
 
-// node_modules/json-schema-traverse/index.js
+// ../../../config/plugins/hillclimb/node_modules/json-schema-traverse/index.js
 var require_json_schema_traverse = __commonJS({
-  "node_modules/json-schema-traverse/index.js"(exports, module) {
+  "../../../config/plugins/hillclimb/node_modules/json-schema-traverse/index.js"(exports, module) {
     "use strict";
     var traverse = module.exports = function(schema, opts, cb) {
       if (typeof opts == "function") {
@@ -22584,9 +22584,9 @@ var require_json_schema_traverse = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/resolve.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/compile/resolve.js
 var require_resolve = __commonJS({
-  "node_modules/ajv/dist/compile/resolve.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/compile/resolve.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.getSchemaRefs = exports.resolveUrl = exports.normalizeId = exports._getFullPath = exports.getFullPath = exports.inlineRef = void 0;
@@ -22740,9 +22740,9 @@ var require_resolve = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/validate/index.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/compile/validate/index.js
 var require_validate = __commonJS({
-  "node_modules/ajv/dist/compile/validate/index.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/compile/validate/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.getData = exports.KeywordCxt = exports.validateFunctionCode = void 0;
@@ -23248,9 +23248,9 @@ var require_validate = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/runtime/validation_error.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/runtime/validation_error.js
 var require_validation_error = __commonJS({
-  "node_modules/ajv/dist/runtime/validation_error.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/runtime/validation_error.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var ValidationError = class extends Error {
@@ -23264,9 +23264,9 @@ var require_validation_error = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/ref_error.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/compile/ref_error.js
 var require_ref_error = __commonJS({
-  "node_modules/ajv/dist/compile/ref_error.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/compile/ref_error.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var resolve_1 = require_resolve();
@@ -23281,9 +23281,9 @@ var require_ref_error = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/index.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/compile/index.js
 var require_compile = __commonJS({
-  "node_modules/ajv/dist/compile/index.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/compile/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.resolveSchema = exports.getCompilingSchema = exports.resolveRef = exports.compileSchema = exports.SchemaEnv = void 0;
@@ -23505,9 +23505,9 @@ var require_compile = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/refs/data.json
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/refs/data.json
 var require_data = __commonJS({
-  "node_modules/ajv/dist/refs/data.json"(exports, module) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/refs/data.json"(exports, module) {
     module.exports = {
       $id: "https://raw.githubusercontent.com/ajv-validator/ajv/master/lib/refs/data.json#",
       description: "Meta-schema for $data reference (JSON AnySchema extension proposal)",
@@ -23524,9 +23524,9 @@ var require_data = __commonJS({
   }
 });
 
-// node_modules/fast-uri/lib/utils.js
+// ../../../config/plugins/hillclimb/node_modules/fast-uri/lib/utils.js
 var require_utils = __commonJS({
-  "node_modules/fast-uri/lib/utils.js"(exports, module) {
+  "../../../config/plugins/hillclimb/node_modules/fast-uri/lib/utils.js"(exports, module) {
     "use strict";
     var isUUID = RegExp.prototype.test.bind(/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/iu);
     var isIPv4 = RegExp.prototype.test.bind(/^(?:(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]\d|\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]\d|\d)$/u);
@@ -24058,9 +24058,9 @@ var require_utils = __commonJS({
   }
 });
 
-// node_modules/fast-uri/lib/schemes.js
+// ../../../config/plugins/hillclimb/node_modules/fast-uri/lib/schemes.js
 var require_schemes = __commonJS({
-  "node_modules/fast-uri/lib/schemes.js"(exports, module) {
+  "../../../config/plugins/hillclimb/node_modules/fast-uri/lib/schemes.js"(exports, module) {
     "use strict";
     var { isUUID } = require_utils();
     var URN_REG = /^([\da-z][\d\-a-z]{0,31}):((?:[\w!$'()*+,\-./:;=@]|%[\da-f]{2})+)$/iu;
@@ -24269,9 +24269,9 @@ var require_schemes = __commonJS({
   }
 });
 
-// node_modules/fast-uri/index.js
+// ../../../config/plugins/hillclimb/node_modules/fast-uri/index.js
 var require_fast_uri = __commonJS({
-  "node_modules/fast-uri/index.js"(exports, module) {
+  "../../../config/plugins/hillclimb/node_modules/fast-uri/index.js"(exports, module) {
     "use strict";
     var { normalizeIPv6, removeDotSegments, removeDotSegmentsRelative, recomposeAuthority, normalizePercentEncoding, normalizePathEncoding, serializePathEncoding, normalizeQueryFragmentEncoding, encodeQuery, encodeFragment, reescapeHostDelimiters, isIPv4, nonSimpleDomain } = require_utils();
     var { SCHEMES, getSchemeHandler } = require_schemes();
@@ -24332,50 +24332,50 @@ var require_fast_uri = __commonJS({
       schemelessOptions.skipEscape = true;
       return serialize(resolved, schemelessOptions);
     }
-    function resolveComponent(base, relative, options, skipNormalization) {
+    function resolveComponent(base, relative2, options, skipNormalization) {
       const target = {};
       if (!skipNormalization) {
         base = parse3(serialize(base, options), options);
-        relative = parse3(serialize(relative, options), options);
+        relative2 = parse3(serialize(relative2, options), options);
       }
       options = options || {};
-      if (!options.tolerant && relative.scheme) {
-        target.scheme = relative.scheme;
-        target.userinfo = relative.userinfo;
-        target.host = relative.host;
-        target.port = relative.port;
-        target.path = removeDotSegments(relative.path || "");
-        target.query = relative.query;
+      if (!options.tolerant && relative2.scheme) {
+        target.scheme = relative2.scheme;
+        target.userinfo = relative2.userinfo;
+        target.host = relative2.host;
+        target.port = relative2.port;
+        target.path = removeDotSegments(relative2.path || "");
+        target.query = relative2.query;
       } else {
-        if (relative.userinfo !== void 0 || relative.host !== void 0 || relative.port !== void 0) {
-          target.userinfo = relative.userinfo;
-          target.host = relative.host;
-          target.port = relative.port;
-          target.path = removeDotSegments(relative.path || "");
-          target.query = relative.query;
+        if (relative2.userinfo !== void 0 || relative2.host !== void 0 || relative2.port !== void 0) {
+          target.userinfo = relative2.userinfo;
+          target.host = relative2.host;
+          target.port = relative2.port;
+          target.path = removeDotSegments(relative2.path || "");
+          target.query = relative2.query;
         } else {
-          if (!relative.path) {
+          if (!relative2.path) {
             target.path = base.path;
-            if (relative.query !== void 0) {
-              target.query = relative.query;
+            if (relative2.query !== void 0) {
+              target.query = relative2.query;
             } else {
               target.query = base.query;
             }
           } else {
-            if (relative.path[0] === "/") {
-              target.path = removeDotSegments(relative.path);
+            if (relative2.path[0] === "/") {
+              target.path = removeDotSegments(relative2.path);
             } else {
               const baseHasAuthority = base.userinfo !== void 0 || base.host !== void 0 || base.port !== void 0;
               if (baseHasAuthority && !base.path) {
-                target.path = "/" + relative.path;
+                target.path = "/" + relative2.path;
               } else if (!base.path) {
-                target.path = relative.path;
+                target.path = relative2.path;
               } else {
-                target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative.path;
+                target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative2.path;
               }
               target.path = base.scheme === void 0 && !baseHasAuthority && target.path[0] !== "/" ? removeDotSegmentsRelative(target.path) : removeDotSegments(target.path);
             }
-            target.query = relative.query;
+            target.query = relative2.query;
           }
           target.userinfo = base.userinfo;
           target.host = base.host;
@@ -24383,7 +24383,7 @@ var require_fast_uri = __commonJS({
         }
         target.scheme = base.scheme;
       }
-      target.fragment = relative.fragment;
+      target.fragment = relative2.fragment;
       return target;
     }
     function equal(uriA, uriB, options) {
@@ -24699,9 +24699,9 @@ var require_fast_uri = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/runtime/uri.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/runtime/uri.js
 var require_uri = __commonJS({
-  "node_modules/ajv/dist/runtime/uri.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/runtime/uri.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var uri = require_fast_uri();
@@ -24710,9 +24710,9 @@ var require_uri = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/core.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/core.js
 var require_core = __commonJS({
-  "node_modules/ajv/dist/core.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/core.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.CodeGen = exports.Name = exports.nil = exports.stringify = exports.str = exports._ = exports.KeywordCxt = void 0;
@@ -25321,9 +25321,9 @@ var require_core = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/core/id.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/core/id.js
 var require_id = __commonJS({
-  "node_modules/ajv/dist/vocabularies/core/id.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/core/id.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var def = {
@@ -25336,9 +25336,9 @@ var require_id = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/core/ref.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/core/ref.js
 var require_ref = __commonJS({
-  "node_modules/ajv/dist/vocabularies/core/ref.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/core/ref.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.callRef = exports.getValidate = void 0;
@@ -25458,9 +25458,9 @@ var require_ref = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/core/index.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/core/index.js
 var require_core2 = __commonJS({
-  "node_modules/ajv/dist/vocabularies/core/index.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/core/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var id_1 = require_id();
@@ -25479,9 +25479,9 @@ var require_core2 = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/limitNumber.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/validation/limitNumber.js
 var require_limitNumber = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/limitNumber.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/validation/limitNumber.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -25511,9 +25511,9 @@ var require_limitNumber = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/multipleOf.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/validation/multipleOf.js
 var require_multipleOf = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/multipleOf.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/validation/multipleOf.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -25539,9 +25539,9 @@ var require_multipleOf = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/runtime/ucs2length.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/runtime/ucs2length.js
 var require_ucs2length = __commonJS({
-  "node_modules/ajv/dist/runtime/ucs2length.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/runtime/ucs2length.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     function ucs2length(str) {
@@ -25565,9 +25565,9 @@ var require_ucs2length = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/limitLength.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/validation/limitLength.js
 var require_limitLength = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/limitLength.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/validation/limitLength.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -25597,9 +25597,9 @@ var require_limitLength = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/pattern.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/validation/pattern.js
 var require_pattern = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/pattern.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/validation/pattern.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var code_1 = require_code2();
@@ -25634,9 +25634,9 @@ var require_pattern = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/limitProperties.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/validation/limitProperties.js
 var require_limitProperties = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/limitProperties.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/validation/limitProperties.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -25663,9 +25663,9 @@ var require_limitProperties = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/required.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/validation/required.js
 var require_required = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/required.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/validation/required.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var code_1 = require_code2();
@@ -25745,9 +25745,9 @@ var require_required = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/limitItems.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/validation/limitItems.js
 var require_limitItems = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/limitItems.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/validation/limitItems.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -25774,9 +25774,9 @@ var require_limitItems = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/runtime/equal.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/runtime/equal.js
 var require_equal = __commonJS({
-  "node_modules/ajv/dist/runtime/equal.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/runtime/equal.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var equal = require_fast_deep_equal();
@@ -25785,9 +25785,9 @@ var require_equal = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/uniqueItems.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/validation/uniqueItems.js
 var require_uniqueItems = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/uniqueItems.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/validation/uniqueItems.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var dataType_1 = require_dataType();
@@ -25852,9 +25852,9 @@ var require_uniqueItems = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/const.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/validation/const.js
 var require_const = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/const.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/validation/const.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -25881,9 +25881,9 @@ var require_const = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/enum.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/validation/enum.js
 var require_enum = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/enum.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/validation/enum.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -25930,9 +25930,9 @@ var require_enum = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/index.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/validation/index.js
 var require_validation = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/index.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/validation/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var limitNumber_1 = require_limitNumber();
@@ -25968,9 +25968,9 @@ var require_validation = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/additionalItems.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/applicator/additionalItems.js
 var require_additionalItems = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/additionalItems.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/applicator/additionalItems.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.validateAdditionalItems = void 0;
@@ -26021,9 +26021,9 @@ var require_additionalItems = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/items.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/applicator/items.js
 var require_items = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/items.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/applicator/items.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.validateTuple = void 0;
@@ -26078,9 +26078,9 @@ var require_items = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/prefixItems.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/applicator/prefixItems.js
 var require_prefixItems = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/prefixItems.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/applicator/prefixItems.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var items_1 = require_items();
@@ -26095,9 +26095,9 @@ var require_prefixItems = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/items2020.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/applicator/items2020.js
 var require_items2020 = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/items2020.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/applicator/items2020.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -26130,9 +26130,9 @@ var require_items2020 = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/contains.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/applicator/contains.js
 var require_contains = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/contains.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/applicator/contains.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -26224,9 +26224,9 @@ var require_contains = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/dependencies.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/applicator/dependencies.js
 var require_dependencies = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/dependencies.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/applicator/dependencies.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.validateSchemaDeps = exports.validatePropertyDeps = exports.error = void 0;
@@ -26318,9 +26318,9 @@ var require_dependencies = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/propertyNames.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/applicator/propertyNames.js
 var require_propertyNames = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/propertyNames.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/applicator/propertyNames.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -26361,9 +26361,9 @@ var require_propertyNames = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/additionalProperties.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/applicator/additionalProperties.js
 var require_additionalProperties = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/additionalProperties.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/applicator/additionalProperties.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var code_1 = require_code2();
@@ -26467,9 +26467,9 @@ var require_additionalProperties = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/properties.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/applicator/properties.js
 var require_properties = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/properties.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/applicator/properties.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var validate_1 = require_validate();
@@ -26525,9 +26525,9 @@ var require_properties = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/patternProperties.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/applicator/patternProperties.js
 var require_patternProperties = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/patternProperties.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/applicator/patternProperties.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var code_1 = require_code2();
@@ -26599,9 +26599,9 @@ var require_patternProperties = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/not.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/applicator/not.js
 var require_not = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/not.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/applicator/not.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var util_1 = require_util();
@@ -26630,9 +26630,9 @@ var require_not = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/anyOf.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/applicator/anyOf.js
 var require_anyOf = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/anyOf.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/applicator/anyOf.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var code_1 = require_code2();
@@ -26647,9 +26647,9 @@ var require_anyOf = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/oneOf.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/applicator/oneOf.js
 var require_oneOf = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/oneOf.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/applicator/oneOf.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -26705,9 +26705,9 @@ var require_oneOf = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/allOf.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/applicator/allOf.js
 var require_allOf = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/allOf.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/applicator/allOf.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var util_1 = require_util();
@@ -26732,9 +26732,9 @@ var require_allOf = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/if.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/applicator/if.js
 var require_if = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/if.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/applicator/if.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -26801,9 +26801,9 @@ var require_if = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/thenElse.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/applicator/thenElse.js
 var require_thenElse = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/thenElse.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/applicator/thenElse.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var util_1 = require_util();
@@ -26819,9 +26819,9 @@ var require_thenElse = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/index.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/applicator/index.js
 var require_applicator = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/index.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/applicator/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var additionalItems_1 = require_additionalItems();
@@ -26867,9 +26867,9 @@ var require_applicator = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/format/format.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/format/format.js
 var require_format = __commonJS({
-  "node_modules/ajv/dist/vocabularies/format/format.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/format/format.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -26957,9 +26957,9 @@ var require_format = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/format/index.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/format/index.js
 var require_format2 = __commonJS({
-  "node_modules/ajv/dist/vocabularies/format/index.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/format/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var format_1 = require_format();
@@ -26968,9 +26968,9 @@ var require_format2 = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/metadata.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/metadata.js
 var require_metadata = __commonJS({
-  "node_modules/ajv/dist/vocabularies/metadata.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/metadata.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.contentVocabulary = exports.metadataVocabulary = void 0;
@@ -26991,9 +26991,9 @@ var require_metadata = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/draft7.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/draft7.js
 var require_draft7 = __commonJS({
-  "node_modules/ajv/dist/vocabularies/draft7.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/draft7.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var core_1 = require_core2();
@@ -27013,9 +27013,9 @@ var require_draft7 = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/discriminator/types.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/discriminator/types.js
 var require_types = __commonJS({
-  "node_modules/ajv/dist/vocabularies/discriminator/types.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/discriminator/types.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.DiscrError = void 0;
@@ -27027,9 +27027,9 @@ var require_types = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/discriminator/index.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/discriminator/index.js
 var require_discriminator = __commonJS({
-  "node_modules/ajv/dist/vocabularies/discriminator/index.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/vocabularies/discriminator/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -27132,9 +27132,9 @@ var require_discriminator = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/refs/json-schema-draft-07.json
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/refs/json-schema-draft-07.json
 var require_json_schema_draft_07 = __commonJS({
-  "node_modules/ajv/dist/refs/json-schema-draft-07.json"(exports, module) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/refs/json-schema-draft-07.json"(exports, module) {
     module.exports = {
       $schema: "http://json-schema.org/draft-07/schema#",
       $id: "http://json-schema.org/draft-07/schema#",
@@ -27289,9 +27289,9 @@ var require_json_schema_draft_07 = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/ajv.js
+// ../../../config/plugins/hillclimb/node_modules/ajv/dist/ajv.js
 var require_ajv = __commonJS({
-  "node_modules/ajv/dist/ajv.js"(exports, module) {
+  "../../../config/plugins/hillclimb/node_modules/ajv/dist/ajv.js"(exports, module) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.MissingRefError = exports.ValidationError = exports.CodeGen = exports.Name = exports.nil = exports.stringify = exports.str = exports._ = exports.KeywordCxt = exports.Ajv = void 0;
@@ -27359,9 +27359,9 @@ var require_ajv = __commonJS({
   }
 });
 
-// node_modules/ajv-formats/dist/formats.js
+// ../../../config/plugins/hillclimb/node_modules/ajv-formats/dist/formats.js
 var require_formats = __commonJS({
-  "node_modules/ajv-formats/dist/formats.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv-formats/dist/formats.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.formatNames = exports.fastFormats = exports.fullFormats = void 0;
@@ -27562,9 +27562,9 @@ var require_formats = __commonJS({
   }
 });
 
-// node_modules/ajv-formats/dist/limit.js
+// ../../../config/plugins/hillclimb/node_modules/ajv-formats/dist/limit.js
 var require_limit = __commonJS({
-  "node_modules/ajv-formats/dist/limit.js"(exports) {
+  "../../../config/plugins/hillclimb/node_modules/ajv-formats/dist/limit.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.formatLimitDefinition = void 0;
@@ -27634,9 +27634,9 @@ var require_limit = __commonJS({
   }
 });
 
-// node_modules/ajv-formats/dist/index.js
+// ../../../config/plugins/hillclimb/node_modules/ajv-formats/dist/index.js
 var require_dist = __commonJS({
-  "node_modules/ajv-formats/dist/index.js"(exports, module) {
+  "../../../config/plugins/hillclimb/node_modules/ajv-formats/dist/index.js"(exports, module) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var formats_1 = require_formats();
@@ -27677,11 +27677,11 @@ var require_dist = __commonJS({
 });
 
 // src/mcp-server.ts
-import { readFileSync as readFileSync7, realpathSync } from "node:fs";
+import { readFileSync as readFileSync7, realpathSync as realpathSync3 } from "node:fs";
 import { dirname as dirname6, join as join8, resolve as resolve7 } from "node:path";
 import { fileURLToPath as fileURLToPath4 } from "node:url";
 
-// node_modules/zod/v3/helpers/util.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v3/helpers/util.js
 var util;
 (function(util2) {
   util2.assertEqual = (_2) => {
@@ -27815,7 +27815,7 @@ var getParsedType = (data) => {
   }
 };
 
-// node_modules/zod/v3/ZodError.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v3/ZodError.js
 var ZodIssueCode = util.arrayToEnum([
   "invalid_type",
   "invalid_literal",
@@ -27944,7 +27944,7 @@ ZodError.create = (issues) => {
   return error62;
 };
 
-// node_modules/zod/v3/locales/en.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v3/locales/en.js
 var errorMap = (issue2, _ctx) => {
   let message2;
   switch (issue2.code) {
@@ -28047,13 +28047,13 @@ var errorMap = (issue2, _ctx) => {
 };
 var en_default = errorMap;
 
-// node_modules/zod/v3/errors.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v3/errors.js
 var overrideErrorMap = en_default;
 function getErrorMap() {
   return overrideErrorMap;
 }
 
-// node_modules/zod/v3/helpers/parseUtil.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
   const { data, path, errorMaps, issueData } = params;
   const fullPath = [...path, ...issueData.path || []];
@@ -28162,14 +28162,14 @@ var isDirty = (x) => x.status === "dirty";
 var isValid = (x) => x.status === "valid";
 var isAsync = (x) => typeof Promise !== "undefined" && x instanceof Promise;
 
-// node_modules/zod/v3/helpers/errorUtil.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v3/helpers/errorUtil.js
 var errorUtil;
 (function(errorUtil2) {
   errorUtil2.errToObj = (message2) => typeof message2 === "string" ? { message: message2 } : message2 || {};
   errorUtil2.toString = (message2) => typeof message2 === "string" ? message2 : message2?.message;
 })(errorUtil || (errorUtil = {}));
 
-// node_modules/zod/v3/types.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
   constructor(parent, value, path, key2) {
     this._cachedPath = [];
@@ -31577,13 +31577,13 @@ var nullableType = ZodNullable.create;
 var preprocessType = ZodEffects.createWithPreprocess;
 var pipelineType = ZodPipeline.create;
 
-// node_modules/zod/v4/mini/external.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/mini/external.js
 init_core2();
 
-// node_modules/zod/v4/mini/parse.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/mini/parse.js
 init_core2();
 
-// node_modules/zod/v4/mini/schemas.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/mini/schemas.js
 init_core2();
 init_util();
 var ZodMiniType = /* @__PURE__ */ $constructor("ZodMiniType", (inst, def) => {
@@ -31651,11 +31651,11 @@ function object(shape, params) {
   return new ZodMiniObject(def);
 }
 
-// node_modules/zod/v4/mini/external.js
+// ../../../config/plugins/hillclimb/node_modules/zod/v4/mini/external.js
 init_json_schema_processors();
 init_locales();
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/server/zod-compat.js
+// ../../../config/plugins/hillclimb/node_modules/@modelcontextprotocol/sdk/dist/esm/server/zod-compat.js
 function isZ4Schema(s2) {
   const schema = s2;
   return !!schema._zod;
@@ -31815,7 +31815,7 @@ function getLiteralValue(schema) {
   return void 0;
 }
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/types.js
+// ../../../config/plugins/hillclimb/node_modules/@modelcontextprotocol/sdk/dist/esm/types.js
 init_v4();
 var LATEST_PROTOCOL_VERSION = "2025-11-25";
 var SUPPORTED_PROTOCOL_VERSIONS = [LATEST_PROTOCOL_VERSION, "2025-06-18", "2025-03-26", "2024-11-05", "2024-10-07"];
@@ -33347,12 +33347,12 @@ var UrlElicitationRequiredError = class extends McpError {
   }
 };
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/interfaces.js
+// ../../../config/plugins/hillclimb/node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/interfaces.js
 function isTerminal(status) {
   return status === "completed" || status === "failed" || status === "cancelled";
 }
 
-// node_modules/zod-to-json-schema/dist/esm/Options.js
+// ../../../config/plugins/hillclimb/node_modules/zod-to-json-schema/dist/esm/Options.js
 var ignoreOverride = Symbol("Let zodToJsonSchema decide on which parser to use");
 var defaultOptions = {
   name: void 0,
@@ -33386,7 +33386,7 @@ var getDefaultOptions = (options) => typeof options === "string" ? {
   ...options
 };
 
-// node_modules/zod-to-json-schema/dist/esm/Refs.js
+// ../../../config/plugins/hillclimb/node_modules/zod-to-json-schema/dist/esm/Refs.js
 var getRefs = (options) => {
   const _options = getDefaultOptions(options);
   const currentPath = _options.name !== void 0 ? [..._options.basePath, _options.definitionPath, _options.name] : _options.basePath;
@@ -33407,7 +33407,7 @@ var getRefs = (options) => {
   };
 };
 
-// node_modules/zod-to-json-schema/dist/esm/errorMessages.js
+// ../../../config/plugins/hillclimb/node_modules/zod-to-json-schema/dist/esm/errorMessages.js
 function addErrorMessage(res, key2, errorMessage, refs) {
   if (!refs?.errorMessages)
     return;
@@ -33423,7 +33423,7 @@ function setResponseValueAndErrors(res, key2, value, errorMessage, refs) {
   addErrorMessage(res, key2, errorMessage, refs);
 }
 
-// node_modules/zod-to-json-schema/dist/esm/getRelativePath.js
+// ../../../config/plugins/hillclimb/node_modules/zod-to-json-schema/dist/esm/getRelativePath.js
 var getRelativePath = (pathA, pathB) => {
   let i = 0;
   for (; i < pathA.length && i < pathB.length; i++) {
@@ -33433,7 +33433,7 @@ var getRelativePath = (pathA, pathB) => {
   return [(pathA.length - i).toString(), ...pathB.slice(i)].join("/");
 };
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/any.js
+// ../../../config/plugins/hillclimb/node_modules/zod-to-json-schema/dist/esm/parsers/any.js
 function parseAnyDef(refs) {
   if (refs.target !== "openAi") {
     return {};
@@ -33449,7 +33449,7 @@ function parseAnyDef(refs) {
   };
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/array.js
+// ../../../config/plugins/hillclimb/node_modules/zod-to-json-schema/dist/esm/parsers/array.js
 function parseArrayDef(def, refs) {
   const res = {
     type: "array"
@@ -33473,7 +33473,7 @@ function parseArrayDef(def, refs) {
   return res;
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/bigint.js
+// ../../../config/plugins/hillclimb/node_modules/zod-to-json-schema/dist/esm/parsers/bigint.js
 function parseBigintDef(def, refs) {
   const res = {
     type: "integer",
@@ -33519,24 +33519,24 @@ function parseBigintDef(def, refs) {
   return res;
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/boolean.js
+// ../../../config/plugins/hillclimb/node_modules/zod-to-json-schema/dist/esm/parsers/boolean.js
 function parseBooleanDef() {
   return {
     type: "boolean"
   };
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/branded.js
+// ../../../config/plugins/hillclimb/node_modules/zod-to-json-schema/dist/esm/parsers/branded.js
 function parseBrandedDef(_def, refs) {
   return parseDef(_def.type._def, refs);
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/catch.js
+// ../../../config/plugins/hillclimb/node_modules/zod-to-json-schema/dist/esm/parsers/catch.js
 var parseCatchDef = (def, refs) => {
   return parseDef(def.innerType._def, refs);
 };
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/date.js
+// ../../../config/plugins/hillclimb/node_modules/zod-to-json-schema/dist/esm/parsers/date.js
 function parseDateDef(def, refs, overrideDateStrategy) {
   const strategy = overrideDateStrategy ?? refs.dateStrategy;
   if (Array.isArray(strategy)) {
@@ -33595,7 +33595,7 @@ var integerDateParser = (def, refs) => {
   return res;
 };
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/default.js
+// ../../../config/plugins/hillclimb/node_modules/zod-to-json-schema/dist/esm/parsers/default.js
 function parseDefaultDef(_def, refs) {
   return {
     ...parseDef(_def.innerType._def, refs),
@@ -33603,12 +33603,12 @@ function parseDefaultDef(_def, refs) {
   };
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/effects.js
+// ../../../config/plugins/hillclimb/node_modules/zod-to-json-schema/dist/esm/parsers/effects.js
 function parseEffectsDef(_def, refs) {
   return refs.effectStrategy === "input" ? parseDef(_def.schema._def, refs) : parseAnyDef(refs);
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/enum.js
+// ../../../config/plugins/hillclimb/node_modules/zod-to-json-schema/dist/esm/parsers/enum.js
 function parseEnumDef(def) {
   return {
     type: "string",
@@ -33616,7 +33616,7 @@ function parseEnumDef(def) {
   };
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/intersection.js
+// ../../../config/plugins/hillclimb/node_modules/zod-to-json-schema/dist/esm/parsers/intersection.js
 var isJsonSchema7AllOfType = (type) => {
   if ("type" in type && type.type === "string")
     return false;
@@ -33658,7 +33658,7 @@ function parseIntersectionDef(def, refs) {
   } : void 0;
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/literal.js
+// ../../../config/plugins/hillclimb/node_modules/zod-to-json-schema/dist/esm/parsers/literal.js
 function parseLiteralDef(def, refs) {
   const parsedType2 = typeof def.value;
   if (parsedType2 !== "bigint" && parsedType2 !== "number" && parsedType2 !== "boolean" && parsedType2 !== "string") {
@@ -33678,7 +33678,7 @@ function parseLiteralDef(def, refs) {
   };
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/string.js
+// ../../../config/plugins/hillclimb/node_modules/zod-to-json-schema/dist/esm/parsers/string.js
 var emojiRegex2 = void 0;
 var zodPatterns = {
   /**
@@ -34003,7 +34003,7 @@ function stringifyRegExpWithFlags(regex, refs) {
   return pattern;
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/record.js
+// ../../../config/plugins/hillclimb/node_modules/zod-to-json-schema/dist/esm/parsers/record.js
 function parseRecordDef(def, refs) {
   if (refs.target === "openAi") {
     console.warn("Warning: OpenAI may not support records in schemas! Try an array of key-value pairs instead.");
@@ -34055,7 +34055,7 @@ function parseRecordDef(def, refs) {
   return schema;
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/map.js
+// ../../../config/plugins/hillclimb/node_modules/zod-to-json-schema/dist/esm/parsers/map.js
 function parseMapDef(def, refs) {
   if (refs.mapStrategy === "record") {
     return parseRecordDef(def, refs);
@@ -34080,7 +34080,7 @@ function parseMapDef(def, refs) {
   };
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/nativeEnum.js
+// ../../../config/plugins/hillclimb/node_modules/zod-to-json-schema/dist/esm/parsers/nativeEnum.js
 function parseNativeEnumDef(def) {
   const object4 = def.values;
   const actualKeys = Object.keys(def.values).filter((key2) => {
@@ -34094,7 +34094,7 @@ function parseNativeEnumDef(def) {
   };
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/never.js
+// ../../../config/plugins/hillclimb/node_modules/zod-to-json-schema/dist/esm/parsers/never.js
 function parseNeverDef(refs) {
   return refs.target === "openAi" ? void 0 : {
     not: parseAnyDef({
@@ -34104,7 +34104,7 @@ function parseNeverDef(refs) {
   };
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/null.js
+// ../../../config/plugins/hillclimb/node_modules/zod-to-json-schema/dist/esm/parsers/null.js
 function parseNullDef(refs) {
   return refs.target === "openApi3" ? {
     enum: ["null"],
@@ -34114,7 +34114,7 @@ function parseNullDef(refs) {
   };
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/union.js
+// ../../../config/plugins/hillclimb/node_modules/zod-to-json-schema/dist/esm/parsers/union.js
 var primitiveMappings = {
   ZodString: "string",
   ZodNumber: "number",
@@ -34182,7 +34182,7 @@ var asAnyOf = (def, refs) => {
   return anyOf.length ? { anyOf } : void 0;
 };
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/nullable.js
+// ../../../config/plugins/hillclimb/node_modules/zod-to-json-schema/dist/esm/parsers/nullable.js
 function parseNullableDef(def, refs) {
   if (["ZodString", "ZodNumber", "ZodBigInt", "ZodBoolean", "ZodNull"].includes(def.innerType._def.typeName) && (!def.innerType._def.checks || !def.innerType._def.checks.length)) {
     if (refs.target === "openApi3") {
@@ -34214,7 +34214,7 @@ function parseNullableDef(def, refs) {
   return base && { anyOf: [base, { type: "null" }] };
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/number.js
+// ../../../config/plugins/hillclimb/node_modules/zod-to-json-schema/dist/esm/parsers/number.js
 function parseNumberDef(def, refs) {
   const res = {
     type: "number"
@@ -34263,7 +34263,7 @@ function parseNumberDef(def, refs) {
   return res;
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/object.js
+// ../../../config/plugins/hillclimb/node_modules/zod-to-json-schema/dist/esm/parsers/object.js
 function parseObjectDef(def, refs) {
   const forceOptionalIntoNullable = refs.target === "openAi";
   const result = {
@@ -34333,7 +34333,7 @@ function safeIsOptional(schema) {
   }
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/optional.js
+// ../../../config/plugins/hillclimb/node_modules/zod-to-json-schema/dist/esm/parsers/optional.js
 var parseOptionalDef = (def, refs) => {
   if (refs.currentPath.toString() === refs.propertyPath?.toString()) {
     return parseDef(def.innerType._def, refs);
@@ -34352,7 +34352,7 @@ var parseOptionalDef = (def, refs) => {
   } : parseAnyDef(refs);
 };
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/pipeline.js
+// ../../../config/plugins/hillclimb/node_modules/zod-to-json-schema/dist/esm/parsers/pipeline.js
 var parsePipelineDef = (def, refs) => {
   if (refs.pipeStrategy === "input") {
     return parseDef(def.in._def, refs);
@@ -34372,12 +34372,12 @@ var parsePipelineDef = (def, refs) => {
   };
 };
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/promise.js
+// ../../../config/plugins/hillclimb/node_modules/zod-to-json-schema/dist/esm/parsers/promise.js
 function parsePromiseDef(def, refs) {
   return parseDef(def.type._def, refs);
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/set.js
+// ../../../config/plugins/hillclimb/node_modules/zod-to-json-schema/dist/esm/parsers/set.js
 function parseSetDef(def, refs) {
   const items = parseDef(def.valueType._def, {
     ...refs,
@@ -34397,7 +34397,7 @@ function parseSetDef(def, refs) {
   return schema;
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/tuple.js
+// ../../../config/plugins/hillclimb/node_modules/zod-to-json-schema/dist/esm/parsers/tuple.js
 function parseTupleDef(def, refs) {
   if (def.rest) {
     return {
@@ -34425,24 +34425,24 @@ function parseTupleDef(def, refs) {
   }
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/undefined.js
+// ../../../config/plugins/hillclimb/node_modules/zod-to-json-schema/dist/esm/parsers/undefined.js
 function parseUndefinedDef(refs) {
   return {
     not: parseAnyDef(refs)
   };
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/unknown.js
+// ../../../config/plugins/hillclimb/node_modules/zod-to-json-schema/dist/esm/parsers/unknown.js
 function parseUnknownDef(refs) {
   return parseAnyDef(refs);
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/readonly.js
+// ../../../config/plugins/hillclimb/node_modules/zod-to-json-schema/dist/esm/parsers/readonly.js
 var parseReadonlyDef = (def, refs) => {
   return parseDef(def.innerType._def, refs);
 };
 
-// node_modules/zod-to-json-schema/dist/esm/selectParser.js
+// ../../../config/plugins/hillclimb/node_modules/zod-to-json-schema/dist/esm/selectParser.js
 var selectParser = (def, typeName, refs) => {
   switch (typeName) {
     case ZodFirstPartyTypeKind.ZodString:
@@ -34518,7 +34518,7 @@ var selectParser = (def, typeName, refs) => {
   }
 };
 
-// node_modules/zod-to-json-schema/dist/esm/parseDef.js
+// ../../../config/plugins/hillclimb/node_modules/zod-to-json-schema/dist/esm/parseDef.js
 function parseDef(def, refs, forceResolution = false) {
   const seenItem = refs.seen.get(def);
   if (refs.override) {
@@ -34574,7 +34574,7 @@ var addMeta = (def, refs, jsonSchema) => {
   return jsonSchema;
 };
 
-// node_modules/zod-to-json-schema/dist/esm/zodToJsonSchema.js
+// ../../../config/plugins/hillclimb/node_modules/zod-to-json-schema/dist/esm/zodToJsonSchema.js
 var zodToJsonSchema = (schema, options) => {
   const refs = getRefs(options);
   let definitions = typeof options === "object" && options.definitions ? Object.entries(options.definitions).reduce((acc, [name2, schema2]) => ({
@@ -34636,7 +34636,7 @@ var zodToJsonSchema = (schema, options) => {
   return combined;
 };
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/server/zod-json-schema-compat.js
+// ../../../config/plugins/hillclimb/node_modules/@modelcontextprotocol/sdk/dist/esm/server/zod-json-schema-compat.js
 function mapMiniTarget(t) {
   if (!t)
     return "draft-7";
@@ -34678,7 +34678,7 @@ function parseWithCompat(schema, data) {
   return result.data;
 }
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/shared/protocol.js
+// ../../../config/plugins/hillclimb/node_modules/@modelcontextprotocol/sdk/dist/esm/shared/protocol.js
 var DEFAULT_REQUEST_TIMEOUT_MSEC = 6e4;
 var Protocol = class {
   constructor(_options) {
@@ -35655,7 +35655,7 @@ function mergeCapabilities(base, additional) {
   return result;
 }
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/validation/ajv-provider.js
+// ../../../config/plugins/hillclimb/node_modules/@modelcontextprotocol/sdk/dist/esm/validation/ajv-provider.js
 var import_ajv = __toESM(require_ajv(), 1);
 var import_ajv_formats = __toESM(require_dist(), 1);
 function createDefaultAjvInstance() {
@@ -35723,7 +35723,7 @@ var AjvJsonSchemaValidator = class {
   }
 };
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/server.js
+// ../../../config/plugins/hillclimb/node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/server.js
 var ExperimentalServerTasks = class {
   constructor(_server) {
     this._server = _server;
@@ -35936,7 +35936,7 @@ var ExperimentalServerTasks = class {
   }
 };
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/helpers.js
+// ../../../config/plugins/hillclimb/node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/helpers.js
 function assertToolsCallTaskCapability(requests, method, entityName) {
   if (!requests) {
     throw new Error(`${entityName} does not support task creation (required for ${method})`);
@@ -35971,7 +35971,7 @@ function assertClientRequestTaskCapability(requests, method, entityName) {
   }
 }
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/server/index.js
+// ../../../config/plugins/hillclimb/node_modules/@modelcontextprotocol/sdk/dist/esm/server/index.js
 var Server = class extends Protocol {
   /**
    * Initializes this server with the given name and version information.
@@ -36342,7 +36342,7 @@ var Server = class extends Protocol {
   }
 };
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/server/completable.js
+// ../../../config/plugins/hillclimb/node_modules/@modelcontextprotocol/sdk/dist/esm/server/completable.js
 var COMPLETABLE_SYMBOL = Symbol.for("mcp.completable");
 function isCompletable(schema) {
   return !!schema && typeof schema === "object" && COMPLETABLE_SYMBOL in schema;
@@ -36356,7 +36356,7 @@ var McpZodTypeKind;
   McpZodTypeKind2["Completable"] = "McpCompletable";
 })(McpZodTypeKind || (McpZodTypeKind = {}));
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/shared/toolNameValidation.js
+// ../../../config/plugins/hillclimb/node_modules/@modelcontextprotocol/sdk/dist/esm/shared/toolNameValidation.js
 var TOOL_NAME_REGEX = /^[A-Za-z0-9._-]{1,128}$/;
 function validateToolName(name) {
   const warnings = [];
@@ -36414,7 +36414,7 @@ function validateAndWarnToolName(name) {
   return result.isValid;
 }
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/mcp-server.js
+// ../../../config/plugins/hillclimb/node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/mcp-server.js
 var ExperimentalMcpServerTasks = class {
   constructor(_mcpServer) {
     this._mcpServer = _mcpServer;
@@ -36429,11 +36429,11 @@ var ExperimentalMcpServerTasks = class {
   }
 };
 
-// node_modules/zod/index.js
+// ../../../config/plugins/hillclimb/node_modules/zod/index.js
 init_external();
 init_external();
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/server/mcp.js
+// ../../../config/plugins/hillclimb/node_modules/@modelcontextprotocol/sdk/dist/esm/server/mcp.js
 function toolInputElementCount(value, max) {
   let count = 0;
   const stack = [value];
@@ -37274,10 +37274,10 @@ var EMPTY_COMPLETION_RESULT = {
   }
 };
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/server/stdio.js
+// ../../../config/plugins/hillclimb/node_modules/@modelcontextprotocol/sdk/dist/esm/server/stdio.js
 import process2 from "node:process";
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/shared/stdio.js
+// ../../../config/plugins/hillclimb/node_modules/@modelcontextprotocol/sdk/dist/esm/shared/stdio.js
 var STDIO_DEFAULT_MAX_BUFFER_SIZE = 10 * 1024 * 1024;
 var ReadBuffer = class {
   constructor(options) {
@@ -37314,7 +37314,7 @@ function serializeMessage(message2) {
   return JSON.stringify(message2) + "\n";
 }
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/server/stdio.js
+// ../../../config/plugins/hillclimb/node_modules/@modelcontextprotocol/sdk/dist/esm/server/stdio.js
 var StdioServerTransport = class {
   constructor(_stdin = process2.stdin, _stdout = process2.stdout, options) {
     this._stdin = _stdin;
@@ -37381,7 +37381,7 @@ var StdioServerTransport = class {
   }
 };
 
-// node_modules/@modelcontextprotocol/ext-apps/dist/src/server/index.js
+// ../../../config/plugins/hillclimb/node_modules/@modelcontextprotocol/ext-apps/dist/src/server/index.js
 init_v4();
 var r = ((Z) => typeof __require < "u" ? __require : typeof Proxy < "u" ? new Proxy(Z, { get: ($, J) => (typeof __require < "u" ? __require : $)[J] }) : Z)(function(Z) {
   if (typeof __require < "u") return __require.apply(this, arguments);
@@ -37478,7 +37478,7 @@ function N3(Z, $, J, X, V) {
 
 // src/repository.ts
 import { DatabaseSync } from "node:sqlite";
-import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -38521,209 +38521,1126 @@ function applyPlanning(tree, a, now) {
   }
 }
 
-// src/repository.ts
-function defaultDataDir() {
-  return process.env.HILLCLIMB_DATA_DIR || process.env.PLUGIN_DATA || join(homedir(), ".gemini", "antigravity", "plugin_data", "hillclimb");
+// src/state.ts
+var PLATEAU = 5;
+var BARS = "\u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588";
+var SECRET_KEY_CACHE = /* @__PURE__ */ new Map();
+function isSecretKey(key2) {
+  const cached2 = SECRET_KEY_CACHE.get(key2);
+  if (cached2 !== void 0) return cached2;
+  let result = false;
+  if (/^[A-Z0-9_]+$/.test(key2)) {
+    result = /(?:^|_)(?:TOKEN|SECRET|KEY|PASSWORD|PASS|CREDENTIAL|AUTH)(?:_|$)/.test(key2);
+  } else if (/^[a-z0-9_-]+$/.test(key2)) {
+    result = /(?:^|[-_])(?:token|secret|password|passwd|passphrase|credential)(?:[-_]|$)|(?:^|[-_])(?:api|auth|access|refresh|bearer|client|private|secret|session|oauth|signing|encryption)[-_](?:key|auth)(?:[-_]|$)/.test(
+      key2
+    );
+  }
+  if (SECRET_KEY_CACHE.size < 1024) SECRET_KEY_CACHE.set(key2, result);
+  return result;
 }
-function openDatabase(dataDir = defaultDataDir()) {
-  mkdirSync(dataDir, { recursive: true });
-  const dbPath = join(dataDir, "hillclimb.db");
-  const db = new DatabaseSync(dbPath);
-  db.exec("PRAGMA journal_mode = WAL;");
-  db.exec("PRAGMA busy_timeout = 5000;");
-  return db;
+function isWhitespaceChar(code, line, idx) {
+  if (code === 32 || code === 9 || code === 11 || code === 12) return true;
+  return code >= 128 && /\s/.test(line[idx]);
 }
-function readAntigravityProjects() {
-  const dir = join(homedir(), ".gemini", "config", "projects");
-  if (!existsSync(dir)) return [];
-  const results = [];
-  for (const entry of readdirSync(dir)) {
-    if (!entry.endsWith(".json")) continue;
-    try {
-      const raw = JSON.parse(readFileSync(join(dir, entry), "utf8"));
-      if (raw.sidecar) continue;
-      const id = typeof raw.id === "string" ? raw.id : null;
-      const name = typeof raw.name === "string" ? raw.name : id;
-      if (!id || !name) continue;
-      let directory = null;
-      const resources = raw.projectResources?.resources;
-      if (Array.isArray(resources)) {
-        for (const res of resources) {
-          const gitFolder = res.gitFolder;
-          const folder = res.folder;
-          const uri = gitFolder?.folderUri ?? folder?.folderUri;
-          if (typeof uri === "string" && uri.startsWith("file://")) {
-            try {
-              directory = fileURLToPath(uri);
+var WORD_PREFIX_ASCII = new Uint8Array(128);
+for (const code of [32, 9, 11, 12, 34, 39, 96, 40, 59, 38, 63, 61, 44, 123, 124, 91, 58]) {
+  WORD_PREFIX_ASCII[code] = 1;
+}
+var KEY_CHAR_ASCII = new Uint8Array(128);
+for (let c = 48; c <= 57; c++) KEY_CHAR_ASCII[c] = 1;
+for (let c = 65; c <= 90; c++) KEY_CHAR_ASCII[c] = 1;
+for (let c = 97; c <= 122; c++) KEY_CHAR_ASCII[c] = 1;
+KEY_CHAR_ASCII[95] = 1;
+KEY_CHAR_ASCII[45] = 1;
+var UNCLOSED_STOP_ASCII = new Uint8Array(128);
+for (const code of [32, 9, 11, 12, 59, 38, 35, 41]) {
+  UNCLOSED_STOP_ASCII[code] = 1;
+}
+function isKeyCharCode(code) {
+  return code < 128 && KEY_CHAR_ASCII[code] === 1;
+}
+var CLOSE_BOUNDARY_ASCII = new Uint8Array(128);
+for (const code of [32, 9, 11, 12, 59, 38, 124, 41, 125, 93, 44, 96]) {
+  CLOSE_BOUNDARY_ASCII[code] = 1;
+}
+function isValidQuoteCloseBoundary(line, closeIdx) {
+  const nextIdx = closeIdx + 1;
+  if (nextIdx >= line.length) return true;
+  const nextCode = line.charCodeAt(nextIdx);
+  return nextCode < 128 ? CLOSE_BOUNDARY_ASCII[nextCode] === 1 : /\s/.test(line[nextIdx]);
+}
+function isSecretDoubleQuotedAssignmentAt(line, idx) {
+  const n2 = line.length;
+  let j2 = idx;
+  while (j2 < n2 && isKeyCharCode(line.charCodeAt(j2))) {
+    j2 += 1;
+  }
+  if (j2 === idx || j2 + 1 >= n2) return false;
+  if (line.charCodeAt(j2) !== 61 || line.charCodeAt(j2 + 1) !== 34) return false;
+  return isSecretKey(line.slice(idx, j2));
+}
+function findMatchingOuterQuoteClose(line, openIdx, quoteCode, isAnsic) {
+  const start = openIdx + (isAnsic ? 2 : 1);
+  if (isAnsic || quoteCode === 34) {
+    const ch = quoteCode === 34 ? '"' : "'";
+    let p3 = start;
+    while (p3 < line.length) {
+      const q = line.indexOf(ch, p3);
+      if (q === -1) return -1;
+      let bs = 0;
+      let k2 = q - 1;
+      while (k2 >= start && line.charCodeAt(k2) === 92) {
+        bs += 1;
+        k2 -= 1;
+      }
+      if ((bs & 1) === 0) return q;
+      p3 = q + 1;
+    }
+    return -1;
+  }
+  let p2 = start;
+  while (p2 < line.length) {
+    const q = line.indexOf("'", p2);
+    if (q === -1) return -1;
+    if (q + 3 < line.length && line.charCodeAt(q + 1) === 92 && line.charCodeAt(q + 2) === 39 && line.charCodeAt(q + 3) === 39) {
+      p2 = q + 4;
+      continue;
+    }
+    return q;
+  }
+  return -1;
+}
+function isUnclosedStopChar(code, line, idx) {
+  return code < 128 ? UNCLOSED_STOP_ASCII[code] === 1 : /\s/.test(line[idx]);
+}
+function isShellSingleQuoteEscape(line, idx) {
+  return idx + 3 < line.length && line.charCodeAt(idx) === 39 && line.charCodeAt(idx + 1) === 92 && line.charCodeAt(idx + 2) === 39 && line.charCodeAt(idx + 3) === 39;
+}
+var INVALIDATE_OUTER_SPAN = -2;
+function scanClosedQuoted(line, contentStart, quoteCode, outerCode, allowBackslashEscape = false, outerAnsic = false, outerEnd = line.length) {
+  if (outerCode === 0) {
+    if (quoteCode === 39 && !allowBackslashEscape) {
+      const q2 = line.indexOf("'", contentStart);
+      return q2 === -1 ? -1 : q2 + 1;
+    }
+    const ch = quoteCode === 39 ? "'" : '"';
+    let p2 = contentStart;
+    while (p2 < line.length) {
+      const q2 = line.indexOf(ch, p2);
+      if (q2 === -1) return -1;
+      let bs = 0;
+      let k2 = q2 - 1;
+      while (k2 >= contentStart && line.charCodeAt(k2) === 92) {
+        bs += 1;
+        k2 -= 1;
+      }
+      if ((bs & 1) === 0) return q2 + 1;
+      p2 = q2 + 1;
+    }
+    return -1;
+  }
+  const limit = Math.min(line.length, outerEnd + 1);
+  let q = contentStart;
+  if (quoteCode === 39) {
+    while (q < limit) {
+      const code = line.charCodeAt(q);
+      if (outerCode === 39) {
+        if (!outerAnsic && q === outerEnd) return q;
+        if (!outerAnsic && isShellSingleQuoteEscape(line, q)) return q + 4;
+        if (code === 39) return -1;
+      }
+      if (allowBackslashEscape && code === 92) {
+        if (outerCode === 39 && q + 1 < limit && line.charCodeAt(q + 1) === 39) {
+          if (outerAnsic) {
+            q += 2;
+            continue;
+          }
+          if (isShellSingleQuoteEscape(line, q + 1)) {
+            q += 5;
+            continue;
+          }
+          return -1;
+        }
+        q += q + 1 < limit ? 2 : 1;
+        continue;
+      }
+      if (outerCode === 34 && code === 34) return -1;
+      if (outerCode !== 39 && code === 39) {
+        return q + 1;
+      }
+      q += 1;
+    }
+    return -1;
+  }
+  while (q < limit) {
+    const code = line.charCodeAt(q);
+    if (outerCode === 39) {
+      if (!outerAnsic && isShellSingleQuoteEscape(line, q)) {
+        q += 4;
+        continue;
+      }
+      if (code === 39) return -1;
+    }
+    if (code === 92) {
+      if (outerCode === 39 && q + 1 < limit && line.charCodeAt(q + 1) === 39) {
+        if (outerAnsic) {
+          q += 2;
+          continue;
+        }
+        if (isShellSingleQuoteEscape(line, q + 1)) {
+          q += 5;
+          continue;
+        }
+        return -1;
+      }
+      q += q + 1 < limit ? 2 : 1;
+    } else if (code === 34) {
+      return q + 1;
+    } else {
+      q += 1;
+    }
+  }
+  return -1;
+}
+function scanClosedEscapedQuoted(line, contentStart, quoteCode, outerCode, outerAnsic = false, outerEnd = line.length) {
+  const limit = outerCode !== 0 ? Math.min(line.length, outerEnd + 1) : line.length;
+  let q = contentStart;
+  while (q < limit) {
+    const code = line.charCodeAt(q);
+    if (outerCode === 39) {
+      if (!outerAnsic && isShellSingleQuoteEscape(line, q)) {
+        q += 4;
+        continue;
+      }
+      if (code === 39) return -1;
+    } else if (code === outerCode) {
+      return -1;
+    }
+    if (code === 92) {
+      if (q + 1 < limit) {
+        const c1 = line.charCodeAt(q + 1);
+        if (outerCode === 39 && !outerAnsic && quoteCode === 39 && isShellSingleQuoteEscape(line, q + 1)) {
+          return q + 5;
+        }
+        if (c1 === quoteCode && !(outerCode === 39 && !outerAnsic && c1 === 39)) return q + 2;
+        if (c1 === 92) {
+          if (q + 3 < limit && line.charCodeAt(q + 2) === 92) {
+            const c3 = line.charCodeAt(q + 3);
+            if (c3 === quoteCode || c3 === 92) {
+              q += 4;
+              continue;
+            }
+          }
+          q += 2;
+          continue;
+        }
+        if (outerCode === 39 && c1 === 39) {
+          if (outerAnsic) {
+            q += 2;
+            continue;
+          }
+          if (isShellSingleQuoteEscape(line, q + 1)) {
+            q += 5;
+            continue;
+          }
+          return -1;
+        }
+        q += 2;
+      } else {
+        q += 1;
+      }
+    } else {
+      q += 1;
+    }
+  }
+  return -1;
+}
+var CLI_BOUNDARY_ASCII = new Uint8Array(128);
+for (const code of [32, 9, 11, 12, 59, 38, 124, 40, 41]) {
+  CLI_BOUNDARY_ASCII[code] = 1;
+}
+var CLI_ARG_PREFIX_ASCII = new Uint8Array(128);
+for (const code of [32, 9, 11, 12, 59, 38, 124, 40, 41, 61]) {
+  CLI_ARG_PREFIX_ASCII[code] = 1;
+}
+function isCliBoundaryChar(line, idx) {
+  const code = line.charCodeAt(idx);
+  return code < 128 ? CLI_BOUNDARY_ASCII[code] === 1 : /\s/.test(line[idx]);
+}
+function isCliArgPrefixChar(line, idx) {
+  const code = line.charCodeAt(idx);
+  return code < 128 ? CLI_ARG_PREFIX_ASCII[code] === 1 : /\s/.test(line[idx]);
+}
+function isAlphaCode(code) {
+  return code >= 65 && code <= 90 || code >= 97 && code <= 122;
+}
+function isUpperEnvKey(line, start, end) {
+  if (end - start < 2) return false;
+  const first = line.charCodeAt(start);
+  if (!(first >= 65 && first <= 90 || first === 95)) return false;
+  for (let i = start + 1; i < end; i += 1) {
+    const c = line.charCodeAt(i);
+    if (!(c >= 65 && c <= 90 || c >= 48 && c <= 57 || c === 95)) return false;
+  }
+  return true;
+}
+function spanContainsSecretAssignment(line, start, end) {
+  let k2 = start;
+  while (k2 < end) {
+    const code = line.charCodeAt(k2);
+    if (code < 128 && KEY_CHAR_ASCII[code] === 1) {
+      const prevCode = k2 > 0 ? line.charCodeAt(k2 - 1) : 32;
+      const atWordStart = k2 === start || (prevCode < 128 ? WORD_PREFIX_ASCII[prevCode] === 1 : /\s/.test(line[k2 - 1]));
+      let j2 = k2 + 1;
+      while (j2 < end) {
+        const jc = line.charCodeAt(j2);
+        if (jc >= 128 || KEY_CHAR_ASCII[jc] !== 1) break;
+        j2 += 1;
+      }
+      if (atWordStart && j2 < end && line.charCodeAt(j2) === 61 && isSecretKey(line.slice(k2, j2))) {
+        return true;
+      }
+      k2 = j2;
+      continue;
+    }
+    k2 += 1;
+  }
+  return false;
+}
+function hasBalancedInnerQuoteAt(line, openQuoteIdx, spanClose, targetQuoteIdx, targetQuoteCode, isEscaped) {
+  if (isEscaped) {
+    const escStart = targetQuoteIdx - 1;
+    if (escStart <= openQuoteIdx || line.charCodeAt(escStart) !== 92) return false;
+    if (escStart - 1 > openQuoteIdx && !isCliArgPrefixChar(line, escStart - 1)) return false;
+    const ch = targetQuoteCode === 34 ? '"' : "'";
+    let p2 = targetQuoteIdx + 1;
+    while (p2 < spanClose) {
+      const q2 = line.indexOf(ch, p2);
+      if (q2 === -1 || q2 >= spanClose) return false;
+      let bs = 0;
+      let b = q2 - 1;
+      while (b >= targetQuoteIdx + 1 && line.charCodeAt(b) === 92) {
+        bs += 1;
+        b -= 1;
+      }
+      if ((bs & 1) === 1) {
+        return q2 + 1 === spanClose || isValidQuoteCloseBoundary(line, q2);
+      }
+      p2 = q2 + 1;
+    }
+    return false;
+  }
+  if (targetQuoteIdx - 1 > openQuoteIdx && !isCliArgPrefixChar(line, targetQuoteIdx - 1)) {
+    return false;
+  }
+  if (targetQuoteCode === 34) {
+    let p2 = targetQuoteIdx + 1;
+    while (p2 < spanClose) {
+      const q2 = line.indexOf('"', p2);
+      if (q2 === -1 || q2 >= spanClose) return false;
+      let bs = 0;
+      let b = q2 - 1;
+      while (b >= targetQuoteIdx + 1 && line.charCodeAt(b) === 92) {
+        bs += 1;
+        b -= 1;
+      }
+      if ((bs & 1) === 0) {
+        return q2 + 1 === spanClose || isValidQuoteCloseBoundary(line, q2);
+      }
+      p2 = q2 + 1;
+    }
+    return false;
+  }
+  const q = line.indexOf("'", targetQuoteIdx + 1);
+  return q !== -1 && q < spanClose && (q + 1 === spanClose || isValidQuoteCloseBoundary(line, q));
+}
+function isSecretKeyBeforeEq(line, bound3, eqIdx) {
+  let start = eqIdx;
+  while (start > bound3 && isKeyCharCode(line.charCodeAt(start - 1))) {
+    start -= 1;
+  }
+  return start < eqIdx && isSecretKey(line.slice(start, eqIdx));
+}
+function isUpperEnvKeyBeforeEq(line, bound3, eqIdx) {
+  let start = eqIdx;
+  while (start > bound3 && isKeyCharCode(line.charCodeAt(start - 1))) {
+    start -= 1;
+  }
+  return start < eqIdx && isUpperEnvKey(line, start, eqIdx);
+}
+function isConcatNonSecretFollowedBySecretCmd(line, afterQuoteIdx, n2, isEscaped) {
+  let p2 = afterQuoteIdx;
+  while (p2 < n2) {
+    const c = line.charCodeAt(p2);
+    if (c < 128 ? CLI_BOUNDARY_ASCII[c] === 1 : /\s/.test(line[p2])) break;
+    if (c === 61 || c === 34 || c === 39 || c === 92 && !isEscaped) return false;
+    if (c === 92 && isEscaped) {
+      if (p2 + 1 < n2) {
+        const nc = line.charCodeAt(p2 + 1);
+        if (nc === 34 || nc === 39) return false;
+        p2 += 2;
+        continue;
+      }
+      return false;
+    }
+    p2 += 1;
+  }
+  while (p2 < n2 && isWhitespaceChar(line.charCodeAt(p2), line, p2)) {
+    p2 += 1;
+  }
+  if (p2 >= n2) return false;
+  const op = line.charCodeAt(p2);
+  if (op === 59 || op === 124) {
+    p2 += 1;
+    if (op === 124 && p2 < n2 && line.charCodeAt(p2) === 124) p2 += 1;
+  } else if (op === 38) {
+    p2 += 1;
+    if (p2 < n2 && line.charCodeAt(p2) === 38) p2 += 1;
+  } else {
+    return false;
+  }
+  while (p2 < n2 && isWhitespaceChar(line.charCodeAt(p2), line, p2)) {
+    p2 += 1;
+  }
+  if (p2 >= n2) return false;
+  let j2 = p2;
+  while (j2 < n2 && isKeyCharCode(line.charCodeAt(j2))) {
+    j2 += 1;
+  }
+  return j2 > p2 && j2 < n2 && line.charCodeAt(j2) === 61 && isSecretKey(line.slice(p2, j2));
+}
+function matchesCrossSpanTarget(line, outerEnd, k2, openQuoteIdx, spanClose, validClose, prefixEnd, targetQuoteIdx, isEscaped, sawShellOp, sawFlag, sawEnvAssign, lastEqPos) {
+  const prevCode = k2 > 0 ? line.charCodeAt(k2 - 1) : 32;
+  const validPrefix = k2 === prefixEnd || (prevCode < 128 ? CLI_ARG_PREFIX_ASCII[prevCode] === 1 : /\s/.test(line[k2 - 1]));
+  if (!validPrefix) return false;
+  if (targetQuoteIdx === openQuoteIdx && !isEscaped) {
+    const hasAssignAtK = lastEqPos === k2 - 1;
+    if (!hasAssignAtK) {
+      return validClose && (sawShellOp || sawFlag);
+    }
+    const isSecretAssign = isSecretKeyBeforeEq(line, outerEnd + 1, lastEqPos);
+    if (validClose) {
+      return sawShellOp || sawFlag || isSecretAssign;
+    }
+    if (isSecretAssign) return true;
+    return sawShellOp && isUpperEnvKeyBeforeEq(line, outerEnd + 1, lastEqPos) && isConcatNonSecretFollowedBySecretCmd(line, spanClose + 1, line.length, false);
+  }
+  if (validClose && targetQuoteIdx > openQuoteIdx && targetQuoteIdx < spanClose && hasBalancedInnerQuoteAt(line, openQuoteIdx, spanClose, targetQuoteIdx, line.charCodeAt(targetQuoteIdx), isEscaped)) {
+    if (sawShellOp || sawFlag) return true;
+    return sawEnvAssign && spanContainsSecretAssignment(line, openQuoteIdx + 1, spanClose);
+  }
+  return false;
+}
+function scanFlagWordAdvance(line, k2, targetQuoteIdx) {
+  const n2 = line.length;
+  if (k2 + 1 >= n2) return k2 + 1;
+  const c1 = line.charCodeAt(k2 + 1);
+  const startIdx = c1 === 45 ? k2 + 2 : k2 + 1;
+  let j2 = startIdx;
+  if (j2 >= n2 || !isAlphaCode(line.charCodeAt(j2))) {
+    j2 = k2 + 1;
+    while (j2 <= targetQuoteIdx) {
+      const jc = line.charCodeAt(j2);
+      if (jc >= 128 || KEY_CHAR_ASCII[jc] !== 1) break;
+      j2 += 1;
+    }
+    return j2;
+  }
+  j2 += 1;
+  while (j2 < n2) {
+    const jc = line.charCodeAt(j2);
+    if (jc >= 128 || KEY_CHAR_ASCII[jc] !== 1) break;
+    j2 += 1;
+  }
+  if (j2 === n2 || isWhitespaceChar(line.charCodeAt(j2), line, j2) || line.charCodeAt(j2) === 61) {
+    return -(j2 + (j2 < n2 && line.charCodeAt(j2) === 61 ? 1 : 0));
+  }
+  return Math.min(j2, targetQuoteIdx + 1);
+}
+function advanceEscapedCrossBoundary(line, n2, outerEnd, k2, nextCode, prefixEnd, targetQuoteIdx, sawShellOp, sawFlag, sawEnvAssign, lastEqPos, escFail) {
+  const failIdx = nextCode === 39 ? 0 : 1;
+  if (k2 < escFail[failIdx]) return -2;
+  const prevCode = k2 > 0 ? line.charCodeAt(k2 - 1) : 32;
+  const validPrefix = k2 === prefixEnd || (prevCode < 128 ? CLI_ARG_PREFIX_ASCII[prevCode] === 1 : /\s/.test(line[k2 - 1]));
+  if (!validPrefix) return -2;
+  const escCloseEnd = scanClosedEscapedQuoted(line, k2 + 2, nextCode, 0, false, n2);
+  if (escCloseEnd === -1) {
+    escFail[failIdx] = n2;
+    return -2;
+  }
+  const spanClose = escCloseEnd - 2;
+  const closeQuoteIdx = escCloseEnd - 1;
+  const validClose = isValidQuoteCloseBoundary(line, closeQuoteIdx);
+  if (targetQuoteIdx <= closeQuoteIdx) {
+    if (k2 + 1 === targetQuoteIdx) {
+      const hasAssignAtK = lastEqPos === k2 - 1;
+      const isSecretAssign = hasAssignAtK && isSecretKeyBeforeEq(line, outerEnd + 1, lastEqPos);
+      if (validClose) {
+        if (sawShellOp || sawFlag || isSecretAssign) return -1;
+      } else if (isSecretAssign || sawShellOp && hasAssignAtK && isUpperEnvKeyBeforeEq(line, outerEnd + 1, lastEqPos) && isConcatNonSecretFollowedBySecretCmd(line, escCloseEnd, n2, true)) {
+        return -1;
+      }
+    } else if (validClose && targetQuoteIdx > k2 + 1 && targetQuoteIdx < spanClose && hasBalancedInnerQuoteAt(line, k2 + 1, spanClose, targetQuoteIdx, line.charCodeAt(targetQuoteIdx), true)) {
+      if (sawShellOp || sawFlag) return -1;
+      if (sawEnvAssign && spanContainsSecretAssignment(line, k2 + 2, spanClose)) return -1;
+    }
+  }
+  if (validClose) {
+    let nextK = escCloseEnd;
+    if (nextK <= targetQuoteIdx && line.charCodeAt(nextK) === 32) nextK += 1;
+    return nextK;
+  }
+  escFail[failIdx] = spanClose;
+  return -2;
+}
+function hasCrossBoundaryAfterOuter(line, outerEnd, closeEnd, isEscaped = false) {
+  if (closeEnd <= outerEnd || !isValidQuoteCloseBoundary(line, outerEnd)) return false;
+  const n2 = line.length;
+  const targetQuoteIdx = closeEnd - 1;
+  let prefixEnd = -1;
+  let sqFailUntil = 0;
+  let dqFailUntil = 0;
+  let ansicFailUntil = 0;
+  let escFail = null;
+  let sawShellOp = false;
+  let sawFlag = false;
+  let sawEnvAssign = false;
+  let lastEqPos = -1;
+  let k2 = outerEnd + 1;
+  while (k2 <= targetQuoteIdx) {
+    const firstCode = line.charCodeAt(k2);
+    if (firstCode === 32) {
+      k2 += 1;
+      continue;
+    }
+    if (firstCode < 128 && KEY_CHAR_ASCII[firstCode] === 1) {
+      const prevCode = k2 > 0 ? line.charCodeAt(k2 - 1) : 32;
+      const atBoundary = k2 === outerEnd + 1 || (prevCode < 128 ? CLI_BOUNDARY_ASCII[prevCode] === 1 : /\s/.test(line[k2 - 1]));
+      if (!atBoundary) {
+        let j3 = k2 + 1;
+        while (j3 <= targetQuoteIdx) {
+          const jc = line.charCodeAt(j3);
+          if (jc >= 128 || KEY_CHAR_ASCII[jc] !== 1) break;
+          j3 += 1;
+        }
+        if (j3 < n2 && line.charCodeAt(j3) === 61 && (prevCode < 128 ? WORD_PREFIX_ASCII[prevCode] === 1 : /\s/.test(line[k2 - 1])) && isSecretKey(line.slice(k2, j3))) {
+          lastEqPos = j3;
+        }
+        k2 = j3;
+        continue;
+      }
+      if (firstCode === 45) {
+        const res = scanFlagWordAdvance(line, k2, targetQuoteIdx);
+        if (res < 0) {
+          sawFlag = true;
+          const eqPos = -res - 1;
+          if (sawShellOp && eqPos < n2 && line.charCodeAt(eqPos) === 61 && isSecretKeyBeforeEq(line, k2, eqPos)) {
+            lastEqPos = eqPos;
+          }
+          k2 = -res;
+          continue;
+        }
+        k2 = res;
+        continue;
+      }
+      let j2 = k2 + 1;
+      while (j2 <= targetQuoteIdx) {
+        const jc = line.charCodeAt(j2);
+        if (jc >= 128 || KEY_CHAR_ASCII[jc] !== 1) break;
+        j2 += 1;
+      }
+      if (j2 < n2 && line.charCodeAt(j2) === 61) {
+        lastEqPos = j2;
+        let v2 = j2 + 1;
+        if (v2 < n2) {
+          const vc = line.charCodeAt(v2);
+          if (vc !== 39 && vc !== 34 && !(vc === 36 && v2 + 1 < n2 && line.charCodeAt(v2 + 1) === 39)) {
+            if (isUpperEnvKey(line, k2, j2)) {
+              sawEnvAssign = true;
+            }
+            while (v2 <= targetQuoteIdx) {
+              const wc = line.charCodeAt(v2);
+              if (wc < 128 ? CLI_BOUNDARY_ASCII[wc] === 1 || wc === 39 || wc === 34 || wc === 36 || wc === 92 : /\s/.test(line[v2])) {
+                break;
+              }
+              v2 += 1;
+            }
+          }
+        }
+        k2 = v2;
+        continue;
+      }
+      k2 = j2;
+      continue;
+    }
+    if (firstCode === 92) {
+      if (k2 + 1 < n2) {
+        const nextCode = line.charCodeAt(k2 + 1);
+        if (isEscaped && (nextCode === 34 || nextCode === 39)) {
+          const res = advanceEscapedCrossBoundary(
+            line,
+            n2,
+            outerEnd,
+            k2,
+            nextCode,
+            prefixEnd,
+            targetQuoteIdx,
+            sawShellOp,
+            sawFlag,
+            sawEnvAssign,
+            lastEqPos,
+            escFail ?? (escFail = new Int32Array(2))
+          );
+          if (res === -1) return true;
+          if (res >= 0) {
+            k2 = res;
+            continue;
+          }
+        }
+        if (nextCode === 36 || nextCode === 92) prefixEnd = k2 + 2;
+        k2 += 2;
+      } else {
+        k2 += 1;
+      }
+      continue;
+    }
+    if (firstCode === 36 && k2 + 1 < n2) {
+      const nextCode = line.charCodeAt(k2 + 1);
+      if (nextCode === 36) {
+        prefixEnd = k2 + 2;
+        k2 += 2;
+        continue;
+      }
+      if (nextCode === 39) {
+        if (k2 >= ansicFailUntil) {
+          const prevCode = k2 > 0 ? line.charCodeAt(k2 - 1) : 32;
+          if (k2 === prefixEnd || (prevCode < 128 ? WORD_PREFIX_ASCII[prevCode] === 1 : /\s/.test(line[k2 - 1]))) {
+            const spanClose = findMatchingOuterQuoteClose(line, k2, 39, true);
+            if (spanClose !== -1) {
+              const validClose = isValidQuoteCloseBoundary(line, spanClose);
+              if (targetQuoteIdx <= spanClose && matchesCrossSpanTarget(
+                line,
+                outerEnd,
+                k2,
+                k2 + 1,
+                spanClose,
+                validClose,
+                prefixEnd,
+                targetQuoteIdx,
+                isEscaped,
+                sawShellOp,
+                sawFlag,
+                sawEnvAssign,
+                lastEqPos
+              )) {
+                return true;
+              }
+              if (validClose) {
+                k2 = spanClose + 1;
+                if (k2 <= targetQuoteIdx && line.charCodeAt(k2) === 32) k2 += 1;
+                continue;
+              }
+            }
+            ansicFailUntil = spanClose !== -1 ? spanClose : n2;
+          }
+        }
+        k2 += 2;
+        continue;
+      }
+    }
+    if (firstCode === 39 || firstCode === 34) {
+      const failUntil = firstCode === 39 ? sqFailUntil : dqFailUntil;
+      if (k2 >= failUntil) {
+        const prevCode = k2 > 0 ? line.charCodeAt(k2 - 1) : 32;
+        if (k2 === prefixEnd || (prevCode < 128 ? WORD_PREFIX_ASCII[prevCode] === 1 : /\s/.test(line[k2 - 1]))) {
+          const spanClose = findMatchingOuterQuoteClose(line, k2, firstCode, false);
+          if (spanClose !== -1) {
+            const validClose = isValidQuoteCloseBoundary(line, spanClose);
+            if (targetQuoteIdx <= spanClose && matchesCrossSpanTarget(
+              line,
+              outerEnd,
+              k2,
+              k2,
+              spanClose,
+              validClose,
+              prefixEnd,
+              targetQuoteIdx,
+              isEscaped,
+              sawShellOp,
+              sawFlag,
+              sawEnvAssign,
+              lastEqPos
+            )) {
+              return true;
+            }
+            if (validClose) {
+              k2 = spanClose + 1;
+              if (k2 <= targetQuoteIdx && line.charCodeAt(k2) === 32) k2 += 1;
+              continue;
+            }
+          }
+          if (firstCode === 39) sqFailUntil = spanClose !== -1 ? spanClose : n2;
+          else dqFailUntil = spanClose !== -1 ? spanClose : n2;
+        }
+      }
+      k2 += 1;
+      continue;
+    }
+    if (firstCode === 59 || firstCode === 124 || firstCode === 41) {
+      sawShellOp = true;
+      k2 += 1;
+      continue;
+    }
+    if (firstCode === 38) {
+      if (k2 + 1 < n2 && line.charCodeAt(k2 + 1) === 38) {
+        sawShellOp = true;
+        k2 += 2;
+        continue;
+      }
+      if (k2 > outerEnd + 1 && isCliBoundaryChar(line, k2 - 1) || k2 + 1 < n2 && isWhitespaceChar(line.charCodeAt(k2 + 1), line, k2 + 1)) {
+        sawShellOp = true;
+      }
+      k2 += 1;
+      continue;
+    }
+    k2 += 1;
+  }
+  return false;
+}
+function tryInvalidateQuoted(line, contentStart, quoteCode, allowBackslashEscape, outerEnd, allowInvalidate, badUntil, badIdx) {
+  if (!allowInvalidate || contentStart < badUntil[badIdx]) return false;
+  const closeEnd = scanClosedQuoted(line, contentStart, quoteCode, 0, allowBackslashEscape, false, line.length);
+  if (closeEnd !== -1 && (closeEnd <= outerEnd || !hasCrossBoundaryAfterOuter(line, outerEnd, closeEnd, false))) {
+    return true;
+  }
+  badUntil[badIdx] = closeEnd === -1 ? line.length : closeEnd;
+  return false;
+}
+function tryInvalidateEscapedQuoted(line, contentStart, quoteCode, outerEnd, allowInvalidate, badUntil, badIdx) {
+  if (!allowInvalidate || contentStart < badUntil[badIdx]) return false;
+  const closeEnd = scanClosedEscapedQuoted(line, contentStart, quoteCode, 0, false, line.length);
+  if (closeEnd !== -1 && (closeEnd <= outerEnd || !hasCrossBoundaryAfterOuter(line, outerEnd, closeEnd, true))) {
+    return true;
+  }
+  badUntil[badIdx] = closeEnd === -1 ? line.length : closeEnd;
+  return false;
+}
+function scanUnclosedSegment(line, start, prefixLen, outerCode, stopCharCode = 0, outerAnsic = false) {
+  const n2 = line.length;
+  let q = start + prefixLen;
+  while (q < n2) {
+    const code = line.charCodeAt(q);
+    if (outerCode === 39 && !outerAnsic && isShellSingleQuoteEscape(line, q)) {
+      q += 4;
+      continue;
+    }
+    if (code === outerCode || stopCharCode !== 0 && code === stopCharCode || isUnclosedStopChar(code, line, q)) {
+      break;
+    }
+    if (code === 92) {
+      if (q + 1 < n2) {
+        const nextCode = line.charCodeAt(q + 1);
+        if (outerCode === 39 && nextCode === 39) {
+          if (outerAnsic) {
+            q += 2;
+            continue;
+          }
+          if (isShellSingleQuoteEscape(line, q + 1)) {
+            q += 5;
+            continue;
+          }
+          q += 1;
+          break;
+        }
+        if (isWhitespaceChar(nextCode, line, q + 1)) {
+          q += 1;
+          break;
+        }
+        q += 2;
+      } else {
+        q += 1;
+      }
+    } else {
+      q += 1;
+    }
+  }
+  return q;
+}
+function scanSecretValue(line, valStart, outerCode, stopCharCode = 0, outerAnsic = false, outerEnd = line.length, allowInvalidate = false, unclosedInOuter, badUntil) {
+  const n2 = line.length;
+  let p2 = valStart;
+  while (p2 < n2) {
+    const code = line.charCodeAt(p2);
+    if (outerCode === 39 && !outerAnsic && isShellSingleQuoteEscape(line, p2)) {
+      const contentStart = p2 + 4;
+      const closeEnd = unclosedInOuter && contentStart < unclosedInOuter[0] ? -1 : scanClosedQuoted(line, contentStart, 39, outerCode, false, outerAnsic, outerEnd);
+      if (closeEnd !== -1) {
+        p2 = closeEnd;
+        continue;
+      }
+      if (unclosedInOuter) unclosedInOuter[0] = outerEnd;
+      p2 = scanUnclosedSegment(line, p2, 4, outerCode, stopCharCode, outerAnsic);
+      break;
+    }
+    if (code === outerCode) break;
+    if (code === 36 && p2 + 1 < n2) {
+      const nextCode = line.charCodeAt(p2 + 1);
+      if (nextCode === 36) {
+        p2 += 2;
+        continue;
+      }
+      if (outerCode === 39 && !outerAnsic && isShellSingleQuoteEscape(line, p2 + 1)) {
+        const contentStart = p2 + 5;
+        const closeEnd = unclosedInOuter && contentStart < unclosedInOuter[2] ? -1 : scanClosedQuoted(line, contentStart, 39, outerCode, true, outerAnsic, outerEnd);
+        if (closeEnd !== -1) {
+          p2 = closeEnd;
+          continue;
+        }
+        if (unclosedInOuter) unclosedInOuter[2] = outerEnd;
+        if (badUntil && tryInvalidateQuoted(line, contentStart, 39, true, outerEnd, allowInvalidate, badUntil, 2)) {
+          return INVALIDATE_OUTER_SPAN;
+        }
+        p2 = scanUnclosedSegment(line, p2, 5, outerCode, stopCharCode, outerAnsic);
+        break;
+      }
+      if ((nextCode === 39 || nextCode === 34) && nextCode !== outerCode) {
+        const contentStart = p2 + 2;
+        const badIdx = nextCode === 39 ? 2 : 1;
+        const closeEnd = outerCode !== 0 && unclosedInOuter && contentStart < unclosedInOuter[badIdx] ? -1 : scanClosedQuoted(line, contentStart, nextCode, outerCode, nextCode === 39, outerAnsic, outerEnd);
+        if (closeEnd !== -1) {
+          p2 = closeEnd;
+          continue;
+        }
+        if (outerCode !== 0) {
+          if (unclosedInOuter) unclosedInOuter[badIdx] = outerEnd;
+          if (badUntil && tryInvalidateQuoted(line, contentStart, nextCode, nextCode === 39, outerEnd, allowInvalidate, badUntil, badIdx)) {
+            return INVALIDATE_OUTER_SPAN;
+          }
+        }
+        p2 = scanUnclosedSegment(line, p2, 2, outerCode, stopCharCode, outerAnsic);
+        break;
+      }
+    }
+    if (code === 34 || code === 39) {
+      const contentStart = p2 + 1;
+      const badIdx = code === 39 ? 0 : 1;
+      const closeEnd = outerCode !== 0 && unclosedInOuter && contentStart < unclosedInOuter[badIdx] ? -1 : scanClosedQuoted(line, contentStart, code, outerCode, false, outerAnsic, outerEnd);
+      if (closeEnd !== -1) {
+        p2 = closeEnd;
+        continue;
+      }
+      if (outerCode !== 0) {
+        if (unclosedInOuter) unclosedInOuter[badIdx] = outerEnd;
+        if (badUntil && tryInvalidateQuoted(line, contentStart, code, false, outerEnd, allowInvalidate, badUntil, badIdx)) {
+          return INVALIDATE_OUTER_SPAN;
+        }
+      }
+      p2 = scanUnclosedSegment(line, p2, 1, outerCode, stopCharCode, outerAnsic);
+      break;
+    }
+    if (code === 92) {
+      if (p2 + 1 < n2) {
+        const nextCode = line.charCodeAt(p2 + 1);
+        if (nextCode === 34 || nextCode === 39) {
+          if (outerCode === 39 && nextCode === 39) {
+            if (outerAnsic) {
+              const contentStart2 = p2 + 2;
+              const closeEnd2 = unclosedInOuter && contentStart2 < unclosedInOuter[4] ? -1 : scanClosedEscapedQuoted(line, contentStart2, 39, outerCode, true, outerEnd);
+              if (closeEnd2 !== -1) {
+                p2 = closeEnd2;
+                continue;
+              }
+              if (unclosedInOuter) unclosedInOuter[4] = outerEnd;
+              if (badUntil && tryInvalidateEscapedQuoted(line, contentStart2, 39, outerEnd, allowInvalidate, badUntil, 4)) {
+                return INVALIDATE_OUTER_SPAN;
+              }
+              p2 = scanUnclosedSegment(line, p2, 2, outerCode, stopCharCode, true);
               break;
-            } catch {
-              directory = uri.slice("file://".length);
+            }
+            if (isShellSingleQuoteEscape(line, p2 + 1)) {
+              if (isShellSingleQuoteEscape(line, p2 + 5)) {
+                p2 += 5;
+                continue;
+              }
+              const contentStart2 = p2 + 5;
+              const closeEnd2 = unclosedInOuter && contentStart2 < unclosedInOuter[4] ? -1 : scanClosedEscapedQuoted(line, contentStart2, 39, outerCode, false, outerEnd);
+              if (closeEnd2 !== -1) {
+                p2 = closeEnd2;
+                continue;
+              }
+              if (unclosedInOuter) unclosedInOuter[4] = outerEnd;
+              if (badUntil && tryInvalidateEscapedQuoted(line, contentStart2, 39, outerEnd, allowInvalidate, badUntil, 4)) {
+                return INVALIDATE_OUTER_SPAN;
+              }
+              p2 = scanUnclosedSegment(line, p2, 5, outerCode, stopCharCode, false);
               break;
+            }
+            p2 += 1;
+            break;
+          }
+          if (outerCode !== 39 && nextCode === 39 && p2 + 2 < n2 && line.charCodeAt(p2 + 2) === 39) {
+            p2 += 2;
+            continue;
+          }
+          const contentStart = p2 + 2;
+          const badIdx = nextCode === 39 ? 4 : 3;
+          const closeEnd = outerCode !== 0 && unclosedInOuter && contentStart < unclosedInOuter[badIdx] ? -1 : scanClosedEscapedQuoted(line, contentStart, nextCode, outerCode, outerAnsic, outerEnd);
+          if (closeEnd !== -1) {
+            p2 = closeEnd;
+            continue;
+          }
+          if (outerCode !== 0) {
+            if (unclosedInOuter) unclosedInOuter[badIdx] = outerEnd;
+            if (badUntil && tryInvalidateEscapedQuoted(line, contentStart, nextCode, outerEnd, allowInvalidate, badUntil, badIdx)) {
+              return INVALIDATE_OUTER_SPAN;
+            }
+          }
+          p2 = scanUnclosedSegment(line, p2, 2, outerCode, stopCharCode, outerAnsic);
+          break;
+        }
+        if (!isWhitespaceChar(nextCode, line, p2 + 1)) {
+          p2 += 2;
+          continue;
+        }
+      }
+      p2 += 1;
+      continue;
+    }
+    if (code === 96 || stopCharCode !== 0 && code === stopCharCode || (code < 128 ? UNCLOSED_STOP_ASCII[code] === 1 : /\s/.test(line[p2]))) {
+      break;
+    }
+    p2 += 1;
+  }
+  return p2;
+}
+function redactAssignmentsOnLine(line) {
+  const lastEq = line.lastIndexOf("=");
+  if (lastEq <= 0) return line;
+  const n2 = line.length;
+  let chunks = null;
+  let copiedTo = 0;
+  let outerCode = 0;
+  let outerAnsic = false;
+  let outerStart = -1;
+  let outerEnd = n2;
+  let prefixEnd = -1;
+  let sqFailUntil = 0;
+  let dqFailUntil = 0;
+  let ansicFailUntil = 0;
+  let nextEq = -1;
+  const unclosedInOuter = new Int32Array(5);
+  const badUntil = new Int32Array(5);
+  let i = 0;
+  while (i < lastEq) {
+    const firstCode = line.charCodeAt(i);
+    if (firstCode < 128 && KEY_CHAR_ASCII[firstCode] === 1) {
+      let j2 = i + 1;
+      while (j2 < lastEq) {
+        const jc = line.charCodeAt(j2);
+        if (jc >= 128 || KEY_CHAR_ASCII[jc] !== 1) break;
+        j2 += 1;
+      }
+      if (j2 <= lastEq && line.charCodeAt(j2) === 61) {
+        const prevCode = i > 0 ? line.charCodeAt(i - 1) : 32;
+        if (prevCode < 128 ? WORD_PREFIX_ASCII[prevCode] === 1 : /\s/.test(line[i - 1])) {
+          const key2 = line.slice(i, j2);
+          if (isSecretKey(key2)) {
+            const valStart = j2 + 1;
+            const stopCharCode = prevCode === 123 ? 125 : prevCode === 91 ? 93 : 0;
+            const allowInvalidate = outerCode !== 0 && i > outerStart + (outerAnsic ? 2 : 1);
+            let valEnd = scanSecretValue(
+              line,
+              valStart,
+              outerCode,
+              stopCharCode,
+              outerAnsic,
+              outerEnd,
+              allowInvalidate,
+              unclosedInOuter,
+              badUntil
+            );
+            if (valEnd === INVALIDATE_OUTER_SPAN) {
+              outerCode = 0;
+              outerAnsic = false;
+              outerStart = -1;
+              outerEnd = n2;
+              valEnd = scanSecretValue(line, valStart, 0, stopCharCode, false, n2, false, unclosedInOuter, badUntil);
+            }
+            if (valEnd > valStart) {
+              if (chunks === null) chunks = [];
+              chunks.push(line.slice(copiedTo, valStart), "<redacted>");
+              copiedTo = valEnd;
+              i = valEnd;
+              continue;
+            }
+            i = valStart;
+            continue;
+          }
+        }
+        i = j2 + 1;
+        continue;
+      }
+      if (outerCode === 0 && j2 < lastEq) {
+        const afterWord = line.charCodeAt(j2);
+        if (afterWord === 39 || afterWord === 34) {
+          i = j2 + 1;
+          continue;
+        }
+      }
+      i = j2;
+      continue;
+    }
+    if (outerCode === 0) {
+      if (firstCode === 92) {
+        if (i + 1 < n2) {
+          const nextCode = line.charCodeAt(i + 1);
+          if (nextCode === 36 || nextCode === 92) {
+            prefixEnd = i + 2;
+          }
+          i += 2;
+        } else {
+          i += 1;
+        }
+        continue;
+      }
+      if (firstCode === 36 && i + 1 < n2) {
+        const nextCode = line.charCodeAt(i + 1);
+        if (nextCode === 36) {
+          prefixEnd = i + 2;
+          i += 2;
+          continue;
+        }
+        if (nextCode === 39) {
+          if (i >= ansicFailUntil) {
+            const prevCode = i > 0 ? line.charCodeAt(i - 1) : 32;
+            if (i === prefixEnd || (prevCode < 128 ? WORD_PREFIX_ASCII[prevCode] === 1 : /\s/.test(line[i - 1]))) {
+              const closed = findMatchingOuterQuoteClose(line, i, 39, true);
+              if (closed !== -1 && isValidQuoteCloseBoundary(line, closed)) {
+                if (nextEq < i) nextEq = line.indexOf("=", i);
+                if (nextEq === -1) break;
+                if (closed < nextEq) {
+                  i = closed + 1;
+                  continue;
+                }
+                outerCode = 39;
+                outerAnsic = true;
+                outerStart = i;
+                outerEnd = closed;
+              } else {
+                ansicFailUntil = closed !== -1 ? closed : n2;
+              }
+            }
+          }
+          i += 2;
+          continue;
+        }
+      }
+      if (firstCode === 39 || firstCode === 34) {
+        const failUntil = firstCode === 39 ? sqFailUntil : dqFailUntil;
+        if (i >= failUntil) {
+          const prevCode = i > 0 ? line.charCodeAt(i - 1) : 32;
+          if (i === prefixEnd || (prevCode < 128 ? WORD_PREFIX_ASCII[prevCode] === 1 : /\s/.test(line[i - 1]))) {
+            const closed = findMatchingOuterQuoteClose(line, i, firstCode, false);
+            if (closed !== -1 && (isValidQuoteCloseBoundary(line, closed) || firstCode === 39 && isSecretDoubleQuotedAssignmentAt(line, i + 1))) {
+              if (nextEq < i) nextEq = line.indexOf("=", i);
+              if (nextEq === -1) break;
+              if (closed < nextEq) {
+                i = closed + 1;
+                continue;
+              }
+              outerCode = firstCode;
+              outerAnsic = false;
+              outerStart = i;
+              outerEnd = closed;
+            } else if (firstCode === 39) {
+              sqFailUntil = closed !== -1 ? closed : n2;
+            } else {
+              dqFailUntil = closed !== -1 ? closed : n2;
             }
           }
         }
       }
-      results.push({ id, name, directory, source: "antigravity" });
-    } catch {
+      i += 1;
       continue;
     }
-  }
-  return results;
-}
-function createRepository(db) {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS hc_trees(
-      project TEXT PRIMARY KEY,
-      body TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS hc_projects(
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      directory TEXT,
-      created TEXT NOT NULL,
-      updated TEXT NOT NULL
-    );
-  `);
-  const readStmt = db.prepare("SELECT body FROM hc_trees WHERE project = ?");
-  const writeStmt = db.prepare(
-    "INSERT INTO hc_trees(project, body) VALUES(?, ?) ON CONFLICT(project) DO UPDATE SET body = excluded.body"
-  );
-  const upsertProjectStmt = db.prepare(
-    `INSERT INTO hc_projects(id, name, directory, created, updated) VALUES(?, ?, ?, ?, ?)
-     ON CONFLICT(id) DO UPDATE SET name = excluded.name, directory = COALESCE(excluded.directory, hc_projects.directory), updated = excluded.updated`
-  );
-  function read2(project) {
-    const row = readStmt.get(project);
-    return row ? treeSchema.parse(JSON.parse(row.body)) : emptyTree();
-  }
-  function modify(project, work) {
-    db.exec("BEGIN IMMEDIATE");
-    try {
-      const tree = read2(project);
-      const result = work(tree);
-      writeStmt.run(project, JSON.stringify(treeSchema.parse(tree)));
-      db.exec("COMMIT");
-      return result;
-    } catch (error62) {
-      try {
-        db.exec("ROLLBACK");
-      } catch {
+    if (outerCode === 34) {
+      if (firstCode === 92) {
+        i += i + 1 < n2 ? 2 : 1;
+        continue;
       }
-      throw error62;
-    }
-  }
-  function act(project, action) {
-    modify(project, (tree) => {
-      const now = (/* @__PURE__ */ new Date()).toISOString();
-      const core = coreActions.safeParse(action);
-      if (core.success) applyCore(tree, core.data, now);
-      else applyPlanning(tree, planningActions.parse(action), now);
-    });
-  }
-  function applyEvidenceBatch(project, actions) {
-    modify(project, (tree) => {
-      const now = (/* @__PURE__ */ new Date()).toISOString();
-      for (const action of actions) {
-        const outcome2 = tree.outcomes.find((o) => o.key === action.key);
-        if (outcome2?.version !== action.version) {
-          throw new Error("Evidence batch no longer matches the contract version for " + action.key);
+      if (firstCode === 34) {
+        outerCode = 0;
+        outerAnsic = false;
+        outerStart = -1;
+        outerEnd = n2;
+      }
+    } else if (outerCode === 39) {
+      if (outerAnsic && firstCode === 92) {
+        i += i + 1 < n2 ? 2 : 1;
+        continue;
+      }
+      if (firstCode === 39) {
+        if (!outerAnsic && isShellSingleQuoteEscape(line, i)) {
+          i += 4;
+          continue;
         }
-        applyCore(tree, action, now);
-      }
-    });
-  }
-  function treeProjects() {
-    const rows = db.prepare("SELECT project FROM hc_trees").all();
-    return rows.map((row) => row.project);
-  }
-  function registerProject(input2) {
-    const directory = input2.directory ? resolve(input2.directory) : null;
-    const baseName = input2.name?.trim() || (directory ? basename(directory) : "") || input2.id?.trim() || "project";
-    const id = input2.id?.trim() || baseName.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "project";
-    const stamp2 = (/* @__PURE__ */ new Date()).toISOString();
-    upsertProjectStmt.run(id, baseName, directory, stamp2, stamp2);
-    return { id, name: baseName, directory, source: "registered" };
-  }
-  function listProjects() {
-    const byId = /* @__PURE__ */ new Map();
-    for (const p2 of readAntigravityProjects()) {
-      byId.set(p2.id, p2);
-    }
-    const registered = db.prepare("SELECT id, name, directory FROM hc_projects ORDER BY updated DESC").all();
-    for (const r2 of registered) {
-      const existing = byId.get(r2.id);
-      byId.set(r2.id, {
-        id: r2.id,
-        name: r2.name || existing?.name || r2.id,
-        directory: r2.directory ?? existing?.directory ?? null,
-        source: existing ? existing.source : "registered"
-      });
-    }
-    for (const id of treeProjects()) {
-      if (!byId.has(id)) {
-        byId.set(id, { id, name: id, directory: null, source: "tree" });
+        outerCode = 0;
+        outerAnsic = false;
+        outerStart = -1;
+        outerEnd = n2;
       }
     }
-    return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
+    i += 1;
   }
-  function getProject(idOrDir) {
-    const all = listProjects();
-    const byId = all.find((p2) => p2.id === idOrDir);
-    if (byId) return byId;
-    const byName = all.find((p2) => p2.name === idOrDir);
-    if (byName) return byName;
-    const abs = idOrDir.startsWith("/") ? resolve(idOrDir) : null;
-    if (abs) {
-      const byDir = all.find((p2) => p2.directory && resolve(p2.directory) === abs);
-      if (byDir) return byDir;
-    }
-    return null;
-  }
-  function resolveProjectId(override, directory) {
-    if (override && override.trim() !== "") {
-      const found = getProject(override.trim());
-      return found ? found.id : override.trim();
-    }
-    if (directory && directory.trim() !== "") {
-      const abs = resolve(directory.trim());
-      const found = getProject(abs);
-      if (found) return found.id;
-      const registered = registerProject({ directory: abs });
-      return registered.id;
-    }
-    const envProject = process.env.ANTIGRAVITY_PROJECT_ID;
-    if (envProject && envProject !== "outside-of-project") {
-      return envProject;
-    }
-    const all = listProjects();
-    if (all.length === 1 && all[0]) return all[0].id;
-    return "default";
-  }
-  function view(project, track2 = "main") {
-    return snapshot(read2(project), track2);
-  }
-  return {
-    db,
-    read: read2,
-    modify,
-    act,
-    applyEvidenceBatch,
-    projects: treeProjects,
-    listProjects,
-    getProject,
-    registerProject,
-    resolveProjectId,
-    view
-  };
+  if (chunks === null) return line;
+  chunks.push(line.slice(copiedTo));
+  return chunks.join("");
 }
-
-// src/runtime.ts
-import { existsSync as existsSync2, mkdirSync as mkdirSync2, readFileSync as readFileSync4, writeFileSync } from "node:fs";
-import { dirname as dirname3, join as join4, resolve as resolve3 } from "node:path";
-
-// src/state.ts
-var PLATEAU = 5;
-var BARS = "\u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588";
+function redactSecrets(command2) {
+  let redactedAssigns;
+  if (!command2.includes("\n") && !command2.includes("\r")) {
+    redactedAssigns = redactAssignmentsOnLine(command2);
+  } else {
+    const n2 = command2.length;
+    let out2 = "";
+    let pos = 0;
+    let changed = false;
+    while (pos < n2) {
+      let lineEnd = pos;
+      while (lineEnd < n2) {
+        const code = command2.charCodeAt(lineEnd);
+        if (code === 10 || code === 13) break;
+        lineEnd += 1;
+      }
+      const line = command2.slice(pos, lineEnd);
+      const redactedLine = redactAssignmentsOnLine(line);
+      if (redactedLine !== line) changed = true;
+      let sepEnd = lineEnd;
+      if (sepEnd < n2) {
+        if (command2.charCodeAt(sepEnd) === 13 && sepEnd + 1 < n2 && command2.charCodeAt(sepEnd + 1) === 10) {
+          sepEnd += 2;
+        } else {
+          sepEnd += 1;
+        }
+      }
+      out2 += redactedLine + command2.slice(lineEnd, sepEnd);
+      pos = sepEnd;
+    }
+    redactedAssigns = changed ? out2 : command2;
+  }
+  let out = redactedAssigns;
+  if (out.indexOf("b") !== -1 || out.indexOf("B") !== -1) {
+    out = out.replace(/\b(Bearer\s+|Basic\s+)[A-Za-z0-9._~+/=-]{8,}/gi, "$1<redacted>");
+  }
+  if (out.indexOf("sk-") !== -1 || out.indexOf("gh") !== -1 || out.indexOf("xox") !== -1 || out.indexOf("AKIA") !== -1) {
+    out = out.replace(
+      /\b(sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16})\b/g,
+      "<redacted>"
+    );
+  }
+  return out;
+}
 function number4(value) {
   if (!Number.isFinite(value)) return String(value);
   if (value === 0) return "0";
@@ -38807,8 +39724,8 @@ function summarize(files, recentLimit = 15, now = Date.now()) {
         kind: "step",
         result: row.result,
         score: typeof row.score === "number" ? row.score : null,
-        idea: row.idea ?? "",
-        note: row.result === "kept" ? "" : row.why ?? ""
+        idea: redactSecrets(row.idea ?? ""),
+        note: row.result === "kept" ? "" : redactSecrets(row.why ?? "")
       };
     }
     return {
@@ -38816,12 +39733,12 @@ function summarize(files, recentLimit = 15, now = Date.now()) {
       kind: String(row.kind),
       score: typeof row.score === "number" ? row.score : null,
       idea: "",
-      note: row.why ?? ""
+      note: redactSecrets(row.why ?? "")
     };
   });
   return {
     name: card.name,
-    goal: card.goal,
+    goal: redactSecrets(card.goal),
     branch: card.branch ?? null,
     direction: card.direction,
     baseline: card.baseline,
@@ -38837,14 +39754,14 @@ function summarize(files, recentLimit = 15, now = Date.now()) {
     checkSeconds: timed.length > 0 ? timed.reduce((total, value) => total + value, 0) / timed.length : null,
     trail,
     spark: spark(trail, card.direction),
-    raises: rows.filter((row) => row.kind === "raise").map((row) => row.why ?? ""),
-    holdouts: rows.filter((row) => row.kind === "holdout").map((row) => ({ score: typeof row.score === "number" ? row.score : 0, why: row.why ?? "" })),
+    raises: rows.filter((row) => row.kind === "raise").map((row) => redactSecrets(row.why ?? "")),
+    holdouts: rows.filter((row) => row.kind === "holdout").map((row) => ({ score: typeof row.score === "number" ? row.score : 0, why: redactSecrets(row.why ?? "") })),
     verdict,
     maxSteps: card.max_steps ?? null,
     maxHours: card.max_hours ?? null,
     pendingTree,
     hasHoldout: typeof card.holdout === "string" && card.holdout !== "",
-    notes: notes === null ? null : tail(notes, 40),
+    notes: notes === null ? null : redactSecrets(tail(notes, 40)),
     recent
   };
 }
@@ -38916,14 +39833,16 @@ function listClimbs(entries, now = Date.now()) {
   });
 }
 function formatRig(card) {
-  const checks = Array.isArray(card.check) ? card.check : typeof card.check === "string" ? [card.check] : [];
+  const checks = (Array.isArray(card.check) ? card.check : typeof card.check === "string" ? [card.check] : []).map(
+    redactSecrets
+  );
   const patterns = card.score ?? [];
-  const guards = card.guards ?? [];
+  const guards = (card.guards ?? []).map(redactSecrets);
   const locks = card.lock ?? [];
   const repos = card.repos ?? [];
   const rows = [];
   const bar = card.target === null ? `none (${card.direction} is the direction; no target set)` : `${number4(card.target)}${card.target_text && card.target_text !== String(card.target) ? ` (${card.target_text})` : ""}, then ${card.after ?? "stop"}`;
-  rows.push(["Goal", card.goal]);
+  rows.push(["Goal", redactSecrets(card.goal)]);
   rows.push(["Bar", bar]);
   rows.push(["Mode", card.score_mode ?? "failure-count (legacy card)"]);
   if (checks.length === 0) rows.push(["Check", "none recorded"]);
@@ -38943,7 +39862,7 @@ score: ${pattern}` : command2]);
   rows.push(["Guards", guards.length > 0 ? guards.join("\n") : "none \u2014 a kept step can break anything the check does not measure"]);
   rows.push([
     "Holdout",
-    typeof card.holdout === "string" && card.holdout !== "" ? `${card.holdout}
+    typeof card.holdout === "string" && card.holdout !== "" ? `${redactSecrets(card.holdout)}
 never read it again; run holdout --why "\u2026" at the bar` : "none \u2014 nothing catches overfitting to the visible cases"
   ]);
   rows.push(["Locked", locks.length > 0 ? locks.join("\n") : "none \u2014 nothing stops a step from editing the check"]);
@@ -38963,6 +39882,509 @@ never read it again; run holdout --why "\u2026" at the bar` : "none \u2014 nothi
   });
   return [head, ...body].join("\n");
 }
+
+// src/repository.ts
+function defaultDataDir() {
+  return process.env.HILLCLIMB_DATA_DIR || process.env.PLUGIN_DATA || join(homedir(), ".gemini", "antigravity", "plugin_data", "hillclimb");
+}
+var sleepBuf = new Int32Array(new SharedArrayBuffer(4));
+function sleepSync(ms) {
+  Atomics.wait(sleepBuf, 0, 0, Math.max(1, ms));
+}
+function isSqliteBusyError(error62) {
+  if (typeof error62 !== "object" || error62 === null) return false;
+  const e = error62;
+  if (typeof e.errcode === "number" && (e.errcode & 255) === 5) return true;
+  const msg = typeof e.message === "string" ? e.message : "";
+  const errstr = typeof e.errstr === "string" ? e.errstr : "";
+  return msg.includes("database is locked") || errstr.includes("database is locked");
+}
+function openDatabase(dataDir = defaultDataDir()) {
+  mkdirSync(dataDir, { recursive: true });
+  const dbPath = join(dataDir, "hillclimb.db");
+  const db = new DatabaseSync(dbPath, { timeout: 5e3 });
+  db.exec("PRAGMA busy_timeout = 5000;");
+  db.exec("PRAGMA wal_autocheckpoint = 200;");
+  const deadline = Date.now() + 5e3;
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      const mode = db.prepare("PRAGMA journal_mode").get()?.journal_mode;
+      if (mode?.toLowerCase() === "wal") {
+        break;
+      }
+      const nextMode = db.prepare("PRAGMA journal_mode = WAL").get()?.journal_mode;
+      if (nextMode?.toLowerCase() === "wal") {
+        break;
+      }
+      if (Date.now() >= deadline || attempt >= 150) {
+        break;
+      }
+    } catch (error62) {
+      if (!isSqliteBusyError(error62) || Date.now() >= deadline || attempt >= 150) {
+        try {
+          db.close();
+        } catch {
+        }
+        throw error62;
+      }
+    }
+    sleepSync(10 + Math.floor(Math.random() * 25));
+  }
+  return db;
+}
+var ANTIGRAVITY_PROJECTS_CACHE_TTL_MS = 5e3;
+var antigravityProjectsCache = null;
+function clearAntigravityProjectsCache() {
+  antigravityProjectsCache = null;
+}
+function readAntigravityProjects() {
+  const dir = join(homedir(), ".gemini", "config", "projects");
+  let dirMtimeMs = -1;
+  try {
+    dirMtimeMs = statSync(dir).mtimeMs;
+  } catch {
+    return [];
+  }
+  const now = Date.now();
+  if (antigravityProjectsCache && antigravityProjectsCache.dir === dir && antigravityProjectsCache.mtimeMs === dirMtimeMs && now - antigravityProjectsCache.at < ANTIGRAVITY_PROJECTS_CACHE_TTL_MS) {
+    return antigravityProjectsCache.projects.map((p2) => ({ ...p2 }));
+  }
+  const results = [];
+  for (const entry of readdirSync(dir)) {
+    if (!entry.endsWith(".json")) continue;
+    try {
+      const raw = JSON.parse(readFileSync(join(dir, entry), "utf8"));
+      if (raw.sidecar) continue;
+      const id = typeof raw.id === "string" ? raw.id : null;
+      const name = typeof raw.name === "string" ? raw.name : id;
+      if (!id || !name) continue;
+      let directory = null;
+      const resources = raw.projectResources?.resources;
+      if (Array.isArray(resources)) {
+        for (const res of resources) {
+          const gitFolder = res.gitFolder;
+          const folder = res.folder;
+          const uri = gitFolder?.folderUri ?? folder?.folderUri;
+          if (typeof uri === "string" && uri.startsWith("file://")) {
+            try {
+              directory = fileURLToPath(uri);
+              break;
+            } catch {
+              directory = uri.slice("file://".length);
+              break;
+            }
+          }
+        }
+      }
+      results.push({ id, name, directory, source: "antigravity" });
+    } catch {
+      continue;
+    }
+  }
+  antigravityProjectsCache = { dir, at: now, mtimeMs: dirMtimeMs, projects: results };
+  return results.map((p2) => ({ ...p2 }));
+}
+function sanitizeTreeSecrets(tree) {
+  let changed = false;
+  const redactField = (value) => {
+    const next = redactSecrets(value);
+    if (next !== value) changed = true;
+    return next;
+  };
+  for (const goal2 of tree.goals) {
+    goal2.title = redactField(goal2.title);
+    goal2.brief = redactField(goal2.brief);
+  }
+  for (const outcome2 of tree.outcomes) {
+    outcome2.title = redactField(outcome2.title);
+    outcome2.story = redactField(outcome2.story);
+    for (const criterion3 of outcome2.criteria) {
+      criterion3.given = redactField(criterion3.given);
+      criterion3.when = redactField(criterion3.when);
+      criterion3.then = redactField(criterion3.then);
+    }
+  }
+  for (const change2 of tree.changes) {
+    change2.proposed.title = redactField(change2.proposed.title);
+    change2.proposed.story = redactField(change2.proposed.story);
+    for (const criterion3 of change2.proposed.criteria) {
+      criterion3.given = redactField(criterion3.given);
+      criterion3.when = redactField(criterion3.when);
+      criterion3.then = redactField(criterion3.then);
+    }
+  }
+  for (const item of tree.evidence) {
+    item.source = redactField(item.source);
+    item.text = redactField(item.text);
+  }
+  for (const comment of tree.comments) {
+    comment.text = redactField(comment.text);
+    if (comment.answer !== null) {
+      comment.answer = redactField(comment.answer);
+    }
+  }
+  for (const act of tree.activity) {
+    act.text = redactField(act.text);
+  }
+  return changed;
+}
+function createRepository(db) {
+  function runInImmediateTx(fn) {
+    const deadline = Date.now() + 5e3;
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        db.exec("BEGIN IMMEDIATE");
+        break;
+      } catch (error62) {
+        if (!isSqliteBusyError(error62) || Date.now() >= deadline || attempt >= 150) {
+          throw error62;
+        }
+        sleepSync(10 + Math.floor(Math.random() * 25));
+      }
+    }
+    try {
+      const result = fn();
+      db.exec("COMMIT");
+      return result;
+    } catch (error62) {
+      try {
+        db.exec("ROLLBACK");
+      } catch {
+      }
+      throw error62;
+    }
+  }
+  const existingTableCount = db.prepare(
+    "SELECT COUNT(*) AS cnt FROM sqlite_master WHERE type = 'table' AND name IN ('hc_trees', 'hc_projects', 'hc_tree_meta')"
+  ).get()?.cnt ?? 0;
+  if (existingTableCount < 3) {
+    runInImmediateTx(() => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS hc_trees(
+          project TEXT PRIMARY KEY,
+          body TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS hc_projects(
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          directory TEXT,
+          created TEXT NOT NULL,
+          updated TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS hc_tree_meta(
+          project TEXT PRIMARY KEY,
+          goal_count INTEGER NOT NULL DEFAULT 0,
+          outcome_count INTEGER NOT NULL DEFAULT 0,
+          inbox_count INTEGER NOT NULL DEFAULT 0,
+          last_activity_at TEXT,
+          has_repo INTEGER NOT NULL DEFAULT 0,
+          updated TEXT NOT NULL
+        );
+      `);
+    });
+  }
+  const readStmt = db.prepare("SELECT body FROM hc_trees WHERE project = ?");
+  const writeStmt = db.prepare(
+    "INSERT INTO hc_trees(project, body) VALUES(?, ?) ON CONFLICT(project) DO UPDATE SET body = excluded.body"
+  );
+  const upsertProjectStmt = db.prepare(
+    `INSERT INTO hc_projects(id, name, directory, created, updated) VALUES(?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET name = excluded.name, directory = COALESCE(excluded.directory, hc_projects.directory), updated = excluded.updated`
+  );
+  const projectDirStmt = db.prepare("SELECT directory FROM hc_projects WHERE id = ?");
+  const hasMetaStmt = db.prepare("SELECT 1 FROM hc_tree_meta WHERE project = ? LIMIT 1");
+  const upsertMetaStmt = db.prepare(
+    `INSERT INTO hc_tree_meta(project, goal_count, outcome_count, inbox_count, last_activity_at, has_repo, updated)
+     VALUES(?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(project) DO UPDATE SET
+       goal_count = excluded.goal_count,
+       outcome_count = excluded.outcome_count,
+       inbox_count = excluded.inbox_count,
+       last_activity_at = excluded.last_activity_at,
+       has_repo = excluded.has_repo,
+       updated = excluded.updated`
+  );
+  const markMetaRepoStmt = db.prepare("UPDATE hc_tree_meta SET has_repo = 1 WHERE project = ?");
+  const sumInboxStmt = db.prepare("SELECT COALESCE(SUM(inbox_count), 0) AS total FROM hc_tree_meta");
+  const listMetaStmt = db.prepare(
+    "SELECT project, goal_count, outcome_count, inbox_count, last_activity_at, has_repo, updated FROM hc_tree_meta ORDER BY updated DESC"
+  );
+  function projectHasRepo(project) {
+    const reg = projectDirStmt.get(project);
+    if (reg?.directory) return true;
+    return readAntigravityProjects().some((p2) => p2.id === project && Boolean(p2.directory));
+  }
+  function computeTreeMeta(project, tree, stamp2 = (/* @__PURE__ */ new Date()).toISOString()) {
+    return {
+      goalCount: tree.goals.length,
+      outcomeCount: tree.outcomes.length,
+      inboxCount: tree.changes.filter((c) => c.state === "pending").length + tree.comments.filter((c) => c.answer === null).length,
+      lastActivityAt: tree.activity.length > 0 ? tree.activity[tree.activity.length - 1].at : null,
+      hasRepo: projectHasRepo(project),
+      updated: stamp2
+    };
+  }
+  const userVersion = db.prepare("PRAGMA user_version").get()?.user_version ?? 0;
+  if (userVersion < 1) {
+    runInImmediateTx(() => {
+      const currentVersion = db.prepare("PRAGMA user_version").get()?.user_version ?? 0;
+      if (currentVersion >= 1) return;
+      const rows = db.prepare("SELECT project, body FROM hc_trees").all();
+      const stamp2 = (/* @__PURE__ */ new Date()).toISOString();
+      for (const row of rows) {
+        const tree = treeSchema.parse(JSON.parse(row.body));
+        if (sanitizeTreeSecrets(tree)) {
+          writeStmt.run(row.project, JSON.stringify(tree));
+        }
+        const meta3 = computeTreeMeta(row.project, tree, stamp2);
+        upsertMetaStmt.run(
+          row.project,
+          meta3.goalCount,
+          meta3.outcomeCount,
+          meta3.inboxCount,
+          meta3.lastActivityAt,
+          meta3.hasRepo ? 1 : 0,
+          meta3.updated
+        );
+      }
+      db.exec("PRAGMA user_version = 1;");
+    });
+  } else {
+    const missingCount = db.prepare("SELECT COUNT(*) AS cnt FROM hc_trees t LEFT JOIN hc_tree_meta m ON m.project = t.project WHERE m.project IS NULL").get()?.cnt ?? 0;
+    if (missingCount > 0) {
+      runInImmediateTx(() => {
+        const missing = db.prepare("SELECT t.project, t.body FROM hc_trees t LEFT JOIN hc_tree_meta m ON m.project = t.project WHERE m.project IS NULL").all();
+        if (missing.length === 0) return;
+        const stamp2 = (/* @__PURE__ */ new Date()).toISOString();
+        for (const row of missing) {
+          const tree = treeSchema.parse(JSON.parse(row.body));
+          if (sanitizeTreeSecrets(tree)) {
+            writeStmt.run(row.project, JSON.stringify(tree));
+          }
+          const meta3 = computeTreeMeta(row.project, tree, stamp2);
+          upsertMetaStmt.run(
+            row.project,
+            meta3.goalCount,
+            meta3.outcomeCount,
+            meta3.inboxCount,
+            meta3.lastActivityAt,
+            meta3.hasRepo ? 1 : 0,
+            meta3.updated
+          );
+        }
+      });
+    }
+  }
+  function read2(project) {
+    const row = readStmt.get(project);
+    if (!row) return emptyTree();
+    const tree = treeSchema.parse(JSON.parse(row.body));
+    sanitizeTreeSecrets(tree);
+    return tree;
+  }
+  function modify(project, work) {
+    return runInImmediateTx(() => {
+      const row = readStmt.get(project);
+      const tree = row ? treeSchema.parse(JSON.parse(row.body)) : emptyTree();
+      const sanitizedBefore = sanitizeTreeSecrets(tree);
+      const beforeWork = JSON.stringify(tree);
+      const result = work(tree);
+      const sanitizedAfter = sanitizeTreeSecrets(tree);
+      const nextBody = JSON.stringify(tree);
+      const bodyChanged = row === void 0 || sanitizedBefore || sanitizedAfter || nextBody !== beforeWork;
+      const metaExists = hasMetaStmt.get(project) !== void 0;
+      if (bodyChanged || !metaExists) {
+        if (bodyChanged) {
+          writeStmt.run(project, nextBody);
+        }
+        const meta3 = computeTreeMeta(project, tree);
+        upsertMetaStmt.run(
+          project,
+          meta3.goalCount,
+          meta3.outcomeCount,
+          meta3.inboxCount,
+          meta3.lastActivityAt,
+          meta3.hasRepo ? 1 : 0,
+          meta3.updated
+        );
+      }
+      return result;
+    });
+  }
+  function act(project, action) {
+    modify(project, (tree) => {
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      const core = coreActions.safeParse(action);
+      if (core.success) applyCore(tree, core.data, now);
+      else applyPlanning(tree, planningActions.parse(action), now);
+    });
+  }
+  function actBatch(project, actions) {
+    if (actions.length === 0) return;
+    modify(project, (tree) => {
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      for (const action of actions) {
+        const core = coreActions.safeParse(action);
+        if (core.success) applyCore(tree, core.data, now);
+        else applyPlanning(tree, planningActions.parse(action), now);
+      }
+    });
+  }
+  function applyEvidenceBatch(project, actions) {
+    modify(project, (tree) => {
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      for (const action of actions) {
+        const outcome2 = tree.outcomes.find((o) => o.key === action.key);
+        if (outcome2?.version !== action.version) {
+          throw new Error("Evidence batch no longer matches the contract version for " + action.key);
+        }
+        applyCore(tree, action, now);
+      }
+    });
+  }
+  function treeProjects() {
+    const rows = db.prepare("SELECT project FROM hc_trees").all();
+    return rows.map((row) => row.project);
+  }
+  function registerProject(input2) {
+    const directory = input2.directory ? resolve(input2.directory) : null;
+    const baseName = input2.name?.trim() || (directory ? basename(directory) : "") || input2.id?.trim() || "project";
+    const id = input2.id?.trim() || baseName.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "project";
+    const stamp2 = (/* @__PURE__ */ new Date()).toISOString();
+    upsertProjectStmt.run(id, baseName, directory, stamp2, stamp2);
+    clearAntigravityProjectsCache();
+    if (directory) {
+      markMetaRepoStmt.run(id);
+    }
+    return { id, name: baseName, directory, source: "registered" };
+  }
+  function listProjects() {
+    const byId = /* @__PURE__ */ new Map();
+    for (const p2 of readAntigravityProjects()) {
+      byId.set(p2.id, p2);
+    }
+    const registered = db.prepare("SELECT id, name, directory FROM hc_projects ORDER BY updated DESC").all();
+    for (const r2 of registered) {
+      const existing = byId.get(r2.id);
+      byId.set(r2.id, {
+        id: r2.id,
+        name: r2.name || existing?.name || r2.id,
+        directory: r2.directory ?? existing?.directory ?? null,
+        source: existing ? existing.source : "registered"
+      });
+    }
+    for (const id of treeProjects()) {
+      if (!byId.has(id)) {
+        byId.set(id, { id, name: id, directory: null, source: "tree" });
+      }
+    }
+    return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }
+  function getProject(idOrDir) {
+    const all = listProjects();
+    const byId = all.find((p2) => p2.id === idOrDir);
+    if (byId) return byId;
+    const byName = all.find((p2) => p2.name === idOrDir);
+    if (byName) return byName;
+    const abs = idOrDir.startsWith("/") ? resolve(idOrDir) : null;
+    if (abs) {
+      const byDir = all.find((p2) => p2.directory && resolve(p2.directory) === abs);
+      if (byDir) return byDir;
+    }
+    return null;
+  }
+  function resolveProjectId(override, directory) {
+    if (override && override.trim() !== "") {
+      const found = getProject(override.trim());
+      return found ? found.id : override.trim();
+    }
+    if (directory && directory.trim() !== "") {
+      const abs = resolve(directory.trim());
+      const found = getProject(abs);
+      if (found) return found.id;
+      const registered = registerProject({ directory: abs });
+      return registered.id;
+    }
+    const envProject = process.env.ANTIGRAVITY_PROJECT_ID;
+    if (envProject && envProject !== "outside-of-project") {
+      return envProject;
+    }
+    const all = listProjects();
+    if (all.length === 1 && all[0]) return all[0].id;
+    return "default";
+  }
+  function view(project, track2 = "main") {
+    return snapshot(read2(project), track2);
+  }
+  function inboxCountTotal() {
+    return sumInboxStmt.get()?.total ?? 0;
+  }
+  function projectSummaries() {
+    const rows = listMetaStmt.all();
+    return rows.map((row) => ({
+      project: row.project,
+      goalCount: row.goal_count,
+      outcomeCount: row.outcome_count,
+      inboxCount: row.inbox_count,
+      lastActivityAt: row.last_activity_at,
+      hasRepo: row.has_repo !== 0,
+      updated: row.updated
+    }));
+  }
+  function checkpointWal() {
+    try {
+      db.exec("PRAGMA wal_checkpoint(TRUNCATE);");
+    } catch {
+    }
+  }
+  function close() {
+    checkpointWal();
+    try {
+      db.close();
+    } catch {
+    }
+  }
+  return {
+    db,
+    read: read2,
+    modify,
+    act,
+    actBatch,
+    applyEvidenceBatch,
+    projects: treeProjects,
+    listProjects,
+    getProject,
+    registerProject,
+    resolveProjectId,
+    view,
+    inboxCountTotal,
+    projectSummaries,
+    checkpointWal,
+    close
+  };
+}
+
+// src/runtime.ts
+import { existsSync as existsSync2, lstatSync, mkdirSync as mkdirSync3, readFileSync as readFileSync5, readlinkSync, realpathSync as realpathSync2, writeFileSync as writeFileSync2 } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename as basename3, dirname as dirname4, isAbsolute as isAbsolute2, join as join5, parse as parsePath, relative, resolve as resolve4, sep as sep2 } from "node:path";
+
+// src/repo-ops.ts
+import { existsSync, mkdirSync as mkdirSync2, readdirSync as readdirSync3, readFileSync as readFileSync3, realpathSync, statSync as statSync2, writeFileSync } from "node:fs";
+import { basename as basename2, dirname as dirname2, join as join3, resolve as resolve2, sep } from "node:path";
+import { homedir as homedir2 } from "node:os";
+
+// src/errors.ts
+var HillClimbError = class extends Error {
+  code;
+  hint;
+  constructor(message2, options) {
+    super(message2);
+    this.name = "HillClimbError";
+    this.code = options?.code ?? "hillclimb_error";
+    this.hint = options?.hint;
+  }
+};
 
 // src/engine.ts
 import { readFileSync as readFileSync2, readdirSync as readdirSync2 } from "node:fs";
@@ -38989,9 +40411,9 @@ function climbCommand(repoPath) {
 function stateDir(repoPath) {
   return joinPath(repoPath, STATE_DIR);
 }
-function resolvePath(base, relative) {
-  if (isAbsolute(relative)) return normalize(relative);
-  return normalize(join2(base, relative));
+function resolvePath(base, relative2) {
+  if (isAbsolute(relative2)) return normalize(relative2);
+  return normalize(join2(base, relative2));
 }
 function hasIgnoreRule(excludeText) {
   if (excludeText === null) return false;
@@ -39038,10 +40460,10 @@ function readEngineSource(name) {
 function bundledKitFiles() {
   readEngineSource("climb.py");
   const root = join2(cachedRoot, "..", "kits");
-  function collect(relative) {
-    const entries = readdirSync2(join2(root, relative), { withFileTypes: true });
+  function collect(relative2) {
+    const entries = readdirSync2(join2(root, relative2), { withFileTypes: true });
     return entries.sort((a, b) => a.name.localeCompare(b.name)).flatMap((entry) => {
-      const path = relative ? relative + "/" + entry.name : entry.name;
+      const path = relative2 ? relative2 + "/" + entry.name : entry.name;
       if (entry.isDirectory() && entry.name !== "__pycache__") return collect(path);
       if (!entry.isFile() || entry.name.startsWith(".") || !/\.(py|md|json|jsonl)$/.test(entry.name)) return [];
       return [{ path, content: readFileSync2(join2(root, path), "utf8") }];
@@ -39050,10 +40472,783 @@ function bundledKitFiles() {
   return collect("");
 }
 
+// src/repo-ops.ts
+var ENGINE_COMMANDS = [
+  'init <name> --goal "..." --check "<command>" --lock <check files>',
+  'try "<idea>"  [--fix]',
+  "status [name]",
+  'relock [name] --why "..."',
+  'holdout --why "..."',
+  'raise <bar> --why "..."',
+  'review "<what you found>"',
+  "budget [name] [--hours N] [--steps N] [--off]",
+  "drop [name]",
+  "list",
+  "save [name]",
+  "kits [words]",
+  "reuse <name or repo/name>"
+];
+function readLocalFile(path) {
+  try {
+    return { text: readFileSync3(path, "utf8"), error: null };
+  } catch (error62) {
+    return { text: null, error: error62 instanceof Error ? error62.message : String(error62) };
+  }
+}
+function writeLocalFile(path, content) {
+  mkdirSync2(dirname2(path), { recursive: true });
+  writeFileSync(path, content, "utf8");
+}
+function resolveRepoDirectory(directory) {
+  const target = directory && directory.trim() !== "" ? resolve2(directory.trim()) : process.cwd();
+  if (!existsSync(target)) {
+    throw new HillClimbError(`Directory does not exist: ${target}`, {
+      code: "missing_directory",
+      hint: "Pass an existing absolute git repository path."
+    });
+  }
+  return target;
+}
+var IGNORED_STATE_DIRS = /* @__PURE__ */ new Set(["engine", "bridge", "node_modules", "venv", "tmp", "cache"]);
+var CACHE_ONLY_EXTS = /\.(?:pyc|pyo|pyd|class|o|so|dylib|swp|swo)$/i;
+function isIgnoredStateDir(name) {
+  if (!name || name.startsWith(".") || name.startsWith("__")) return true;
+  return IGNORED_STATE_DIRS.has(name.toLowerCase());
+}
+function hasRealClimbContent(dir) {
+  try {
+    const stack = [dir];
+    let checked = 0;
+    while (stack.length > 0 && checked < 64) {
+      const current = stack.pop();
+      for (const entry of readdirSync3(current, { withFileTypes: true })) {
+        if (entry.name.startsWith(".") || entry.name === "__pycache__" || entry.name === "node_modules") continue;
+        checked += 1;
+        if (entry.isDirectory()) {
+          stack.push(join3(current, entry.name));
+        } else if (entry.isFile() && !CACHE_ONLY_EXTS.test(entry.name)) {
+          return true;
+        }
+      }
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+function discoverClimbs(repoPath) {
+  const base = stateDir(repoPath);
+  if (!existsSync(base)) return { climbs: [], prepared: [] };
+  const entries = readdirSync3(base, { withFileTypes: true });
+  const climbs = [];
+  const prepared = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory() || isIgnoredStateDir(entry.name)) continue;
+    const card = readCardFile(repoPath, entry.name);
+    if (entry.name === "kits" && card.text === null) continue;
+    if (card.text !== null) {
+      climbs.push(entry.name);
+    } else if (hasRealClimbContent(join3(base, entry.name))) {
+      prepared.push(entry.name);
+    }
+  }
+  return { climbs: climbs.sort(), prepared: prepared.sort() };
+}
+function preparedNote(prepared) {
+  if (prepared.length === 0) return "";
+  const list = prepared.join(", ");
+  return `
+
+Not a climb yet: ${list} \u2014 check files without a card.json, so init never completed there. Start it with: ${prepared.length === 1 ? `init ${list}` : "init <name>"}`;
+}
+function readCardFile(repoPath, name) {
+  return readLocalFile(joinPath(stateDir(repoPath), name, "card.json"));
+}
+function readRows(repoPath, name) {
+  const base = joinPath(stateDir(repoPath), name);
+  const log2 = readLocalFile(joinPath(base, "log.jsonl"));
+  return log2.text === null ? [] : parseLog(log2.text);
+}
+function readClimb(repoPath, wanted) {
+  const found = discoverClimbs(repoPath);
+  if (wanted !== void 0 && wanted !== "") {
+    const file3 = found.climbs.includes(wanted) ? readCardFile(repoPath, wanted) : { text: null, error: null };
+    if (file3.text === null) {
+      const why = found.prepared.includes(wanted) ? `${wanted} has check files but no card.json, so init never completed there. Start it with: ${climbCommand(repoPath)} init ${wanted}` : void 0;
+      throw new HillClimbError(`no climb named ${JSON.stringify(wanted)} in ${stateDir(repoPath)}`, {
+        code: "climb_not_found",
+        hint: why ?? (found.climbs.length > 0 ? `Climbs here: ${found.climbs.join(", ")}.` : `Start one with: ${climbCommand(repoPath)} init <name> \u2026`)
+      });
+    }
+    return { card: parseCard(file3.text), name: wanted };
+  }
+  const names = found.climbs;
+  if (names.length === 0) {
+    throw new HillClimbError(`no climb in ${stateDir(repoPath)}`, {
+      code: "no_climb",
+      hint: `Nothing is initialized here. Start one with: ${climbCommand(repoPath)} init <name> --goal "\u2026" --check "\u2026" --lock <check files>${preparedNote(found.prepared)}`
+    });
+  }
+  if (names.length > 1) {
+    throw new HillClimbError("name the climb: this repository has more than one", {
+      code: "ambiguous_climb",
+      hint: `Climbs here: ${names.join(", ")}.`
+    });
+  }
+  const only = names[0];
+  const file2 = readCardFile(repoPath, only);
+  if (file2.text === null) {
+    throw new HillClimbError(`climb directory ${only} has no readable card.json`, {
+      code: "climb_corrupt",
+      hint: file2.error ?? void 0
+    });
+  }
+  return { card: parseCard(file2.text), name: only };
+}
+function readState(repoPath, wanted) {
+  const { card, name } = readClimb(repoPath, wanted);
+  const base = joinPath(stateDir(repoPath), name);
+  const notes = readLocalFile(joinPath(base, "notes.md"));
+  const pending = readLocalFile(joinPath(base, "pending-tree"));
+  return {
+    name,
+    card,
+    rows: readRows(repoPath, name),
+    notes: notes.text,
+    pendingTree: pending.text !== null
+  };
+}
+function installEngine(repoPath) {
+  const wrote = [];
+  const target = engineDir(repoPath);
+  let exclude = null;
+  let warning = null;
+  const head = readLocalFile(joinPath(repoPath, ".git", "HEAD"));
+  const layout = head.text !== null ? excludePath(repoPath, { dotGitIsDirectory: true }) : (() => {
+    const pointer = readLocalFile(joinPath(repoPath, ".git"));
+    if (pointer.text === null) {
+      throw new HillClimbError(`${repoPath} is not a git repository`, {
+        code: "not_a_repository",
+        hint: "Hill Climb commits every kept step, so the target must be a git checkout."
+      });
+    }
+    const gitdir = /^gitdir:\s*(.+)$/m.exec(pointer.text);
+    const common = gitdir === null ? { text: null } : readLocalFile(joinPath(resolvePath(repoPath, gitdir[1]?.trim() ?? ""), "commondir"));
+    return excludePath(repoPath, {
+      dotGitIsDirectory: false,
+      dotGitText: pointer.text,
+      commonDirText: common.text
+    });
+  })();
+  exclude = layout.excludePath;
+  const existing = readLocalFile(layout.excludePath);
+  if (!hasIgnoreRule(existing.text)) {
+    try {
+      writeLocalFile(layout.excludePath, withIgnoreRule(existing.text));
+      wrote.push(layout.excludePath);
+    } catch (error62) {
+      warning = `could not write ${layout.excludePath}: ${error62 instanceof Error ? error62.message : String(error62)}`;
+    }
+  }
+  for (const name of ENGINE_FILES) {
+    writeLocalFile(engineFile(repoPath, name), readEngineSource(name));
+    wrote.push(engineFile(repoPath, name));
+  }
+  for (const kit of bundledKitFiles()) {
+    const path = joinPath(repoPath, ".hill-climb", "kits", kit.path);
+    writeLocalFile(path, kit.content);
+    wrote.push(path);
+  }
+  clearScanCache(repoPath);
+  return { engine: target, command: climbCommand(repoPath), wrote, exclude, warning };
+}
+function formatSetupText(result, repoPath) {
+  const lines = [
+    `Engine: ${result.engine}`,
+    `Benchmark kits: ${joinPath(repoPath, ".hill-climb", "kits")}`,
+    `CLIMB="${result.engine}/climb.py"`,
+    "",
+    "Next (write the check first, then start the climb in your own shell):",
+    `  ${result.command} init <name> --goal "\u2026" --check "<command>" --lock <check files>`,
+    `  ${result.command} try "<idea>"`,
+    `  ${result.command} status`,
+    "",
+    "Commands:",
+    ...ENGINE_COMMANDS.map((command2) => `  ${command2}`),
+    "",
+    `Read state without running checks: hillclimb_status (or hillclimb status --dir ${repoPath})`
+  ];
+  if (result.warning !== null) lines.push("", `Warning: ${result.warning}`);
+  return lines.join("\n");
+}
+function getClimbStatus(repoPath, name, last = 15) {
+  const state = readState(repoPath, name);
+  const summary = summarize(state, last);
+  const text3 = formatSummary(summary);
+  const next = summary.verdict === "bar-reached" ? `
+
+Next: run the holdout, then the final review \u2014 ${climbCommand(repoPath)} holdout --why final` : `
+
+Next step in your shell: ${climbCommand(repoPath)} try "<idea>"`;
+  return { summary, text: text3, textWithNext: `${text3}${next}`, directory: repoPath, engine: engineDir(repoPath) };
+}
+function getClimbCard(repoPath, name) {
+  const { card } = readClimb(repoPath, name);
+  return {
+    text: formatRig(card),
+    data: {
+      directory: repoPath,
+      name: card.name,
+      goal: redactSecrets(card.goal),
+      branch: card.branch ?? null,
+      base: card.base ?? null,
+      check: (Array.isArray(card.check) ? card.check : card.check === void 0 ? [] : [card.check]).map(redactSecrets),
+      score: card.score ?? [],
+      direction: card.direction,
+      target: card.target,
+      targetText: card.target_text ?? null,
+      after: card.after ?? "stop",
+      runs: card.runs ?? 1,
+      paired: card.paired ?? false,
+      scoreMode: card.score_mode ?? "failure-count",
+      minGain: card.min_gain ?? 0,
+      timeout: card.timeout ?? null,
+      guards: (card.guards ?? []).map(redactSecrets),
+      holdout: card.holdout ? redactSecrets(card.holdout) : null,
+      locked: card.lock ?? [],
+      fingerprint: card.fingerprint ?? null,
+      repos: (card.repos ?? []).map((repo) => repo.path),
+      maxSteps: card.max_steps ?? null,
+      maxHours: card.max_hours ?? null,
+      hard: card.hard ?? false
+    }
+  };
+}
+function getClimbList(repoPath) {
+  const { climbs: names, prepared } = discoverClimbs(repoPath);
+  const entries = [];
+  for (const name of names) {
+    const card = readCardFile(repoPath, name);
+    if (card.text === null) continue;
+    entries.push({ card: parseCard(card.text), rows: readRows(repoPath, name) });
+  }
+  const summaries = listClimbs(entries);
+  const text3 = entries.length === 0 ? `No climbs in ${stateDir(repoPath)}. Start one with: ${climbCommand(repoPath)} init <name> \u2026${preparedNote(prepared)}` : `${summaries.map((entry) => {
+    const verdict = entry.verdict === "climbing" ? "" : `  [${entry.verdict}]`;
+    return `${entry.name}: ${number4(entry.baseline)} -> ${number4(entry.best)} (${entry.direction}), ${entry.steps} steps${verdict}`;
+  }).join("\n")}${preparedNote(prepared)}`;
+  return { directory: repoPath, climbs: summaries, prepared, text: text3 };
+}
+function getClimbLog(repoPath, name, limit = 40) {
+  const { name: climbName } = readClimb(repoPath, name);
+  const rows = readRows(repoPath, climbName);
+  const slice = rows.slice(-limit).map((row) => ({
+    ...row,
+    ...typeof row.idea === "string" ? { idea: redactSecrets(row.idea) } : {},
+    ...typeof row.why === "string" ? { why: redactSecrets(row.why) } : {}
+  }));
+  const text3 = slice.map((row) => {
+    const score = typeof row.score === "number" ? number4(row.score) : "-";
+    const label = row.idea ?? row.why ?? "";
+    return `${row.time ?? ""}  ${row.kind.padEnd(9)} ${(row.result ?? "").padEnd(6)} ${score.padStart(10)}  ${label}`;
+  }).join("\n");
+  return { name: climbName, rows: slice, text: text3 === "" ? "No log rows." : text3 };
+}
+function getClimbNotes(repoPath, name) {
+  const { name: climbName } = readClimb(repoPath, name);
+  const notes = readLocalFile(joinPath(stateDir(repoPath), climbName, "notes.md"));
+  if (notes.text === null) {
+    throw new HillClimbError(`climb ${climbName} has no notes.md yet`, {
+      code: "no_notes",
+      hint: `Write a few lines after every 5 steps: ${joinPath(stateDir(repoPath), climbName, "notes.md")}`
+    });
+  }
+  return redactSecrets(notes.text);
+}
+function getClimbVerdict(repoPath, name) {
+  const state = readState(repoPath, name);
+  const summary = summarize(state, 0);
+  const line = verdictLine(summary);
+  return line === "" ? "CLIMBING" : line;
+}
+function statMtimeMs(path) {
+  try {
+    return statSync2(path).mtimeMs;
+  } catch {
+    return 0;
+  }
+}
+function statSignature(path) {
+  try {
+    const st = statSync2(path);
+    return { mtimeMs: st.mtimeMs, size: st.size };
+  } catch {
+    return null;
+  }
+}
+function isEnoent(error62) {
+  return error62?.code === "ENOENT";
+}
+function collectSampleFiles(dir, limit = 200) {
+  let count = 0;
+  let maxMtimeMs = statMtimeMs(dir);
+  const samples = [];
+  const stack = [{ full: dir, rel: "" }];
+  while (stack.length > 0 && count < limit) {
+    const cur = stack.pop();
+    let entries;
+    try {
+      entries = readdirSync3(cur.full, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name));
+    } catch {
+      continue;
+    }
+    for (const e of entries) {
+      if (count >= limit) break;
+      const rel = cur.rel ? `${cur.rel}/${e.name}` : e.name;
+      const fullPath = join3(cur.full, e.name);
+      if (e.isDirectory()) {
+        if (e.name !== "__pycache__") stack.push({ full: fullPath, rel });
+      } else if (e.isFile()) {
+        count += 1;
+        if (samples.length < 8) samples.push(rel);
+        const mtime = statMtimeMs(fullPath);
+        if (mtime > maxMtimeMs) maxMtimeMs = mtime;
+      }
+    }
+  }
+  return { count, samples, maxMtimeMs };
+}
+function classifyOrigin(dir, isMain) {
+  const norm = dir.replaceAll("\\", "/");
+  const base = basename2(dir);
+  if (isMain) return { origin: "checkout", workerLabel: "main checkout" };
+  if (norm.includes("/.gemini/antigravity/worktrees/")) {
+    const cleaned = base.replace(/^swarm-/, "").replace(/-[0-9a-f]{6,10}$/i, "");
+    return { origin: "antigravity", workerLabel: cleaned || base };
+  }
+  if (/\/\.[^/]+\/.*(?:worktree|storage|cache|plugins)/i.test(norm)) {
+    return { origin: "archived", workerLabel: base };
+  }
+  return { origin: "checkout", workerLabel: base };
+}
+function latestMtimeIso(dir) {
+  try {
+    return statSync2(dir).mtime.toISOString();
+  } catch {
+    return null;
+  }
+}
+function readWorktreeBranch(dir) {
+  try {
+    const dotGit = join3(dir, ".git");
+    let headPath = join3(dotGit, "HEAD");
+    if (!existsSync(headPath) && existsSync(dotGit)) {
+      const pointer = readFileSync3(dotGit, "utf8");
+      const m2 = /^gitdir:\s*(.+)$/m.exec(pointer);
+      if (m2?.[1]) headPath = join3(resolvePath(dir, m2[1].trim()), "HEAD");
+    }
+    if (!existsSync(headPath)) return null;
+    const head = readFileSync3(headPath, "utf8").trim();
+    const ref = /^ref:\s*refs\/heads\/(.+)$/.exec(head);
+    return ref?.[1] ?? head.slice(0, 10);
+  } catch {
+    return null;
+  }
+}
+function linkedWorktreesOf(repoPath, warnings) {
+  const seen = /* @__PURE__ */ new Set();
+  const normalizedMain = resolve2(repoPath);
+  const expectedGitDir = join3(normalizedMain, ".git").replaceAll("\\", "/");
+  const add = (candidate) => {
+    const abs = resolve2(candidate);
+    if (abs === normalizedMain || seen.has(abs)) return;
+    if (existsSync(abs)) seen.add(abs);
+  };
+  const gitWorktreesDir = join3(normalizedMain, ".git", "worktrees");
+  if (existsSync(gitWorktreesDir)) {
+    try {
+      for (const entry of readdirSync3(gitWorktreesDir, { withFileTypes: true })) {
+        if (!entry.isDirectory()) continue;
+        const gitdirFile = join3(gitWorktreesDir, entry.name, "gitdir");
+        if (!existsSync(gitdirFile)) continue;
+        const targetGitFile = readFileSync3(gitdirFile, "utf8").trim();
+        if (!targetGitFile) continue;
+        const wtDir = dirname2(resolve2(gitWorktreesDir, entry.name, targetGitFile));
+        add(wtDir);
+      }
+    } catch (error62) {
+      if (!isEnoent(error62)) {
+        warnings.push(`Failed to scan git worktrees in ${gitWorktreesDir}: ${error62 instanceof Error ? error62.message : String(error62)}`);
+      }
+    }
+  }
+  const agyWorktreesRoot = join3(homedir2(), ".gemini", "antigravity", "worktrees");
+  if (existsSync(agyWorktreesRoot)) {
+    try {
+      for (const conv of readdirSync3(agyWorktreesRoot, { withFileTypes: true })) {
+        if (!conv.isDirectory()) continue;
+        const convDir = join3(agyWorktreesRoot, conv.name);
+        for (const wt of readdirSync3(convDir, { withFileTypes: true })) {
+          if (!wt.isDirectory()) continue;
+          const wtPath = join3(convDir, wt.name);
+          const absWt = resolve2(wtPath);
+          if (absWt === normalizedMain || seen.has(absWt)) continue;
+          const dotGit = join3(wtPath, ".git");
+          try {
+            const pointer = readFileSync3(dotGit, "utf8").replaceAll("\\", "/");
+            if (pointer.includes(expectedGitDir)) {
+              add(wtPath);
+            }
+          } catch (error62) {
+            const code = error62?.code;
+            if (code !== "ENOENT" && code !== "EISDIR") {
+              warnings.push(`Failed to read worktree pointer ${dotGit}: ${error62 instanceof Error ? error62.message : String(error62)}`);
+            }
+          }
+        }
+      }
+    } catch (error62) {
+      if (!isEnoent(error62)) {
+        warnings.push(`Failed to scan Antigravity worktrees in ${agyWorktreesRoot}: ${error62 instanceof Error ? error62.message : String(error62)}`);
+      }
+    }
+  }
+  return [...seen];
+}
+function conversationIdFromPath(dir) {
+  const norm = dir.replaceAll("\\", "/");
+  const m2 = /\/\.gemini\/antigravity\/worktrees\/([0-9a-f-]{36})\//i.exec(norm);
+  return m2?.[1] ?? null;
+}
+var SCAN_CACHE_TTL_MS = 4e3;
+var LIVE_RECENCY_MS = 15 * 60 * 1e3;
+var CLIMB_STAT_MEMO_MAX = 500;
+var scanCache = /* @__PURE__ */ new Map();
+var climbStatMemo = /* @__PURE__ */ new Map();
+function safeRealpath(path) {
+  try {
+    return realpathSync(path);
+  } catch {
+    return null;
+  }
+}
+function mainCheckoutOf(dir) {
+  try {
+    const dotGit = join3(dir, ".git");
+    if (!existsSync(dotGit)) return null;
+    const st = statSync2(dotGit);
+    if (st.isDirectory()) return resolve2(dir);
+    if (!st.isFile()) return null;
+    const pointer = readFileSync3(dotGit, "utf8");
+    const m2 = /^gitdir:\s*(.+)$/m.exec(pointer);
+    if (!m2?.[1]) return null;
+    const gitDir = resolve2(dir, m2[1].trim());
+    const commonDirPath = join3(gitDir, "commondir");
+    if (existsSync(commonDirPath)) {
+      const relCommon = readFileSync3(commonDirPath, "utf8").trim();
+      if (relCommon) {
+        const commonGitDir = resolve2(gitDir, relCommon);
+        return dirname2(commonGitDir);
+      }
+    }
+    const norm = gitDir.replaceAll("\\", "/");
+    const idx = norm.lastIndexOf("/.git/worktrees/");
+    if (idx > 0) return resolve2(norm.slice(0, idx));
+    return null;
+  } catch {
+    return null;
+  }
+}
+function clearScanCache(repoPath) {
+  if (!repoPath) {
+    scanCache.clear();
+    climbStatMemo.clear();
+    return;
+  }
+  const abs = resolve2(repoPath);
+  const mainCheckout = mainCheckoutOf(abs);
+  if (!mainCheckout) {
+    scanCache.clear();
+    climbStatMemo.clear();
+    return;
+  }
+  const targets = /* @__PURE__ */ new Set([abs, resolve2(mainCheckout)]);
+  for (const p2 of [abs, resolve2(mainCheckout)]) {
+    const real = safeRealpath(p2);
+    if (real) targets.add(real);
+  }
+  for (const key2 of scanCache.keys()) {
+    const sepIdx = key2.indexOf("|");
+    const keyRoot = sepIdx >= 0 ? key2.slice(0, sepIdx) : key2;
+    if (targets.has(keyRoot)) {
+      scanCache.delete(key2);
+      continue;
+    }
+    const realKeyRoot = safeRealpath(keyRoot);
+    if (realKeyRoot && targets.has(realKeyRoot)) {
+      scanCache.delete(key2);
+    }
+  }
+  const isUnderTargets = (candidate) => {
+    for (const target of targets) {
+      if (candidate === target || candidate.startsWith(`${target}${sep}`)) return true;
+    }
+    return false;
+  };
+  for (const climbDir of climbStatMemo.keys()) {
+    if (isUnderTargets(climbDir)) {
+      climbStatMemo.delete(climbDir);
+      continue;
+    }
+    const realClimbDir = safeRealpath(climbDir);
+    if (realClimbDir && isUnderTargets(realClimbDir)) {
+      climbStatMemo.delete(climbDir);
+    }
+  }
+}
+function scanProjectClimbs(repoPath, opts) {
+  if (!repoPath || !existsSync(repoPath)) {
+    return {
+      projectDirectory: repoPath,
+      engineInstalled: false,
+      worktreesScanned: 0,
+      currentCount: 0,
+      archivedCount: 0,
+      climbs: [],
+      warnings: []
+    };
+  }
+  const normalizedMain = resolve2(repoPath);
+  const bypassCache = Boolean(opts?.bypassCache || opts?.force);
+  const rowLimit = opts?.rowLimit === void 0 ? 50 : Math.max(0, Math.floor(opts.rowLimit));
+  const includeNotes = opts?.includeNotes ?? true;
+  const cacheKey = `${normalizedMain}|${rowLimit}|${includeNotes ? 1 : 0}`;
+  const nowMs = Date.now();
+  if (!bypassCache) {
+    const cached2 = scanCache.get(cacheKey);
+    if (cached2 && nowMs - cached2.at < SCAN_CACHE_TTL_MS) {
+      return cached2.value;
+    }
+  }
+  const warnings = [];
+  const engineInstalled = existsSync(engineFile(normalizedMain, "climb.py"));
+  const worktrees = linkedWorktreesOf(normalizedMain, warnings);
+  const roots = [normalizedMain, ...worktrees];
+  const climbs = [];
+  for (const root of roots) {
+    const isMain = root === normalizedMain;
+    const baseStateDir = stateDir(root);
+    if (!existsSync(baseStateDir)) continue;
+    const found = discoverClimbs(root);
+    if (found.climbs.length === 0 && found.prepared.length === 0) continue;
+    const branch = readWorktreeBranch(root);
+    const worktreeName = basename2(root);
+    const conversationId = conversationIdFromPath(root);
+    const { origin, workerLabel } = classifyOrigin(root, isMain);
+    const parsedEntries = [];
+    for (const dirName of found.climbs) {
+      const climbDir = joinPath(baseStateDir, dirName);
+      try {
+        const cardPath = joinPath(climbDir, "card.json");
+        const logPath = joinPath(climbDir, "log.jsonl");
+        const lastPath = joinPath(climbDir, "last.txt");
+        const cardSig = statSignature(cardPath);
+        if (!cardSig) continue;
+        const logSig = statSignature(logPath);
+        const lastMtimeMs = statMtimeMs(lastPath);
+        const logMtimeMs = logSig?.mtimeMs ?? 0;
+        const logSize = logSig?.size ?? 0;
+        const latestMtimeMs = Math.max(cardSig.mtimeMs, logMtimeMs, lastMtimeMs);
+        const memo2 = !bypassCache ? climbStatMemo.get(climbDir) : void 0;
+        if (memo2 && memo2.cardMtimeMs === cardSig.mtimeMs && memo2.cardSize === cardSig.size && memo2.logMtimeMs === logMtimeMs && memo2.logSize === logSize) {
+          parsedEntries.push({
+            dirName,
+            climbDir,
+            card: memo2.card,
+            rows: memo2.rows,
+            summary: memo2.summary,
+            checks: memo2.checks,
+            latestMtimeMs
+          });
+          continue;
+        }
+        const cardText = readFileSync3(cardPath, "utf8");
+        const card = parseCard(cardText);
+        const logText = logSig ? readFileSync3(logPath, "utf8") : "";
+        const rows = logText === "" ? [] : parseLog(logText);
+        const pendingTree = existsSync(joinPath(climbDir, "pending-tree"));
+        const summary = summarize({ card, rows, notes: null, pendingTree }, 0, nowMs);
+        const checks = Array.isArray(card.check) ? card.check : card.check === void 0 ? [] : [card.check];
+        if (climbStatMemo.size >= CLIMB_STAT_MEMO_MAX) {
+          climbStatMemo.clear();
+        }
+        climbStatMemo.set(climbDir, {
+          cardMtimeMs: cardSig.mtimeMs,
+          cardSize: cardSig.size,
+          logMtimeMs,
+          logSize,
+          card,
+          rows,
+          summary,
+          checks
+        });
+        parsedEntries.push({ dirName, climbDir, card, rows, summary, checks, latestMtimeMs });
+      } catch (error62) {
+        warnings.push(
+          `Failed to read climb ${dirName} in ${root}: ${error62 instanceof Error ? error62.message : String(error62)}`
+        );
+        continue;
+      }
+    }
+    const canonicalNames = new Set(
+      parsedEntries.filter((e) => !e.card.name || e.card.name === e.dirName).map((e) => e.dirName)
+    );
+    const referencedSiblingDirs = /* @__PURE__ */ new Set();
+    const refRegex = /\.hill-climb\/([^/\s"'`]+)/g;
+    for (const entry of parsedEntries) {
+      if (!canonicalNames.has(entry.dirName)) continue;
+      const card = entry.card;
+      const texts = [...entry.checks, ...card.guards ?? [], ...card.lock ?? [], ...card.holdout ? [card.holdout] : []];
+      for (const text3 of texts) {
+        for (const match of text3.matchAll(refRegex)) {
+          const refDir = match[1];
+          if (refDir && refDir !== entry.dirName && refDir !== "engine" && refDir !== "kits" && refDir !== "bridge") {
+            referencedSiblingDirs.add(refDir);
+          }
+        }
+      }
+    }
+    for (const { dirName: name, climbDir, card, rows: allRows, summary, checks, latestMtimeMs } of parsedEntries) {
+      const cardName = card.name?.trim() || name;
+      if (cardName !== name && (canonicalNames.has(cardName) || referencedSiblingDirs.has(name) || allRows.length === 0)) {
+        continue;
+      }
+      const rows = rowLimit === 0 ? [] : allRows.slice(-rowLimit).map((r2) => ({
+        kind: r2.kind,
+        step: typeof r2.step === "number" && Number.isFinite(r2.step) ? r2.step : null,
+        result: r2.result ?? null,
+        score: typeof r2.score === "number" ? r2.score : null,
+        idea: typeof r2.idea === "string" ? redactSecrets(r2.idea) : null,
+        why: typeof r2.why === "string" ? redactSecrets(r2.why) : null,
+        time: r2.time ?? null,
+        commit: null
+      }));
+      const rawTargetText = card.target_text ?? null;
+      const targetTextMatches = rawTargetText !== null && (summary.target === null || Number.isFinite(Number(rawTargetText)) && Math.abs(Number(rawTargetText) - summary.target) < 1e-9);
+      const isLive = (summary.verdict === "climbing" || summary.verdict === "plateau") && latestMtimeMs > 0 && nowMs - latestMtimeMs <= LIVE_RECENCY_MS;
+      const rawNotes = includeNotes ? readLocalFile(joinPath(climbDir, "notes.md")).text : null;
+      const notes = rawNotes === null ? null : redactSecrets(rawNotes);
+      const updatedAt = allRows[allRows.length - 1]?.time ?? (latestMtimeMs > 0 ? new Date(latestMtimeMs).toISOString() : latestMtimeIso(climbDir));
+      climbs.push({
+        id: `${root}::${name}`,
+        name,
+        status: "active",
+        origin,
+        isLive,
+        directory: root,
+        worktreeName,
+        workerLabel,
+        isMainCheckout: isMain,
+        conversationId,
+        branch: card.branch ?? branch,
+        goal: typeof card.goal === "string" ? redactSecrets(card.goal) : null,
+        direction: card.direction,
+        baseline: summary.baseline,
+        best: summary.best,
+        target: summary.target,
+        targetText: targetTextMatches ? rawTargetText : null,
+        steps: summary.steps,
+        kept: summary.kept,
+        undone: Math.max(0, summary.steps - summary.kept),
+        sinceGain: summary.sinceGain,
+        verdict: summary.verdict,
+        sparkline: summary.spark,
+        check: checks.map(redactSecrets),
+        guards: (card.guards ?? []).map(redactSecrets),
+        holdout: card.holdout ? redactSecrets(card.holdout) : null,
+        locked: card.lock ?? [],
+        scoreMode: card.score_mode ?? "failure-count",
+        rows,
+        notes,
+        bestCommit: card.best.commit?.trim() || null,
+        preparedFiles: 0,
+        preparedSampleFiles: [],
+        updatedAt
+      });
+    }
+    for (const name of found.prepared) {
+      if (name === "bridge" || referencedSiblingDirs.has(name)) continue;
+      const dir = joinPath(baseStateDir, name);
+      const { count, samples, maxMtimeMs } = collectSampleFiles(dir);
+      const isLive = maxMtimeMs > 0 && nowMs - maxMtimeMs <= LIVE_RECENCY_MS;
+      climbs.push({
+        id: `${root}::${name}`,
+        name,
+        status: "prepared",
+        origin,
+        isLive,
+        directory: root,
+        worktreeName,
+        workerLabel,
+        isMainCheckout: isMain,
+        conversationId,
+        branch,
+        goal: null,
+        direction: null,
+        baseline: null,
+        best: null,
+        target: null,
+        targetText: null,
+        steps: 0,
+        kept: 0,
+        undone: 0,
+        sinceGain: 0,
+        verdict: "preparing",
+        sparkline: "",
+        check: [],
+        guards: [],
+        holdout: null,
+        locked: [],
+        scoreMode: null,
+        rows: [],
+        notes: null,
+        bestCommit: null,
+        preparedFiles: count,
+        preparedSampleFiles: samples,
+        updatedAt: maxMtimeMs > 0 ? new Date(maxMtimeMs).toISOString() : latestMtimeIso(dir)
+      });
+    }
+  }
+  const timeMs2 = (v2) => {
+    if (!v2) return 0;
+    const ms = Date.parse(v2.includes("T") ? v2 : v2.replace(" ", "T"));
+    return Number.isFinite(ms) ? ms : 0;
+  };
+  const originRank = (o) => o === "antigravity" ? 0 : o === "checkout" ? 1 : 2;
+  climbs.sort((a, b) => {
+    if (originRank(a.origin) !== originRank(b.origin)) return originRank(a.origin) - originRank(b.origin);
+    if (a.isLive !== b.isLive) return a.isLive ? -1 : 1;
+    return timeMs2(b.updatedAt) - timeMs2(a.updatedAt) || a.name.localeCompare(b.name);
+  });
+  const currentCount = climbs.filter((c) => c.origin !== "archived" || c.isLive).length;
+  const archivedCount = climbs.length - currentCount;
+  const result = {
+    projectDirectory: normalizedMain,
+    engineInstalled,
+    worktreesScanned: worktrees.length,
+    currentCount,
+    archivedCount,
+    climbs,
+    warnings
+  };
+  scanCache.set(cacheKey, { at: Date.now(), value: result });
+  return result;
+}
+
 // src/search-bridge.ts
 import { createHash } from "node:crypto";
-import { readFileSync as readFileSync3, readdirSync as readdirSync3 } from "node:fs";
-import { dirname as dirname2, join as join3, resolve as resolve2 } from "node:path";
+import { readFileSync as readFileSync4, readdirSync as readdirSync4 } from "node:fs";
+import { dirname as dirname3, join as join4, resolve as resolve3 } from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 var BridgeError = class extends Error {
   code;
@@ -39924,11 +42119,11 @@ function receiptText(marker, state, line) {
 }
 function receiptSource(marker, state, line) {
   const verified = line.at === "" ? "" : ` at ${line.at}`;
-  return `${state.identity} \xB7 ${line.command}${verified} \xB7 binding ${marker.binding.digest.slice(0, 12)}`;
+  return `${state.identity} \xB7 ${redactSecrets(line.command)}${verified} \xB7 binding ${marker.binding.digest.slice(0, 12)}`;
 }
 async function readRepo(files, root, marker) {
-  const relative = marker.runDir !== "" ? marker.runDir : `.hill-climb/${climbNameFor(marker.runId)}`;
-  const base = joinPath(root, relative);
+  const relative2 = marker.runDir !== "" ? marker.runDir : `.hill-climb/${climbNameFor(marker.runId)}`;
+  const base = joinPath(root, relative2);
   const cardText = await files.read(`${base}/card.json`);
   let card = null;
   try {
@@ -39937,7 +42132,7 @@ async function readRepo(files, root, marker) {
     card = null;
   }
   if (card === null) {
-    return { live: emptyLive(), holdout: null, identity: "", reason: `no card.json under ${relative}: init never completed` };
+    return { live: emptyLive(), holdout: null, identity: "", reason: `no card.json under ${relative2}: init never completed` };
   }
   const rows = parseLog(await files.read(`${base}/log.jsonl`) ?? "");
   const holdouts = rows.filter((row) => row.kind === "holdout" && finite(row.score) !== null);
@@ -39956,7 +42151,7 @@ async function readRepo(files, root, marker) {
       id,
       parent: bestStep === 0 ? "baseline" : `step-${bestStep}`,
       score: finite(row.score),
-      label: typeof row.idea === "string" && row.idea !== "" ? row.idea : String(row.result ?? "step"),
+      label: typeof row.idea === "string" && row.idea !== "" ? redactSecrets(row.idea) : String(row.result ?? "step"),
       at: at(row.time)
     });
     if (row.result === "kept") bestStep = step;
@@ -39971,7 +42166,8 @@ async function readRepo(files, root, marker) {
     holdout: lastHoldout === null ? null : number4(finite(lastHoldout.score) ?? 0)
   };
   const identity = `climb ${card.name}${card.best.commit ? `@${card.best.commit.slice(0, 12)}` : ""}${card.branch ? ` (${card.branch})` : ""}, ${kept.length} steps kept`;
-  const reached = lastHoldout !== null && finite(lastHoldout.visible) === card.best.score;
+  const lastVisible = finite(lastHoldout?.visible);
+  const reached = lastHoldout !== null && lastVisible !== null && lastVisible === card.best.score;
   return {
     live,
     holdout: reached ? finite(lastHoldout.score) : null,
@@ -40248,16 +42444,16 @@ function localPort(root = process.cwd()) {
   return {
     async read(path) {
       try {
-        return readFileSync3(resolve2(root, path), "utf8");
+        return readFileSync4(resolve3(root, path), "utf8");
       } catch {
         return null;
       }
     },
     async list(path) {
-      const dir = resolve2(root, path);
+      const dir = resolve3(root, path);
       try {
-        return readdirSync3(dir, { withFileTypes: true }).map((entry) => ({
-          path: join3(dir, entry.name),
+        return readdirSync4(dir, { withFileTypes: true }).map((entry) => ({
+          path: join4(dir, entry.name),
           name: entry.name,
           kind: entry.isDirectory() ? "directory" : "file"
         }));
@@ -40268,13 +42464,13 @@ function localPort(root = process.cwd()) {
   };
 }
 function assetCandidates() {
-  const here = dirname2(fileURLToPath3(import.meta.url));
-  return [join3(here, "..", "assets", "bridge"), join3(here, "assets", "bridge"), join3(here, "..", "..", "assets", "bridge")];
+  const here = dirname3(fileURLToPath3(import.meta.url));
+  return [join4(here, "..", "assets", "bridge"), join4(here, "assets", "bridge"), join4(here, "..", "..", "assets", "bridge")];
 }
 function receiptScript() {
   for (const root of assetCandidates()) {
     try {
-      return readFileSync3(join3(root, "receipt.py"), "utf8");
+      return readFileSync4(join4(root, "receipt.py"), "utf8");
     } catch {
       continue;
     }
@@ -40401,23 +42597,156 @@ var defaults = () => ({
   maxAttempts: MAX_ATTEMPTS,
   reconcileIntervalMs: RECONCILE_INTERVAL_MS,
   staleAfterMs: Math.max(RECONCILE_INTERVAL_MS * 4, 12e4),
-  automatic: false
+  automatic: false,
+  disableConversationService: false,
+  allowEphemeralConversationService: false
 });
+function parseRigFromRecipeMarker(recipe2) {
+  const markerFile = recipe2.files.find((file2) => file2.path === recipe2.markerPath);
+  if (!markerFile) return null;
+  try {
+    const parsed = JSON.parse(markerFile.content);
+    if (!parsed.rig || typeof parsed.rig !== "object") return null;
+    const candidate = parsed.rig;
+    if (candidate.engine !== "repo" && candidate.engine !== "search") return null;
+    return candidate;
+  } catch {
+    return null;
+  }
+}
+function parseAncestorsFromPrompt(rawPrompt) {
+  const header = "## Briefs you inherit";
+  const start = rawPrompt.indexOf(header);
+  if (start === -1) return [];
+  const afterHeader = start + header.length;
+  const nextSection = rawPrompt.indexOf("\n## ", afterHeader);
+  const block = (nextSection === -1 ? rawPrompt.slice(afterHeader) : rawPrompt.slice(afterHeader, nextSection)).trim();
+  const goals = [];
+  for (const line of block.split("\n")) {
+    const match = /^- \*\*(.+)\*\* — (.*)$/.exec(line);
+    if (!match) continue;
+    goals.push({
+      key: "",
+      parentGoalKey: null,
+      title: match[1],
+      brief: match[2],
+      rank: goals.length,
+      created: ""
+    });
+  }
+  return goals;
+}
+function escapeRegExp(text3) {
+  return text3.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+function redactRigForDisplay(rig) {
+  if (rig.engine === "repo") {
+    return {
+      ...rig,
+      check: rig.check.map(redactSecrets),
+      guard: rig.guard.map(redactSecrets),
+      holdout: redactSecrets(rig.holdout),
+      lock: rig.lock.map(redactSecrets),
+      ...rig.score !== void 0 ? { score: rig.score.map(redactSecrets) } : {},
+      ...rig.preflight !== void 0 ? { preflight: redactSecrets(rig.preflight) } : {},
+      ...rig.minGain !== void 0 ? { minGain: redactSecrets(rig.minGain) } : {}
+    };
+  }
+  return {
+    ...rig,
+    metric: redactSecrets(rig.metric),
+    verifier: redactSecrets(rig.verifier),
+    baseline: redactSecrets(rig.baseline),
+    ...rig.budget !== void 0 ? { budget: redactSecrets(rig.budget) } : {},
+    ...rig.agent !== void 0 ? { agent: redactSecrets(rig.agent) } : {},
+    ...rig.model !== void 0 ? { model: redactSecrets(rig.model) } : {},
+    ...rig.runner !== void 0 ? { runner: redactSecrets(rig.runner) } : {}
+  };
+}
 function workerPrompt(brief2) {
   const { outcome: outcome2, recipe: recipe2 } = brief2;
+  const rawPrompt = recipe2.prompt.trim();
+  const missingCriteria = outcome2.criteria.filter((criterion3) => !rawPrompt.includes(criterion3.id));
+  let safePrompt = rawPrompt;
+  const displayRig = brief2.rig ?? parseRigFromRecipeMarker(recipe2);
+  let rebuilt = false;
+  if (displayRig !== null) {
+    try {
+      const ancestors = brief2.ancestors ?? parseAncestorsFromPrompt(rawPrompt);
+      const safeOutcome = {
+        ...outcome2,
+        title: redactSecrets(outcome2.title),
+        story: redactSecrets(outcome2.story),
+        criteria: outcome2.criteria.map((criterion3) => ({
+          ...criterion3,
+          given: redactSecrets(criterion3.given),
+          when: redactSecrets(criterion3.when),
+          then: redactSecrets(criterion3.then)
+        }))
+      };
+      const safeAncestors = ancestors.map((goal2) => ({
+        ...goal2,
+        title: redactSecrets(goal2.title),
+        brief: redactSecrets(goal2.brief)
+      }));
+      const safeRig = redactRigForDisplay(displayRig);
+      const dirMatch = new RegExp(`^Outcome \\\`${escapeRegExp(outcome2.key)}\\\` v${outcome2.version} in (.+)\\.$`, "m").exec(rawPrompt);
+      const displayWorkspace = { directory: dirMatch?.[1] ?? "." };
+      const displayRecipe = recipe({
+        workspace: displayWorkspace,
+        outcome: safeOutcome,
+        ancestors: safeAncestors,
+        engine: brief2.engine,
+        rig: safeRig,
+        runId: brief2.runId,
+        track: brief2.track
+      });
+      safePrompt = displayRecipe.prompt.trim();
+      const origDigest12 = recipe2.binding.digest.slice(0, 12);
+      const dispDigest12 = displayRecipe.binding.digest.slice(0, 12);
+      if (origDigest12 && dispDigest12 && origDigest12 !== dispDigest12) {
+        safePrompt = safePrompt.replaceAll(dispDigest12, origDigest12);
+      }
+      if (displayRecipe.proof !== recipe2.proof) {
+        safePrompt = safePrompt.replaceAll(displayRecipe.proof, redactSecrets(recipe2.proof));
+      }
+      rebuilt = true;
+    } catch {
+      rebuilt = false;
+    }
+  }
+  if (!rebuilt) {
+    for (const criterion3 of outcome2.criteria) {
+      const rawLine = `- **${criterion3.id}** \u2014 given ${criterion3.given}, when ${criterion3.when}, then ${criterion3.then}`;
+      if (safePrompt.includes(rawLine)) {
+        const safeLine = `- **${redactSecrets(criterion3.id)}** \u2014 given ${redactSecrets(criterion3.given)}, when ${redactSecrets(criterion3.when)}, then ${redactSecrets(criterion3.then)}`;
+        safePrompt = safePrompt.replaceAll(rawLine, safeLine);
+      }
+    }
+    const safeTitle = redactSecrets(outcome2.title);
+    if (safeTitle !== outcome2.title && outcome2.title.length > 0) {
+      safePrompt = safePrompt.replaceAll(`# Climb: ${outcome2.title}`, `# Climb: ${safeTitle}`);
+    }
+    const safeStory = redactSecrets(outcome2.story);
+    if (safeStory !== outcome2.story && outcome2.story.length > 0) {
+      safePrompt = safePrompt.replaceAll(outcome2.story, safeStory);
+    }
+  }
+  safePrompt = redactSecrets(safePrompt);
   const lines = [
-    `<!-- hillclimb: run ${recipe2.runId} \xB7 ${brief2.key} v${brief2.version} \xB7 track ${brief2.track} \xB7 engine ${brief2.engine} \xB7 project ${brief2.projectId} -->`,
+    `<!-- hillclimb: run ${redactSecrets(recipe2.runId)} \xB7 ${redactSecrets(brief2.key)} v${brief2.version} \xB7 track ${redactSecrets(brief2.track)} \xB7 engine ${brief2.engine} \xB7 project ${redactSecrets(brief2.projectId)} -->`,
     "",
-    `Workspace directory: \`${brief2.directory}\``,
+    `Workspace directory: \`${redactSecrets(brief2.directory)}\``,
     "",
-    recipe2.prompt.trim(),
+    safePrompt,
     ""
   ];
-  const missingCriteria = outcome2.criteria.filter((criterion3) => !recipe2.prompt.includes(criterion3.id));
   if (missingCriteria.length) {
     lines.push("## Criteria this run must prove", "");
     for (const criterion3 of missingCriteria) {
-      lines.push(`- \`${criterion3.id}\` given ${criterion3.given}, when ${criterion3.when}, then ${criterion3.then}`);
+      lines.push(
+        `- \`${redactSecrets(criterion3.id)}\` given ${redactSecrets(criterion3.given)}, when ${redactSecrets(criterion3.when)}, then ${redactSecrets(criterion3.then)}`
+      );
     }
     lines.push("");
   }
@@ -40425,13 +42754,79 @@ function workerPrompt(brief2) {
     "## Limits this dispatch set",
     "- Work inside the configured repository checkout. Do not push, do not deploy, and do not move a branch someone else works on.",
     "- Use the configured engine, verifier and budget in this checkout.",
-    `- The receipt is the verifier's record. Run \`${recipe2.proof}\` exactly once at the bar; do not write, edit or hand-set a receipt line. The bridge re-checks the verifier's own record and refuses anything it cannot re-run.`,
+    `- The receipt is the verifier's record. Run \`${redactSecrets(recipe2.proof)}\` exactly once at the bar; do not write, edit or hand-set a receipt line. The bridge re-checks the verifier's own record and refuses anything it cannot re-run.`,
     "- Stop at the bar, at a plateau, or after two refusals for the same reason, and say which one it was.",
     "- When finished, call `hillclimb_search_summit` to verify the receipt landed in the ledger."
   );
-  return lines.join("\n");
+  return redactSecrets(lines.join("\n"));
 }
-async function callConversationService(method, body) {
+function isTruthyEnv(value) {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized === "1" || normalized === "true";
+}
+function isTestHarnessArg(arg) {
+  if (arg === "--test" || arg.startsWith("--test=") || arg.startsWith("--test-")) return true;
+  return /(?:^|[\\/=])(?:tsx|vitest|jest|mocha)(?:[\\/.]|$)/i.test(arg);
+}
+function isTestHarnessEntrypoint(entry) {
+  if (!entry) return false;
+  if (/(?:^|[\\/])node_modules[\\/](?:tsx|vitest|jest|mocha)(?:[\\/]|$)/i.test(entry)) return true;
+  const file2 = basename3(entry);
+  if (/^(?:tsx|vitest|jest|mocha)(?:\.[cm]?[jt]s)?$/i.test(file2)) return true;
+  return /\.(?:test|spec)\.[cm]?[jt]s$/i.test(file2);
+}
+function isTestHarnessEnvironment() {
+  if (process.env.NODE_TEST_CONTEXT) return true;
+  if (isTruthyEnv(process.env.VITEST) || process.env.VITEST_WORKER_ID || process.env.JEST_WORKER_ID) return true;
+  if (process.execArgv.some(isTestHarnessArg)) return true;
+  if (isTestHarnessEntrypoint(process.argv[1])) return true;
+  for (const arg of process.argv.slice(2)) {
+    if (arg === "--") break;
+    if (arg === "--test" || arg.startsWith("--test=")) return true;
+  }
+  return false;
+}
+function safeCwd() {
+  try {
+    return process.cwd();
+  } catch {
+    return tmpdir();
+  }
+}
+function isEphemeralTempDirectory(directory) {
+  const resolvedDir = resolve4(directory);
+  const canonDir = canonicalPath(resolvedDir);
+  const rawRoots = [tmpdir(), "/tmp", "/private/tmp", "/var/folders", "/private/var/folders"];
+  for (const rawRoot of rawRoots) {
+    if (!rawRoot) continue;
+    const resRoot = resolve4(rawRoot);
+    if (resRoot !== parsePath(resRoot).root) {
+      if (isSameOrInside(resRoot, resolvedDir) || isSameOrInside(resRoot, canonDir)) return true;
+    }
+    const canonRoot = canonicalPath(resRoot);
+    if (canonRoot !== parsePath(canonRoot).root) {
+      if (isSameOrInside(canonRoot, resolvedDir) || isSameOrInside(canonRoot, canonDir)) return true;
+    }
+  }
+  return false;
+}
+function conversationServiceGuardReason(options) {
+  if (isTruthyEnv(process.env.HILLCLIMB_DISABLE_CONVERSATION_SERVICE)) {
+    return "disabled_by_env";
+  }
+  if (options?.disableConversationService) {
+    return "disabled_by_option";
+  }
+  const allowTestOrEphemeral = Boolean(options?.allowEphemeralConversationService) || isTruthyEnv(process.env.HILLCLIMB_ALLOW_TEST_CONVERSATION_SERVICE);
+  if (!allowTestOrEphemeral) {
+    if (isTestHarnessEnvironment()) return "blocked_test_harness";
+    if (options?.directory && isEphemeralTempDirectory(options.directory)) return "blocked_ephemeral_directory";
+  }
+  return null;
+}
+async function callConversationService(method, body, guardOptions) {
+  if (conversationServiceGuardReason(guardOptions) !== null) return null;
   const address = process.env.ANTIGRAVITY_LS_ADDRESS;
   const token = process.env.ANTIGRAVITY_CSRF_TOKEN;
   if (!address || !token) return null;
@@ -40453,24 +42848,24 @@ async function callConversationService(method, body) {
 }
 function ensureGitExclude(repoPath, extraRules) {
   try {
-    const dotGitHead = join4(repoPath, ".git", "HEAD");
+    const dotGitHead = join5(repoPath, ".git", "HEAD");
     let excludeFile;
     if (existsSync2(dotGitHead)) {
       excludeFile = excludePath(repoPath, { dotGitIsDirectory: true }).excludePath;
     } else {
-      const dotGit = join4(repoPath, ".git");
+      const dotGit = join5(repoPath, ".git");
       if (!existsSync2(dotGit)) return;
-      const pointer = readFileSync4(dotGit, "utf8");
+      const pointer = readFileSync5(dotGit, "utf8");
       const match = /^gitdir:\s*(.+)$/m.exec(pointer);
       const commonPath = match?.[1] ? joinPath(resolvePath(repoPath, match[1].trim()), "commondir") : null;
-      const commonText = commonPath && existsSync2(commonPath) ? readFileSync4(commonPath, "utf8") : null;
+      const commonText = commonPath && existsSync2(commonPath) ? readFileSync5(commonPath, "utf8") : null;
       excludeFile = excludePath(repoPath, {
         dotGitIsDirectory: false,
         dotGitText: pointer,
         commonDirText: commonText
       }).excludePath;
     }
-    let text3 = existsSync2(excludeFile) ? readFileSync4(excludeFile, "utf8") : "";
+    let text3 = existsSync2(excludeFile) ? readFileSync5(excludeFile, "utf8") : "";
     let changed = false;
     if (!hasIgnoreRule(text3)) {
       text3 = withIgnoreRule(text3);
@@ -40479,15 +42874,15 @@ function ensureGitExclude(repoPath, extraRules) {
     for (const rule of extraRules) {
       const lines = text3.split("\n").map((l) => l.trim());
       if (!lines.includes(rule)) {
-        const sep = text3 === "" || text3.endsWith("\n") ? "" : "\n";
-        text3 = `${text3}${sep}${rule}
+        const sep3 = text3 === "" || text3.endsWith("\n") ? "" : "\n";
+        text3 = `${text3}${sep3}${rule}
 `;
         changed = true;
       }
     }
     if (changed) {
-      mkdirSync2(dirname3(excludeFile), { recursive: true });
-      writeFileSync(excludeFile, text3, "utf8");
+      mkdirSync3(dirname4(excludeFile), { recursive: true });
+      writeFileSync2(excludeFile, text3, "utf8");
     }
   } catch {
   }
@@ -40528,6 +42923,8 @@ function createRuntime(repo, overrides = {}) {
     CREATE UNIQUE INDEX IF NOT EXISTS hc_runs_one_live
       ON hc_runs(project_id,key,track) WHERE state IN ('dispatching','live');
     CREATE INDEX IF NOT EXISTS hc_runs_thread ON hc_runs(thread_id);
+    CREATE INDEX IF NOT EXISTS hc_runs_project_state ON hc_runs(project_id,state);
+    CREATE INDEX IF NOT EXISTS hc_runs_project_key_track ON hc_runs(project_id,key,track);
     CREATE TABLE IF NOT EXISTS hc_receipts(
       receipt_id TEXT PRIMARY KEY,
       run_id TEXT NOT NULL,
@@ -40751,8 +43148,8 @@ function createRuntime(repo, overrides = {}) {
     ensureGitExclude(directory, ["/.hillclimb/bridge/"]);
     for (const file2 of recipe2.files) {
       const fullPath = resolveInside(directory, file2.path);
-      mkdirSync2(dirname3(fullPath), { recursive: true });
-      writeFileSync(fullPath, file2.content, "utf8");
+      mkdirSync3(dirname4(fullPath), { recursive: true });
+      writeFileSync2(fullPath, file2.content, "utf8");
     }
   }
   function claimOf(projectId, key2) {
@@ -40913,7 +43310,7 @@ function createRuntime(repo, overrides = {}) {
       );
     }
     const projectInfo = repo.getProject(projectId);
-    const directory = options?.directory ? resolve3(options.directory) : projectInfo?.directory ? resolve3(projectInfo.directory) : null;
+    const directory = options?.directory ? resolve4(options.directory) : projectInfo?.directory ? resolve4(projectInfo.directory) : null;
     if (!directory || !existsSync2(directory)) {
       throw new RuntimeError(
         "no_checkout",
@@ -40928,7 +43325,7 @@ function createRuntime(repo, overrides = {}) {
     } catch (error62) {
       throw new RuntimeError("bridge_refused", message(error62));
     }
-    const brief2 = workerPrompt({ projectId, key: key2, track: track2, engine, runId, version: outcome2.version, outcome: outcome2, recipe: recipe2, directory });
+    const brief2 = workerPrompt({ projectId, key: key2, track: track2, engine, runId, version: outcome2.version, outcome: outcome2, recipe: recipe2, directory, rig, ancestors });
     const attempt = (failedAttemptsStmt.get(projectId, key2, track2, outcome2.version)?.n ?? 0) + 1;
     const launches = launchesInFlightStmt.get()?.n ?? 0;
     if (launches >= deps.maxConcurrentLaunches) {
@@ -41012,6 +43409,7 @@ function createRuntime(repo, overrides = {}) {
     }
     try {
       materialize(directory, recipe2);
+      clearScanCache(directory);
     } catch (error62) {
       retire(runId, "failed", `materialize failed: ${message(error62)}`);
       throw new RuntimeError("materialize_failed", `Could not write verifier files into ${directory}: ${message(error62)}`);
@@ -41030,12 +43428,22 @@ function createRuntime(repo, overrides = {}) {
         launchMode: "client_message"
       };
     }
-    const created = await callConversationService("CreateConversation", {
-      ...projectInfo?.source === "antigravity" ? { projectId } : {},
-      title: `Climb ${key2} \xB7 ${engine}`,
-      tags: ["hillclimb", `run:${runId}`, `outcome:${key2}`],
-      prompt: [{ text: brief2 }]
-    });
+    const created = await callConversationService(
+      "CreateConversation",
+      {
+        ...projectInfo?.source === "antigravity" ? { projectId } : {},
+        title: `Climb ${key2} \xB7 ${engine}`,
+        tags: ["hillclimb", `run:${runId}`, `outcome:${key2}`],
+        prompt: [{ text: brief2 }]
+      },
+      {
+        directory,
+        disableConversationService: Boolean(options?.disableConversationService || deps.disableConversationService),
+        allowEphemeralConversationService: Boolean(
+          options?.allowEphemeralConversationService || deps.allowEphemeralConversationService
+        )
+      }
+    );
     const convId = created?.conversation?.id ?? null;
     if (convId) {
       attachWorker(runId, convId);
@@ -41211,9 +43619,18 @@ function createRuntime(repo, overrides = {}) {
     }
     let convRunState = null;
     if (row.thread_id && !row.thread_id.startsWith("local:")) {
-      const conv = await callConversationService("GetConversation", {
-        conversationId: row.thread_id
-      });
+      const guardDirectory = row.directory || (isEphemeralTempDirectory(safeCwd()) ? safeCwd() : repo.getProject(row.project_id)?.directory ?? safeCwd());
+      const conv = await callConversationService(
+        "GetConversation",
+        {
+          conversationId: row.thread_id
+        },
+        {
+          directory: guardDirectory,
+          disableConversationService: deps.disableConversationService,
+          allowEphemeralConversationService: deps.allowEphemeralConversationService
+        }
+      );
       convRunState = conv?.state?.runState ?? null;
     }
     const seen = convRunState === "RUN_STATE_RUNNING" ? "active" : convRunState === "RUN_STATE_IDLE" ? "idle" : row.thread_id?.startsWith("local:") ? "local" : "unknown";
@@ -41372,627 +43789,111 @@ function sameSet(left, right) {
   const set2 = new Set(left);
   return right.every((item) => set2.has(item));
 }
-function resolveInside(root, path) {
-  if (path.startsWith("/")) return path;
-  return root.replace(/\/$/, "") + "/" + path.replace(/^\.\//, "");
+var MAX_SYMLINK_HOPS = 40;
+function isSameOrInside(basePath, candidatePath) {
+  const rel = relative(basePath, candidatePath);
+  return rel === "" || rel !== ".." && !rel.startsWith(`..${sep2}`) && !rel.startsWith("../") && !isAbsolute2(rel);
+}
+function isStrictlyInside(basePath, candidatePath) {
+  const rel = relative(basePath, candidatePath);
+  return rel !== "" && rel !== ".." && !rel.startsWith(`..${sep2}`) && !rel.startsWith("../") && !isAbsolute2(rel);
+}
+function canonicalPath(p2) {
+  const abs = resolve4(p2);
+  const missing = [];
+  let cur = abs;
+  while (true) {
+    try {
+      const real = realpathSync2(cur);
+      return missing.length ? join5(real, ...missing) : real;
+    } catch (error62) {
+      const code = error62?.code;
+      if (code !== "ENOENT" && code !== "ENOTDIR") {
+        throw error62;
+      }
+      const parent = dirname4(cur);
+      if (parent === cur) {
+        return abs;
+      }
+      missing.unshift(basename3(cur));
+      cur = parent;
+    }
+  }
+}
+function resolveSegments(startDir, segments, state, boundary, originalTargetPath) {
+  let cur = startDir;
+  for (const seg of segments) {
+    if (!seg || seg === ".") continue;
+    if (seg === "..") {
+      const parent = dirname4(cur);
+      if (boundary !== null && !isSameOrInside(boundary, parent)) {
+        throw new RuntimeError("path_outside_root", `Refusing symlink path outside workspace root: ${originalTargetPath}`);
+      }
+      cur = parent;
+      continue;
+    }
+    const next = join5(cur, seg);
+    let stat2;
+    try {
+      stat2 = lstatSync(next);
+    } catch (error62) {
+      const code = error62?.code;
+      if (code === "ENOENT" || code === "ENOTDIR") {
+        cur = next;
+        continue;
+      }
+      if (code === "ELOOP") {
+        throw new RuntimeError("path_outside_root", `Refusing symlink loop in path: ${originalTargetPath}`);
+      }
+      throw error62;
+    }
+    if (stat2.isSymbolicLink()) {
+      state.hops += 1;
+      if (state.hops > MAX_SYMLINK_HOPS) {
+        throw new RuntimeError("path_outside_root", `Refusing symlink loop in path: ${originalTargetPath}`);
+      }
+      const rawLink = readlinkSync(next);
+      if (!rawLink || rawLink.includes("\0")) {
+        throw new RuntimeError("path_outside_root", `Refusing invalid symlink target for path: ${originalTargetPath}`);
+      }
+      const linkSegs = rawLink.split(/[\\/]+/).filter(Boolean);
+      if (isAbsolute2(rawLink)) {
+        const fsRoot = parsePath(rawLink).root || sep2;
+        const resolvedAbs = resolveSegments(fsRoot, linkSegs, state, null, originalTargetPath);
+        const canonAbs = canonicalPath(resolvedAbs);
+        if (boundary !== null && (!isSameOrInside(boundary, resolvedAbs) || !isSameOrInside(boundary, canonAbs))) {
+          throw new RuntimeError("path_outside_root", `Refusing symlink path outside workspace root: ${originalTargetPath}`);
+        }
+        cur = canonAbs;
+      } else {
+        cur = resolveSegments(dirname4(next), linkSegs, state, boundary, originalTargetPath);
+      }
+    } else {
+      cur = next;
+    }
+  }
+  return cur;
+}
+function resolveInside(root, targetPath) {
+  if (!targetPath || targetPath.includes("\0")) {
+    throw new RuntimeError("path_outside_root", `Refusing invalid path ${JSON.stringify(targetPath)}`);
+  }
+  const base = resolve4(root);
+  const resolved = resolve4(base, targetPath);
+  const rel = relative(base, resolved);
+  if (!isStrictlyInside(base, resolved)) {
+    throw new RuntimeError("path_outside_root", `Refusing path outside workspace root: ${targetPath}`);
+  }
+  const baseReal = canonicalPath(base);
+  const segments = rel.split(sep2).filter(Boolean);
+  const finalResolved = resolveSegments(baseReal, segments, { hops: 0 }, baseReal, targetPath);
+  if (!isStrictlyInside(baseReal, finalResolved)) {
+    throw new RuntimeError("path_outside_root", `Refusing symlink path outside workspace root: ${targetPath}`);
+  }
+  return resolved;
 }
 function message(error62) {
   return error62 instanceof Error ? error62.message : String(error62);
-}
-
-// src/repo-ops.ts
-import { existsSync as existsSync3, mkdirSync as mkdirSync3, readdirSync as readdirSync4, readFileSync as readFileSync5, statSync, writeFileSync as writeFileSync2 } from "node:fs";
-import { basename as basename2, dirname as dirname4, join as join5, resolve as resolve4 } from "node:path";
-import { homedir as homedir2 } from "node:os";
-
-// src/errors.ts
-var HillClimbError = class extends Error {
-  code;
-  hint;
-  constructor(message2, options) {
-    super(message2);
-    this.name = "HillClimbError";
-    this.code = options?.code ?? "hillclimb_error";
-    this.hint = options?.hint;
-  }
-};
-
-// src/repo-ops.ts
-var ENGINE_COMMANDS = [
-  'init <name> --goal "..." --check "<command>" --lock <check files>',
-  'try "<idea>"  [--fix]',
-  "status [name]",
-  'relock [name] --why "..."',
-  'holdout --why "..."',
-  'raise <bar> --why "..."',
-  'review "<what you found>"',
-  "budget [name] [--hours N] [--steps N] [--off]",
-  "drop [name]",
-  "list",
-  "save [name]",
-  "kits [words]",
-  "reuse <name or repo/name>"
-];
-function readLocalFile(path) {
-  try {
-    return { text: readFileSync5(path, "utf8"), error: null };
-  } catch (error62) {
-    return { text: null, error: error62 instanceof Error ? error62.message : String(error62) };
-  }
-}
-function writeLocalFile(path, content) {
-  mkdirSync3(dirname4(path), { recursive: true });
-  writeFileSync2(path, content, "utf8");
-}
-function resolveRepoDirectory(directory) {
-  const target = directory && directory.trim() !== "" ? resolve4(directory.trim()) : process.cwd();
-  if (!existsSync3(target)) {
-    throw new HillClimbError(`Directory does not exist: ${target}`, {
-      code: "missing_directory",
-      hint: "Pass an existing absolute git repository path."
-    });
-  }
-  return target;
-}
-var IGNORED_STATE_DIRS = /* @__PURE__ */ new Set(["engine", "bridge", "node_modules", "venv", "tmp", "cache"]);
-var CACHE_ONLY_EXTS = /\.(?:pyc|pyo|pyd|class|o|so|dylib|swp|swo)$/i;
-function isIgnoredStateDir(name) {
-  if (!name || name.startsWith(".") || name.startsWith("__")) return true;
-  return IGNORED_STATE_DIRS.has(name.toLowerCase());
-}
-function hasRealClimbContent(dir) {
-  try {
-    const stack = [dir];
-    let checked = 0;
-    while (stack.length > 0 && checked < 64) {
-      const current = stack.pop();
-      for (const entry of readdirSync4(current, { withFileTypes: true })) {
-        if (entry.name.startsWith(".") || entry.name === "__pycache__" || entry.name === "node_modules") continue;
-        checked += 1;
-        if (entry.isDirectory()) {
-          stack.push(join5(current, entry.name));
-        } else if (entry.isFile() && !CACHE_ONLY_EXTS.test(entry.name)) {
-          return true;
-        }
-      }
-    }
-  } catch {
-    return false;
-  }
-  return false;
-}
-function redactSecrets(command2) {
-  return command2.replace(
-    /\b([A-Z0-9_]*(?:TOKEN|SECRET|KEY|PASSWORD|PASS|CREDENTIAL|AUTH)[A-Z0-9_]*)=("[^"]*"|'[^']*'|[^\s]+)/gi,
-    "$1=<redacted>"
-  ).replace(/\b(Bearer\s+)[A-Za-z0-9._~+/=-]{8,}/g, "$1<redacted>");
-}
-function discoverClimbs(repoPath) {
-  const base = stateDir(repoPath);
-  if (!existsSync3(base)) return { climbs: [], prepared: [] };
-  const entries = readdirSync4(base, { withFileTypes: true });
-  const climbs = [];
-  const prepared = [];
-  for (const entry of entries) {
-    if (!entry.isDirectory() || isIgnoredStateDir(entry.name)) continue;
-    const card = readCardFile(repoPath, entry.name);
-    if (entry.name === "kits" && card.text === null) continue;
-    if (card.text !== null) {
-      climbs.push(entry.name);
-    } else if (hasRealClimbContent(join5(base, entry.name))) {
-      prepared.push(entry.name);
-    }
-  }
-  return { climbs: climbs.sort(), prepared: prepared.sort() };
-}
-function preparedNote(prepared) {
-  if (prepared.length === 0) return "";
-  const list = prepared.join(", ");
-  return `
-
-Not a climb yet: ${list} \u2014 check files without a card.json, so init never completed there. Start it with: ${prepared.length === 1 ? `init ${list}` : "init <name>"}`;
-}
-function readCardFile(repoPath, name) {
-  return readLocalFile(joinPath(stateDir(repoPath), name, "card.json"));
-}
-function readRows(repoPath, name) {
-  const base = joinPath(stateDir(repoPath), name);
-  const log2 = readLocalFile(joinPath(base, "log.jsonl"));
-  return log2.text === null ? [] : parseLog(log2.text);
-}
-function readClimb(repoPath, wanted) {
-  const found = discoverClimbs(repoPath);
-  if (wanted !== void 0 && wanted !== "") {
-    const file3 = found.climbs.includes(wanted) ? readCardFile(repoPath, wanted) : { text: null, error: null };
-    if (file3.text === null) {
-      const why = found.prepared.includes(wanted) ? `${wanted} has check files but no card.json, so init never completed there. Start it with: ${climbCommand(repoPath)} init ${wanted}` : void 0;
-      throw new HillClimbError(`no climb named ${JSON.stringify(wanted)} in ${stateDir(repoPath)}`, {
-        code: "climb_not_found",
-        hint: why ?? (found.climbs.length > 0 ? `Climbs here: ${found.climbs.join(", ")}.` : `Start one with: ${climbCommand(repoPath)} init <name> \u2026`)
-      });
-    }
-    return { card: parseCard(file3.text), name: wanted };
-  }
-  const names = found.climbs;
-  if (names.length === 0) {
-    throw new HillClimbError(`no climb in ${stateDir(repoPath)}`, {
-      code: "no_climb",
-      hint: `Nothing is initialized here. Start one with: ${climbCommand(repoPath)} init <name> --goal "\u2026" --check "\u2026" --lock <check files>${preparedNote(found.prepared)}`
-    });
-  }
-  if (names.length > 1) {
-    throw new HillClimbError("name the climb: this repository has more than one", {
-      code: "ambiguous_climb",
-      hint: `Climbs here: ${names.join(", ")}.`
-    });
-  }
-  const only = names[0];
-  const file2 = readCardFile(repoPath, only);
-  if (file2.text === null) {
-    throw new HillClimbError(`climb directory ${only} has no readable card.json`, {
-      code: "climb_corrupt",
-      hint: file2.error ?? void 0
-    });
-  }
-  return { card: parseCard(file2.text), name: only };
-}
-function readState(repoPath, wanted) {
-  const { card, name } = readClimb(repoPath, wanted);
-  const base = joinPath(stateDir(repoPath), name);
-  const notes = readLocalFile(joinPath(base, "notes.md"));
-  const pending = readLocalFile(joinPath(base, "pending-tree"));
-  return {
-    name,
-    card,
-    rows: readRows(repoPath, name),
-    notes: notes.text,
-    pendingTree: pending.text !== null
-  };
-}
-function installEngine(repoPath) {
-  const wrote = [];
-  const target = engineDir(repoPath);
-  let exclude = null;
-  let warning = null;
-  const head = readLocalFile(joinPath(repoPath, ".git", "HEAD"));
-  const layout = head.text !== null ? excludePath(repoPath, { dotGitIsDirectory: true }) : (() => {
-    const pointer = readLocalFile(joinPath(repoPath, ".git"));
-    if (pointer.text === null) {
-      throw new HillClimbError(`${repoPath} is not a git repository`, {
-        code: "not_a_repository",
-        hint: "Hill Climb commits every kept step, so the target must be a git checkout."
-      });
-    }
-    const gitdir = /^gitdir:\s*(.+)$/m.exec(pointer.text);
-    const common = gitdir === null ? { text: null } : readLocalFile(joinPath(resolvePath(repoPath, gitdir[1]?.trim() ?? ""), "commondir"));
-    return excludePath(repoPath, {
-      dotGitIsDirectory: false,
-      dotGitText: pointer.text,
-      commonDirText: common.text
-    });
-  })();
-  exclude = layout.excludePath;
-  const existing = readLocalFile(layout.excludePath);
-  if (!hasIgnoreRule(existing.text)) {
-    try {
-      writeLocalFile(layout.excludePath, withIgnoreRule(existing.text));
-      wrote.push(layout.excludePath);
-    } catch (error62) {
-      warning = `could not write ${layout.excludePath}: ${error62 instanceof Error ? error62.message : String(error62)}`;
-    }
-  }
-  for (const name of ENGINE_FILES) {
-    writeLocalFile(engineFile(repoPath, name), readEngineSource(name));
-    wrote.push(engineFile(repoPath, name));
-  }
-  for (const kit of bundledKitFiles()) {
-    const path = joinPath(repoPath, ".hill-climb", "kits", kit.path);
-    writeLocalFile(path, kit.content);
-    wrote.push(path);
-  }
-  return { engine: target, command: climbCommand(repoPath), wrote, exclude, warning };
-}
-function formatSetupText(result, repoPath) {
-  const lines = [
-    `Engine: ${result.engine}`,
-    `Benchmark kits: ${joinPath(repoPath, ".hill-climb", "kits")}`,
-    `CLIMB="${result.engine}/climb.py"`,
-    "",
-    "Next (write the check first, then start the climb in your own shell):",
-    `  ${result.command} init <name> --goal "\u2026" --check "<command>" --lock <check files>`,
-    `  ${result.command} try "<idea>"`,
-    `  ${result.command} status`,
-    "",
-    "Commands:",
-    ...ENGINE_COMMANDS.map((command2) => `  ${command2}`),
-    "",
-    `Read state without running checks: hillclimb_status (or hillclimb status --dir ${repoPath})`
-  ];
-  if (result.warning !== null) lines.push("", `Warning: ${result.warning}`);
-  return lines.join("\n");
-}
-function getClimbStatus(repoPath, name, last = 15) {
-  const state = readState(repoPath, name);
-  const summary = summarize(state, last);
-  const text3 = formatSummary(summary);
-  const next = summary.verdict === "bar-reached" ? `
-
-Next: run the holdout, then the final review \u2014 ${climbCommand(repoPath)} holdout --why final` : `
-
-Next step in your shell: ${climbCommand(repoPath)} try "<idea>"`;
-  return { summary, text: text3, textWithNext: `${text3}${next}`, directory: repoPath, engine: engineDir(repoPath) };
-}
-function getClimbCard(repoPath, name) {
-  const { card } = readClimb(repoPath, name);
-  return {
-    text: formatRig(card),
-    data: {
-      directory: repoPath,
-      name: card.name,
-      goal: card.goal,
-      branch: card.branch ?? null,
-      base: card.base ?? null,
-      check: Array.isArray(card.check) ? card.check : card.check === void 0 ? [] : [card.check],
-      score: card.score ?? [],
-      direction: card.direction,
-      target: card.target,
-      targetText: card.target_text ?? null,
-      after: card.after ?? "stop",
-      runs: card.runs ?? 1,
-      paired: card.paired ?? false,
-      scoreMode: card.score_mode ?? "failure-count",
-      minGain: card.min_gain ?? 0,
-      timeout: card.timeout ?? null,
-      guards: card.guards ?? [],
-      holdout: card.holdout ?? null,
-      locked: card.lock ?? [],
-      fingerprint: card.fingerprint ?? null,
-      repos: (card.repos ?? []).map((repo) => repo.path),
-      maxSteps: card.max_steps ?? null,
-      maxHours: card.max_hours ?? null,
-      hard: card.hard ?? false
-    }
-  };
-}
-function getClimbList(repoPath) {
-  const { climbs: names, prepared } = discoverClimbs(repoPath);
-  const entries = [];
-  for (const name of names) {
-    const card = readCardFile(repoPath, name);
-    if (card.text === null) continue;
-    entries.push({ card: parseCard(card.text), rows: readRows(repoPath, name) });
-  }
-  const summaries = listClimbs(entries);
-  const text3 = entries.length === 0 ? `No climbs in ${stateDir(repoPath)}. Start one with: ${climbCommand(repoPath)} init <name> \u2026${preparedNote(prepared)}` : `${summaries.map((entry) => {
-    const verdict = entry.verdict === "climbing" ? "" : `  [${entry.verdict}]`;
-    return `${entry.name}: ${number4(entry.baseline)} -> ${number4(entry.best)} (${entry.direction}), ${entry.steps} steps${verdict}`;
-  }).join("\n")}${preparedNote(prepared)}`;
-  return { directory: repoPath, climbs: summaries, prepared, text: text3 };
-}
-function getClimbLog(repoPath, name, limit = 40) {
-  const { name: climbName } = readClimb(repoPath, name);
-  const rows = readRows(repoPath, climbName);
-  const slice = rows.slice(-limit);
-  const text3 = slice.map((row) => {
-    const score = typeof row.score === "number" ? number4(row.score) : "-";
-    const label = row.idea ?? row.why ?? "";
-    return `${row.time ?? ""}  ${row.kind.padEnd(9)} ${(row.result ?? "").padEnd(6)} ${score.padStart(10)}  ${label}`;
-  }).join("\n");
-  return { name: climbName, rows: slice, text: text3 === "" ? "No log rows." : text3 };
-}
-function getClimbNotes(repoPath, name) {
-  const { name: climbName } = readClimb(repoPath, name);
-  const notes = readLocalFile(joinPath(stateDir(repoPath), climbName, "notes.md"));
-  if (notes.text === null) {
-    throw new HillClimbError(`climb ${climbName} has no notes.md yet`, {
-      code: "no_notes",
-      hint: `Write a few lines after every 5 steps: ${joinPath(stateDir(repoPath), climbName, "notes.md")}`
-    });
-  }
-  return notes.text;
-}
-function getClimbVerdict(repoPath, name) {
-  const state = readState(repoPath, name);
-  const summary = summarize(state, 0);
-  const line = verdictLine(summary);
-  return line === "" ? "CLIMBING" : line;
-}
-function collectSampleFiles(dir, limit = 200) {
-  let count = 0;
-  const samples = [];
-  const stack = [{ full: dir, rel: "" }];
-  while (stack.length > 0 && count < limit) {
-    const cur = stack.pop();
-    let entries;
-    try {
-      entries = readdirSync4(cur.full, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name));
-    } catch {
-      continue;
-    }
-    for (const e of entries) {
-      if (count >= limit) break;
-      const rel = cur.rel ? `${cur.rel}/${e.name}` : e.name;
-      if (e.isDirectory()) {
-        if (e.name !== "__pycache__") stack.push({ full: join5(cur.full, e.name), rel });
-      } else if (e.isFile()) {
-        count += 1;
-        if (samples.length < 8) samples.push(rel);
-      }
-    }
-  }
-  return { count, samples };
-}
-function classifyOrigin(dir, isMain) {
-  const norm = dir.replaceAll("\\", "/");
-  const base = basename2(dir);
-  if (isMain) return { origin: "checkout", workerLabel: "main checkout" };
-  if (norm.includes("/.gemini/antigravity/worktrees/")) {
-    const cleaned = base.replace(/^swarm-/, "").replace(/-[0-9a-f]{6,10}$/i, "");
-    return { origin: "antigravity", workerLabel: cleaned || base };
-  }
-  if (/\/\.[^/]+\/.*(?:worktree|storage|cache|plugins)/i.test(norm)) {
-    return { origin: "archived", workerLabel: base };
-  }
-  return { origin: "checkout", workerLabel: base };
-}
-function latestMtimeIso(dir) {
-  try {
-    return statSync(dir).mtime.toISOString();
-  } catch {
-    return null;
-  }
-}
-function readWorktreeBranch(dir) {
-  try {
-    const dotGit = join5(dir, ".git");
-    let headPath = join5(dotGit, "HEAD");
-    if (!existsSync3(headPath) && existsSync3(dotGit)) {
-      const pointer = readFileSync5(dotGit, "utf8");
-      const m2 = /^gitdir:\s*(.+)$/m.exec(pointer);
-      if (m2?.[1]) headPath = join5(resolvePath(dir, m2[1].trim()), "HEAD");
-    }
-    if (!existsSync3(headPath)) return null;
-    const head = readFileSync5(headPath, "utf8").trim();
-    const ref = /^ref:\s*refs\/heads\/(.+)$/.exec(head);
-    return ref?.[1] ?? head.slice(0, 10);
-  } catch {
-    return null;
-  }
-}
-function linkedWorktreesOf(repoPath) {
-  const seen = /* @__PURE__ */ new Set();
-  const normalizedMain = resolve4(repoPath);
-  const add = (candidate) => {
-    const abs = resolve4(candidate);
-    if (abs === normalizedMain || seen.has(abs)) return;
-    if (existsSync3(abs)) seen.add(abs);
-  };
-  const gitWorktreesDir = join5(normalizedMain, ".git", "worktrees");
-  if (existsSync3(gitWorktreesDir)) {
-    try {
-      for (const entry of readdirSync4(gitWorktreesDir, { withFileTypes: true })) {
-        if (!entry.isDirectory()) continue;
-        const gitdirFile = join5(gitWorktreesDir, entry.name, "gitdir");
-        if (!existsSync3(gitdirFile)) continue;
-        const targetGitFile = readFileSync5(gitdirFile, "utf8").trim();
-        if (!targetGitFile) continue;
-        const wtDir = dirname4(resolve4(gitWorktreesDir, entry.name, targetGitFile));
-        add(wtDir);
-      }
-    } catch {
-    }
-  }
-  const agyWorktreesRoot = join5(homedir2(), ".gemini", "antigravity", "worktrees");
-  if (existsSync3(agyWorktreesRoot)) {
-    try {
-      for (const conv of readdirSync4(agyWorktreesRoot, { withFileTypes: true })) {
-        if (!conv.isDirectory()) continue;
-        const convDir = join5(agyWorktreesRoot, conv.name);
-        for (const wt of readdirSync4(convDir, { withFileTypes: true })) {
-          if (!wt.isDirectory()) continue;
-          const wtPath = join5(convDir, wt.name);
-          const dotGit = join5(wtPath, ".git");
-          try {
-            const pointer = readFileSync5(dotGit, "utf8").replaceAll("\\", "/");
-            const expectedGitDir = join5(normalizedMain, ".git").replaceAll("\\", "/");
-            if (pointer.includes(expectedGitDir)) {
-              add(wtPath);
-            }
-          } catch {
-            continue;
-          }
-        }
-      }
-    } catch {
-    }
-  }
-  return [...seen];
-}
-function conversationIdFromPath(dir) {
-  const norm = dir.replaceAll("\\", "/");
-  const m2 = /\/\.gemini\/antigravity\/worktrees\/([0-9a-f-]{36})\//i.exec(norm);
-  return m2?.[1] ?? null;
-}
-var SCAN_CACHE_TTL_MS = 4e3;
-var scanCache = /* @__PURE__ */ new Map();
-function scanProjectClimbs(repoPath, opts) {
-  if (!repoPath || !existsSync3(repoPath)) {
-    return {
-      projectDirectory: repoPath,
-      engineInstalled: false,
-      worktreesScanned: 0,
-      currentCount: 0,
-      archivedCount: 0,
-      climbs: []
-    };
-  }
-  const normalizedMain = resolve4(repoPath);
-  if (!opts?.force) {
-    const cached2 = scanCache.get(normalizedMain);
-    if (cached2 && Date.now() - cached2.at < SCAN_CACHE_TTL_MS) {
-      return cached2.value;
-    }
-  }
-  const engineInstalled = existsSync3(engineFile(normalizedMain, "climb.py"));
-  const worktrees = linkedWorktreesOf(normalizedMain);
-  const roots = [normalizedMain, ...worktrees];
-  const climbs = [];
-  for (const root of roots) {
-    const isMain = root === normalizedMain;
-    const found = discoverClimbs(root);
-    const branch = readWorktreeBranch(root);
-    const worktreeName = basename2(root);
-    const conversationId = conversationIdFromPath(root);
-    const { origin, workerLabel } = classifyOrigin(root, isMain);
-    const parsedEntries = [];
-    for (const dirName of found.climbs) {
-      try {
-        const state = readState(root, dirName);
-        const summary = summarize(state, 50);
-        const card = state.card;
-        const checks = Array.isArray(card.check) ? card.check : card.check === void 0 ? [] : [card.check];
-        parsedEntries.push({ dirName, state, summary, checks });
-      } catch {
-        continue;
-      }
-    }
-    const canonicalNames = new Set(
-      parsedEntries.filter((e) => !e.state.card.name || e.state.card.name === e.dirName).map((e) => e.dirName)
-    );
-    const referencedSiblingDirs = /* @__PURE__ */ new Set();
-    const refRegex = /\.hill-climb\/([^/\s"'`]+)/g;
-    for (const entry of parsedEntries) {
-      if (!canonicalNames.has(entry.dirName)) continue;
-      const card = entry.state.card;
-      const texts = [...entry.checks, ...card.guards ?? [], ...card.lock ?? [], ...card.holdout ? [card.holdout] : []];
-      for (const text3 of texts) {
-        for (const match of text3.matchAll(refRegex)) {
-          const refDir = match[1];
-          if (refDir && refDir !== entry.dirName && refDir !== "engine" && refDir !== "kits" && refDir !== "bridge") {
-            referencedSiblingDirs.add(refDir);
-          }
-        }
-      }
-    }
-    for (const { dirName: name, state, summary, checks } of parsedEntries) {
-      const card = state.card;
-      const cardName = card.name?.trim() || name;
-      if (cardName !== name && (canonicalNames.has(cardName) || referencedSiblingDirs.has(name) || state.rows.length === 0)) {
-        continue;
-      }
-      const rows = state.rows.slice(-50).map((r2) => ({
-        kind: r2.kind,
-        step: typeof r2.step === "number" && Number.isFinite(r2.step) ? r2.step : null,
-        result: r2.result ?? null,
-        score: typeof r2.score === "number" ? r2.score : null,
-        idea: r2.idea ?? null,
-        why: r2.why ?? null,
-        time: r2.time ?? null,
-        commit: null
-      }));
-      const rawTargetText = card.target_text ?? null;
-      const targetTextMatches = rawTargetText !== null && (summary.target === null || Number.isFinite(Number(rawTargetText)) && Math.abs(Number(rawTargetText) - summary.target) < 1e-9);
-      const isLive = summary.verdict === "climbing" || summary.verdict === "plateau";
-      climbs.push({
-        id: `${root}::${name}`,
-        name,
-        status: "active",
-        origin,
-        isLive,
-        directory: root,
-        worktreeName,
-        workerLabel,
-        isMainCheckout: isMain,
-        conversationId,
-        branch: card.branch ?? branch,
-        goal: card.goal ?? null,
-        direction: card.direction,
-        baseline: summary.baseline,
-        best: summary.best,
-        target: summary.target,
-        targetText: targetTextMatches ? rawTargetText : null,
-        steps: summary.steps,
-        kept: summary.kept,
-        undone: Math.max(0, summary.steps - summary.kept),
-        sinceGain: summary.sinceGain,
-        verdict: summary.verdict,
-        sparkline: summary.spark,
-        check: checks.map(redactSecrets),
-        guards: (card.guards ?? []).map(redactSecrets),
-        holdout: card.holdout ? redactSecrets(card.holdout) : null,
-        locked: card.lock ?? [],
-        scoreMode: card.score_mode ?? "failure-count",
-        rows,
-        notes: state.notes,
-        preparedFiles: 0,
-        preparedSampleFiles: [],
-        updatedAt: rows[rows.length - 1]?.time ?? latestMtimeIso(joinPath(stateDir(root), name))
-      });
-    }
-    for (const name of found.prepared) {
-      if (name === "bridge" || referencedSiblingDirs.has(name)) continue;
-      const dir = joinPath(stateDir(root), name);
-      const { count, samples } = collectSampleFiles(dir);
-      climbs.push({
-        id: `${root}::${name}`,
-        name,
-        status: "prepared",
-        origin,
-        isLive: true,
-        directory: root,
-        worktreeName,
-        workerLabel,
-        isMainCheckout: isMain,
-        conversationId,
-        branch,
-        goal: null,
-        direction: null,
-        baseline: null,
-        best: null,
-        target: null,
-        targetText: null,
-        steps: 0,
-        kept: 0,
-        undone: 0,
-        sinceGain: 0,
-        verdict: "preparing",
-        sparkline: "",
-        check: [],
-        guards: [],
-        holdout: null,
-        locked: [],
-        scoreMode: null,
-        rows: [],
-        notes: null,
-        preparedFiles: count,
-        preparedSampleFiles: samples,
-        updatedAt: latestMtimeIso(dir)
-      });
-    }
-  }
-  const timeMs2 = (v2) => {
-    if (!v2) return 0;
-    const ms = Date.parse(v2.includes("T") ? v2 : v2.replace(" ", "T"));
-    return Number.isFinite(ms) ? ms : 0;
-  };
-  const originRank = (o) => o === "antigravity" ? 0 : o === "checkout" ? 1 : 2;
-  climbs.sort((a, b) => {
-    if (originRank(a.origin) !== originRank(b.origin)) return originRank(a.origin) - originRank(b.origin);
-    if (a.isLive !== b.isLive) return a.isLive ? -1 : 1;
-    return timeMs2(b.updatedAt) - timeMs2(a.updatedAt) || a.name.localeCompare(b.name);
-  });
-  const currentCount = climbs.filter((c) => c.origin !== "archived" || c.isLive).length;
-  const archivedCount = climbs.length - currentCount;
-  const result = {
-    projectDirectory: normalizedMain,
-    engineInstalled,
-    worktreesScanned: worktrees.length,
-    currentCount,
-    archivedCount,
-    climbs
-  };
-  scanCache.set(normalizedMain, { at: Date.now(), value: result });
-  return result;
 }
 
 // src/auto-track.ts
@@ -42006,13 +43907,26 @@ function humanizeClimbName(name) {
   if (words2.length === 0) return name;
   return words2.map((w2, i) => i === 0 ? w2.charAt(0).toUpperCase() + w2.slice(1) : w2).join(" ");
 }
-function deriveOutcomeKey(climbName, goalKeys) {
-  const base = climbName.toUpperCase().replace(/[^A-Z0-9_-]+/g, "-").replace(/^[^A-Z0-9]+/, "").replace(/-+$/g, "").slice(0, 88) || "CLIMB";
-  if (!goalKeys.has(base)) return base;
-  return `CLIMB-${base}`.slice(0, 95);
+function deriveOutcomeKey(climbName, goalKeys, takenOutcomeKeys, disambiguator) {
+  const rawBase = climbName.toUpperCase().replace(/[^A-Z0-9_-]+/g, "-").replace(/^[^A-Z0-9]+/, "").replace(/-+$/g, "").slice(0, 88) || "CLIMB";
+  const candidate = goalKeys.has(rawBase) ? `CLIMB-${rawBase}`.slice(0, 95) : rawBase;
+  const isTaken = (key2) => goalKeys.has(key2) || (takenOutcomeKeys?.has(key2) ?? false);
+  if (!isTaken(candidate)) return candidate;
+  if (disambiguator) {
+    const suffix = disambiguator.toUpperCase().replace(/[^A-Z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 16);
+    if (suffix) {
+      const withSuffix = `${candidate.slice(0, 95 - suffix.length - 1)}-${suffix}`;
+      if (!isTaken(withSuffix)) return withSuffix;
+    }
+  }
+  for (let n2 = 2; n2 < 1e3; n2 += 1) {
+    const numbered = `${candidate.slice(0, 95 - String(n2).length - 1)}-${n2}`;
+    if (!isTaken(numbered)) return numbered;
+  }
+  return `${candidate.slice(0, 86)}-${Date.now().toString(36).toUpperCase()}`.slice(0, 95);
 }
 function buildOutcomeContract(climb) {
-  const rawGoal = climb.goal?.trim() ?? "";
+  const rawGoal = redactSecrets(climb.goal?.trim() ?? "");
   const title = rawGoal.length >= 4 && rawGoal.length <= 96 ? rawGoal : humanizeClimbName(climb.name);
   const workerNote = climb.origin === "antigravity" ? `Antigravity worker ${climb.workerLabel}` : climb.origin === "archived" ? `archived worktree ${climb.workerLabel}` : `local checkout`;
   const story = rawGoal.length > 0 ? `${rawGoal} (tracked from .hill-climb/${climb.name} in ${workerNote}).` : climb.status === "prepared" ? `Preparing benchmark inputs (${climb.preparedFiles} staged file${climb.preparedFiles === 1 ? "" : "s"}) before running climb.py in ${workerNote}.` : `Tracked from .hill-climb/${climb.name} in ${workerNote}.`;
@@ -42054,7 +43968,20 @@ function lastKeptCommit(climb) {
       return r2.commit;
     }
   }
-  return null;
+  return climb.bestCommit ?? null;
+}
+var AUTO_CLAIM_HOURS = 0.25;
+var AUTO_CLAIM_REFRESH_MARGIN_MS = 5 * 60 * 1e3;
+function autoClaimWorkerId(climb) {
+  if (climb.isMainCheckout || climb.workerLabel === "main checkout") {
+    return climb.conversationId;
+  }
+  const candidate = climb.conversationId ?? climb.workerLabel ?? climb.worktreeName;
+  if (!candidate || candidate === "main checkout") return null;
+  return candidate;
+}
+function canUpgradePreparedContract(link, climb, outcome2, tree) {
+  return link.auto_created === 1 && climb.status === "active" && outcome2.version === 1 && !tree.changes.some((c) => c.key === outcome2.key) && outcome2.criteria.length === 1 && outcome2.criteria[0]?.id === "C1" && outcome2.criteria[0]?.when === "Initialized and iterated with climb.py";
 }
 function climbToLiveData(climb) {
   const rows = [];
@@ -42080,7 +44007,7 @@ function climbToLiveData(climb) {
       id,
       parent: incumbentId,
       score: r2.score,
-      label: r2.idea ?? r2.why ?? (r2.result ? `Step ${stepNum} (${r2.result})` : `Step ${stepNum}`),
+      label: redactSecrets(r2.idea ?? r2.why ?? (r2.result ? `Step ${stepNum} (${r2.result})` : `Step ${stepNum}`)),
       at: r2.time ?? climb.updatedAt ?? (/* @__PURE__ */ new Date()).toISOString()
     });
     if (r2.result === "kept") {
@@ -42128,16 +44055,77 @@ function createAutoTracker(repo) {
       last_synced_verdict TEXT,
       created TEXT NOT NULL,
       updated TEXT NOT NULL,
-      PRIMARY KEY (project_id, climb_name)
+      PRIMARY KEY (project_id, climb_id)
     );
+  `);
+  const needsPkMigrationCheck = () => {
+    const linkCols = db.prepare("PRAGMA table_info(hc_climb_links)").all();
+    const climbIdCol = linkCols.find((c) => c.name === "climb_id");
+    const climbNameCol = linkCols.find((c) => c.name === "climb_name");
+    return linkCols.length > 0 && ((climbIdCol?.pk ?? 0) === 0 || (climbNameCol?.pk ?? 0) > 0);
+  };
+  if (needsPkMigrationCheck()) {
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      if (needsPkMigrationCheck()) {
+        db.exec(`
+          DROP TABLE IF EXISTS hc_climb_links_v2;
+          CREATE TABLE hc_climb_links_v2 (
+            project_id TEXT NOT NULL,
+            climb_name TEXT NOT NULL,
+            climb_id TEXT NOT NULL,
+            outcome_key TEXT NOT NULL,
+            directory TEXT NOT NULL,
+            origin TEXT NOT NULL,
+            auto_created INTEGER NOT NULL DEFAULT 1,
+            last_synced_steps INTEGER NOT NULL DEFAULT -1,
+            last_synced_verdict TEXT,
+            created TEXT NOT NULL,
+            updated TEXT NOT NULL,
+            PRIMARY KEY (project_id, climb_id)
+          );
+          INSERT OR REPLACE INTO hc_climb_links_v2(
+            project_id, climb_name, climb_id, outcome_key, directory, origin,
+            auto_created, last_synced_steps, last_synced_verdict, created, updated
+          )
+          SELECT
+            project_id,
+            climb_name,
+            CASE WHEN climb_id IS NULL OR climb_id = '' THEN directory || '::' || climb_name ELSE climb_id END,
+            outcome_key,
+            directory,
+            origin,
+            auto_created,
+            last_synced_steps,
+            last_synced_verdict,
+            created,
+            updated
+          FROM hc_climb_links
+          ORDER BY updated ASC;
+          DROP TABLE hc_climb_links;
+          ALTER TABLE hc_climb_links_v2 RENAME TO hc_climb_links;
+        `);
+      }
+      db.exec("COMMIT");
+    } catch (error62) {
+      try {
+        db.exec("ROLLBACK");
+      } catch {
+      }
+      throw error62;
+    }
+  }
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS hc_climb_links_project_outcome ON hc_climb_links(project_id, outcome_key);
+    CREATE INDEX IF NOT EXISTS hc_climb_links_project_name ON hc_climb_links(project_id, climb_name);
   `);
   const getSettingStmt = db.prepare("SELECT auto_track_climbs FROM hc_settings WHERE project_id = ?");
   const setSettingStmt = db.prepare(
     `INSERT INTO hc_settings(project_id, auto_track_climbs, updated) VALUES(?, ?, ?)
      ON CONFLICT(project_id) DO UPDATE SET auto_track_climbs = excluded.auto_track_climbs, updated = excluded.updated`
   );
-  const getLinkByNameStmt = db.prepare(
-    "SELECT * FROM hc_climb_links WHERE project_id = ? AND climb_name = ?"
+  const getLinkByIdStmt = db.prepare(
+    "SELECT * FROM hc_climb_links WHERE project_id = ? AND climb_id = ?"
   );
   const getLinkByOutcomeStmt = db.prepare(
     "SELECT * FROM hc_climb_links WHERE project_id = ? AND outcome_key = ?"
@@ -42148,8 +44136,8 @@ function createAutoTracker(repo) {
        project_id, climb_name, climb_id, outcome_key, directory, origin,
        auto_created, last_synced_steps, last_synced_verdict, created, updated
      ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(project_id, climb_name) DO UPDATE SET
-       climb_id = excluded.climb_id,
+     ON CONFLICT(project_id, climb_id) DO UPDATE SET
+       climb_name = excluded.climb_name,
        outcome_key = excluded.outcome_key,
        directory = excluded.directory,
        origin = excluded.origin,
@@ -42157,6 +44145,17 @@ function createAutoTracker(repo) {
        last_synced_verdict = excluded.last_synced_verdict,
        updated = excluded.updated`
   );
+  let activeRunCheckStmt = null;
+  function hasActiveRunForOutcome(projectId, outcomeKey2) {
+    if (!activeRunCheckStmt) {
+      const exists = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'hc_runs' LIMIT 1").get();
+      if (!exists) return false;
+      activeRunCheckStmt = db.prepare(
+        "SELECT 1 FROM hc_runs WHERE project_id = ? AND key = ? AND state IN ('dispatching', 'live') LIMIT 1"
+      );
+    }
+    return activeRunCheckStmt.get(projectId, outcomeKey2) !== void 0;
+  }
   function isAutoTrackEnabled(projectId) {
     const row = getSettingStmt.get(projectId);
     return row ? row.auto_track_climbs !== 0 : true;
@@ -42164,45 +44163,129 @@ function createAutoTracker(repo) {
   function setAutoTrackEnabled(projectId, enabled) {
     setSettingStmt.run(projectId, enabled ? 1 : 0, (/* @__PURE__ */ new Date()).toISOString());
   }
-  function syncProgress(projectId, climb, link) {
-    const tree = repo.read(projectId);
+  function assessProgressWrite(tree, projectId, climb, link, nowMs) {
     const outcome2 = tree.outcomes.find((o) => o.key === link.outcome_key);
-    if (!outcome2) return;
-    const now = (/* @__PURE__ */ new Date()).toISOString();
-    const workerId = climb.conversationId ?? climb.workerLabel ?? climb.worktreeName;
+    if (!outcome2) return { treeWrite: false, linkWrite: false };
+    const isStaleStep = climb.status === "active" && link.last_synced_steps >= 0 && climb.steps < link.last_synced_steps;
+    let treeWrite = false;
+    let linkWrite = !isStaleStep && (link.climb_name !== climb.name || link.directory !== climb.directory || link.origin !== climb.origin);
     const existingClaim = tree.claims.find((c) => c.key === outcome2.key);
-    const claimActive = existingClaim ? Date.parse(existingClaim.expires) > Date.now() : false;
-    if (climb.isLive) {
-      if (!claimActive && workerId) {
-        try {
-          repo.act(projectId, { op: "claim_outcome", key: outcome2.key, threadId: workerId, hours: 4 });
-        } catch {
+    if (existingClaim?.threadId === "main checkout") {
+      treeWrite = true;
+    } else if (!isStaleStep) {
+      const workerId = autoClaimWorkerId(climb);
+      const canAutoClaim = !climb.isMainCheckout && climb.isLive && workerId !== null && workerId !== "main checkout";
+      const expiresMs = existingClaim ? Date.parse(existingClaim.expires) : 0;
+      const claimActive = existingClaim ? expiresMs > nowMs : false;
+      if (canAutoClaim) {
+        const needsClaim = !claimActive || existingClaim?.threadId === workerId && expiresMs - nowMs < AUTO_CLAIM_REFRESH_MARGIN_MS;
+        if (needsClaim && !hasActiveRunForOutcome(projectId, outcome2.key)) {
+          treeWrite = true;
         }
+      } else if (existingClaim && workerId !== null && existingClaim.threadId === workerId && !hasActiveRunForOutcome(projectId, outcome2.key)) {
+        treeWrite = true;
       }
-    } else if (existingClaim && existingClaim.threadId === workerId) {
-      try {
-        repo.act(projectId, { op: "release_outcome", key: outcome2.key, threadId: workerId });
-      } catch {
-      }
+    }
+    if (!isStaleStep && canUpgradePreparedContract(link, climb, outcome2, tree)) {
+      treeWrite = true;
     }
     if (climb.status !== "active") {
-      upsertLinkStmt.run(
-        projectId,
-        climb.name,
-        climb.id,
-        outcome2.key,
-        climb.directory,
-        climb.origin,
-        link.auto_created,
-        link.last_synced_steps,
-        climb.verdict,
-        link.created,
-        now
-      );
-      return;
+      if (link.last_synced_verdict !== climb.verdict) {
+        linkWrite = true;
+      }
+      return { treeWrite, linkWrite };
+    }
+    const sourcePrefix = `climb.py:${climb.name}`;
+    const alreadyConfirmed = tree.evidence.some(
+      (e) => e.key === outcome2.key && e.version === outcome2.version && e.track === "main" && e.kind === "confirms" && e.source.startsWith(sourcePrefix)
+    );
+    const needsConfirms = climbMeetsTargetWithGain(climb) && !alreadyConfirmed;
+    if (needsConfirms) {
+      treeWrite = true;
+    }
+    if (isStaleStep) {
+      return { treeWrite, linkWrite };
     }
     const changed = climb.steps !== link.last_synced_steps || climb.verdict !== link.last_synced_verdict;
-    if (!changed) return;
+    if (!changed) return { treeWrite, linkWrite };
+    linkWrite = true;
+    if (climb.steps > Math.max(0, link.last_synced_steps) || link.last_synced_steps < 0 && climb.baseline !== null) {
+      treeWrite = true;
+    }
+    return { treeWrite, linkWrite };
+  }
+  function applySyncProgressInTx(tree, projectId, climb, link, now, nowMs, warnings) {
+    const outcome2 = tree.outcomes.find((o) => o.key === link.outcome_key);
+    if (!outcome2) return;
+    const isStaleStep = climb.status === "active" && link.last_synced_steps >= 0 && climb.steps < link.last_synced_steps;
+    if (!isStaleStep && canUpgradePreparedContract(link, climb, outcome2, tree)) {
+      const upgraded = buildOutcomeContract(climb);
+      outcome2.title = upgraded.title;
+      outcome2.story = upgraded.story;
+      outcome2.criteria = upgraded.criteria;
+      outcome2.updated = now;
+      tree.activity.push({
+        at: now,
+        key: outcome2.key,
+        text: `refresh_outcome ${outcome2.key} v1 "${outcome2.title}"`,
+        signal: outcomeSignal(tree, outcome2.key, "main", now),
+        track: "main"
+      });
+    }
+    const existingClaim = tree.claims.find((c) => c.key === outcome2.key);
+    if (existingClaim && existingClaim.threadId === "main checkout") {
+      applyCore(tree, { op: "release_outcome", key: outcome2.key, threadId: "main checkout" }, now);
+    }
+    if (!isStaleStep) {
+      const workerId = autoClaimWorkerId(climb);
+      const canAutoClaim = !climb.isMainCheckout && climb.isLive && workerId !== null && workerId !== "main checkout";
+      const currentClaim = tree.claims.find((c) => c.key === outcome2.key);
+      const expiresMs = currentClaim ? Date.parse(currentClaim.expires) : 0;
+      const claimActive = currentClaim ? expiresMs > nowMs : false;
+      if (canAutoClaim) {
+        const needsClaim = !claimActive || currentClaim?.threadId === workerId && expiresMs - nowMs < AUTO_CLAIM_REFRESH_MARGIN_MS;
+        if (needsClaim && !hasActiveRunForOutcome(projectId, outcome2.key)) {
+          try {
+            applyCore(
+              tree,
+              { op: "claim_outcome", key: outcome2.key, threadId: workerId, hours: AUTO_CLAIM_HOURS },
+              now
+            );
+          } catch (error62) {
+            warnings.push(
+              `Auto-claim skipped for ${outcome2.key}: ${error62 instanceof Error ? error62.message : String(error62)}`
+            );
+          }
+        }
+      } else if (currentClaim && workerId !== null && currentClaim.threadId === workerId && !hasActiveRunForOutcome(projectId, outcome2.key)) {
+        try {
+          applyCore(tree, { op: "release_outcome", key: outcome2.key, threadId: workerId }, now);
+        } catch (error62) {
+          warnings.push(
+            `Release claim failed for ${outcome2.key}: ${error62 instanceof Error ? error62.message : String(error62)}`
+          );
+        }
+      }
+    }
+    const metaChanged = link.climb_name !== climb.name || link.directory !== climb.directory || link.origin !== climb.origin;
+    if (climb.status !== "active") {
+      if (link.last_synced_verdict !== climb.verdict || metaChanged) {
+        upsertLinkStmt.run(
+          projectId,
+          climb.name,
+          climb.id,
+          outcome2.key,
+          climb.directory,
+          climb.origin,
+          link.auto_created,
+          link.last_synced_steps,
+          climb.verdict,
+          link.created,
+          now
+        );
+      }
+      return;
+    }
     const cid = outcome2.criteria[0]?.id;
     const criterionIds2 = cid ? [cid] : [];
     const commit = lastKeptCommit(climb);
@@ -42211,75 +44294,135 @@ function createAutoTracker(repo) {
     const alreadyConfirmed = tree.evidence.some(
       (e) => e.key === outcome2.key && e.version === outcome2.version && e.track === "main" && e.kind === "confirms" && e.source.startsWith(sourcePrefix)
     );
-    if (climbMeetsTargetWithGain(climb) && !alreadyConfirmed) {
+    const needsConfirms = climbMeetsTargetWithGain(climb) && !alreadyConfirmed;
+    if (isStaleStep) {
+      if (needsConfirms) {
+        const targetText = climb.targetText ?? fmtNum(climb.target);
+        applyCore(
+          tree,
+          {
+            op: "add_evidence",
+            key: outcome2.key,
+            version: outcome2.version,
+            kind: "confirms",
+            criterionIds: criterionIds2,
+            track: "main",
+            source,
+            text: `climb.py reached target ${targetText}: ${fmtNum(climb.baseline)} \u2192 ${fmtNum(climb.best)} across ${climb.kept}/${climb.steps} kept edit${climb.steps === 1 ? "" : "s"}.`
+          },
+          now
+        );
+      }
+      return;
+    }
+    const changed = climb.steps !== link.last_synced_steps || climb.verdict !== link.last_synced_verdict;
+    if (!changed && !needsConfirms) {
+      if (metaChanged) {
+        upsertLinkStmt.run(
+          projectId,
+          climb.name,
+          climb.id,
+          outcome2.key,
+          climb.directory,
+          climb.origin,
+          link.auto_created,
+          link.last_synced_steps,
+          link.last_synced_verdict,
+          link.created,
+          now
+        );
+      }
+      return;
+    }
+    if (needsConfirms) {
       const targetText = climb.targetText ?? fmtNum(climb.target);
-      repo.act(projectId, {
-        op: "add_evidence",
-        key: outcome2.key,
-        version: outcome2.version,
-        kind: "confirms",
-        criterionIds: criterionIds2,
-        track: "main",
-        source,
-        text: `climb.py reached target ${targetText}: ${fmtNum(climb.baseline)} \u2192 ${fmtNum(climb.best)} across ${climb.kept}/${climb.steps} kept edit${climb.steps === 1 ? "" : "s"}.`
-      });
+      applyCore(
+        tree,
+        {
+          op: "add_evidence",
+          key: outcome2.key,
+          version: outcome2.version,
+          kind: "confirms",
+          criterionIds: criterionIds2,
+          track: "main",
+          source,
+          text: `climb.py reached target ${targetText}: ${fmtNum(climb.baseline)} \u2192 ${fmtNum(climb.best)} across ${climb.kept}/${climb.steps} kept edit${climb.steps === 1 ? "" : "s"}.`
+        },
+        now
+      );
     } else if (climb.steps > Math.max(0, link.last_synced_steps) || link.last_synced_steps < 0 && climb.baseline !== null) {
       const targetPart = climb.target !== null ? ` (target ${climb.targetText ?? fmtNum(climb.target)})` : "";
       const text3 = climb.steps === 0 ? `climb.py baseline measured: ${fmtNum(climb.baseline)}${targetPart}.` : `climb.py update (${climb.verdict}): ${fmtNum(climb.baseline)} \u2192 ${fmtNum(climb.best)}${targetPart} after ${climb.steps} step${climb.steps === 1 ? "" : "s"} (${climb.kept} kept).`;
-      repo.act(projectId, {
-        op: "add_evidence",
-        key: outcome2.key,
-        version: outcome2.version,
-        kind: "note",
-        criterionIds: criterionIds2,
-        track: "main",
-        source,
-        text: text3
-      });
+      applyCore(
+        tree,
+        {
+          op: "add_evidence",
+          key: outcome2.key,
+          version: outcome2.version,
+          kind: "note",
+          criterionIds: criterionIds2,
+          track: "main",
+          source,
+          text: text3
+        },
+        now
+      );
     }
-    upsertLinkStmt.run(
-      projectId,
-      climb.name,
-      climb.id,
-      outcome2.key,
-      climb.directory,
-      climb.origin,
-      link.auto_created,
-      climb.steps,
-      climb.verdict,
-      link.created,
-      now
-    );
+    if (changed || metaChanged) {
+      const nextSteps = Math.max(link.last_synced_steps, climb.steps);
+      upsertLinkStmt.run(
+        projectId,
+        climb.name,
+        climb.id,
+        outcome2.key,
+        climb.directory,
+        climb.origin,
+        link.auto_created,
+        nextSteps,
+        climb.verdict,
+        link.created,
+        now
+      );
+    }
   }
-  function trackClimb(projectId, climb, opts) {
-    const autoCreated = opts?.autoCreated ?? false;
-    const now = (/* @__PURE__ */ new Date()).toISOString();
-    const tree = repo.read(projectId);
-    const existingLink = getLinkByNameStmt.get(projectId, climb.name);
+  function applyTrackClimbInTx(tree, projectId, climb, autoCreated, linkedOutcomeToClimbId, now, nowMs, warnings) {
+    const existingLink = getLinkByIdStmt.get(projectId, climb.id);
     if (existingLink && tree.outcomes.some((o) => o.key === existingLink.outcome_key)) {
-      syncProgress(projectId, climb, existingLink);
+      applySyncProgressInTx(tree, projectId, climb, existingLink, now, nowMs, warnings);
       return existingLink.outcome_key;
     }
     const goalKeys = new Set(tree.goals.map((g) => g.key));
-    const outcomeKey2 = deriveOutcomeKey(climb.name, goalKeys);
+    const takenOutcomeKeys = /* @__PURE__ */ new Set();
+    for (const [oKey, cId] of linkedOutcomeToClimbId) {
+      if (cId !== climb.id) takenOutcomeKeys.add(oKey);
+    }
+    const outcomeKey2 = deriveOutcomeKey(climb.name, goalKeys, takenOutcomeKeys, climb.workerLabel);
     const existingOutcome = tree.outcomes.find((o) => o.key === outcomeKey2);
     if (!existingOutcome) {
       if (!goalKeys.has(DEFAULT_GOAL_KEY)) {
-        repo.act(projectId, {
-          op: "create_goal",
-          key: DEFAULT_GOAL_KEY,
-          parentGoalKey: null,
-          title: "Tracked climbs",
-          brief: "Outcomes automatically tracked from .hill-climb runs in this repository and its Antigravity worktrees.",
-          rank: 50
-        });
+        applyCore(
+          tree,
+          {
+            op: "create_goal",
+            key: DEFAULT_GOAL_KEY,
+            parentGoalKey: null,
+            title: "Tracked climbs",
+            brief: "Outcomes automatically tracked from .hill-climb runs in this repository and its Antigravity worktrees.",
+            rank: 50
+          },
+          now
+        );
       }
-      repo.act(projectId, {
-        op: "create_outcome",
-        key: outcomeKey2,
-        goalKey: DEFAULT_GOAL_KEY,
-        contract: buildOutcomeContract(climb)
-      });
+      applyCore(
+        tree,
+        {
+          op: "create_outcome",
+          key: outcomeKey2,
+          goalKey: DEFAULT_GOAL_KEY,
+          contract: buildOutcomeContract(climb)
+        },
+        now
+      );
     }
     const link = {
       project_id: projectId,
@@ -42307,43 +44450,167 @@ function createAutoTracker(repo) {
       link.created,
       link.updated
     );
-    syncProgress(projectId, climb, link);
+    linkedOutcomeToClimbId.set(outcomeKey2, climb.id);
+    applySyncProgressInTx(tree, projectId, climb, link, now, nowMs, warnings);
     return outcomeKey2;
+  }
+  function trackClimb(projectId, climb, opts) {
+    const autoCreated = opts?.autoCreated ?? false;
+    const warnings = [];
+    return repo.modify(projectId, (tree) => {
+      const nowMs = Date.now();
+      const now = new Date(nowMs).toISOString();
+      const linkedOutcomeToClimbId = /* @__PURE__ */ new Map();
+      for (const row of listLinksStmt.all(projectId)) {
+        linkedOutcomeToClimbId.set(row.outcome_key, row.climb_id);
+      }
+      return applyTrackClimbInTx(tree, projectId, climb, autoCreated, linkedOutcomeToClimbId, now, nowMs, warnings);
+    });
   }
   function syncScannedClimbs(projectId, scanned) {
     const autoTrackClimbs = isAutoTrackEnabled(projectId);
-    const existingLinks = /* @__PURE__ */ new Map();
+    const warnings = [...scanned.warnings ?? []];
+    const nowMs = Date.now();
+    const now = new Date(nowMs).toISOString();
+    const preLinks = /* @__PURE__ */ new Map();
     for (const row of listLinksStmt.all(projectId)) {
-      existingLinks.set(row.climb_name, row);
+      preLinks.set(row.climb_id, row);
     }
-    const tree = repo.read(projectId);
-    const outcomeKeys = new Set(tree.outcomes.map((o) => o.key));
-    const linkedByName = /* @__PURE__ */ new Map();
+    const preTree = repo.read(projectId);
+    const preOutcomeKeys = new Set(preTree.outcomes.map((o) => o.key));
+    const preLinkedById = /* @__PURE__ */ new Map();
+    const hasPhantomMainClaim = preTree.claims.some((c) => c.threadId === "main checkout");
+    let needsTreeWrite = hasPhantomMainClaim;
+    const linkOnlyUpdates = [];
     for (const climb of scanned.climbs) {
-      const existing = existingLinks.get(climb.name);
-      const alreadyTracked = existing !== void 0 && outcomeKeys.has(existing.outcome_key);
+      const existing = preLinks.get(climb.id);
+      const alreadyTracked = existing !== void 0 && preOutcomeKeys.has(existing.outcome_key);
       if (alreadyTracked) {
-        try {
-          syncProgress(projectId, climb, existing);
-          linkedByName.set(climb.name, existing.outcome_key);
-        } catch {
-          linkedByName.set(climb.name, existing.outcome_key);
-        }
+        preLinkedById.set(climb.id, existing.outcome_key);
+        const assessed = assessProgressWrite(preTree, projectId, climb, existing, nowMs);
+        if (assessed.treeWrite) needsTreeWrite = true;
+        if (assessed.linkWrite) linkOnlyUpdates.push({ climb, link: existing });
       } else if (autoTrackClimbs && climb.origin !== "archived") {
-        try {
-          const key2 = trackClimb(projectId, climb, { autoCreated: true });
-          linkedByName.set(climb.name, key2);
-          outcomeKeys.add(key2);
-        } catch {
-        }
+        needsTreeWrite = true;
       }
     }
+    if (!needsTreeWrite && linkOnlyUpdates.length === 0) {
+      return {
+        ...scanned,
+        warnings,
+        autoTrackClimbs,
+        climbs: scanned.climbs.map((climb) => ({
+          ...climb,
+          outcomeKey: preLinkedById.get(climb.id) ?? null
+        }))
+      };
+    }
+    if (!needsTreeWrite) {
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        for (const { climb, link } of linkOnlyUpdates) {
+          const current = getLinkByIdStmt.get(projectId, climb.id) ?? link;
+          if (climb.status === "active" && current.last_synced_steps >= 0 && climb.steps < current.last_synced_steps) {
+            continue;
+          }
+          const nextSteps = climb.status === "active" ? Math.max(current.last_synced_steps, climb.steps) : current.last_synced_steps;
+          upsertLinkStmt.run(
+            projectId,
+            climb.name,
+            climb.id,
+            current.outcome_key,
+            climb.directory,
+            climb.origin,
+            current.auto_created,
+            nextSteps,
+            climb.verdict,
+            current.created,
+            now
+          );
+        }
+        db.exec("COMMIT");
+      } catch (error62) {
+        try {
+          db.exec("ROLLBACK");
+        } catch {
+        }
+        warnings.push(
+          `Failed to update climb link metadata: ${error62 instanceof Error ? error62.message : String(error62)}`
+        );
+      }
+      return {
+        ...scanned,
+        warnings,
+        autoTrackClimbs,
+        climbs: scanned.climbs.map((climb) => ({
+          ...climb,
+          outcomeKey: preLinkedById.get(climb.id) ?? null
+        }))
+      };
+    }
+    const linkedById = repo.modify(projectId, (tree) => {
+      const txLinks = /* @__PURE__ */ new Map();
+      const txLinkedOutcomeToClimbId = /* @__PURE__ */ new Map();
+      for (const row of listLinksStmt.all(projectId)) {
+        txLinks.set(row.climb_id, row);
+        txLinkedOutcomeToClimbId.set(row.outcome_key, row.climb_id);
+      }
+      const outcomeKeys = new Set(tree.outcomes.map((o) => o.key));
+      const resultMap = /* @__PURE__ */ new Map();
+      for (const claim3 of [...tree.claims]) {
+        if (claim3.threadId === "main checkout") {
+          try {
+            applyCore(tree, { op: "release_outcome", key: claim3.key, threadId: "main checkout" }, now);
+          } catch (error62) {
+            warnings.push(
+              `Failed to release phantom claim on ${claim3.key}: ${error62 instanceof Error ? error62.message : String(error62)}`
+            );
+          }
+        }
+      }
+      for (const climb of scanned.climbs) {
+        const existing = txLinks.get(climb.id);
+        const alreadyTracked = existing !== void 0 && outcomeKeys.has(existing.outcome_key);
+        if (alreadyTracked) {
+          try {
+            applySyncProgressInTx(tree, projectId, climb, existing, now, nowMs, warnings);
+            resultMap.set(climb.id, existing.outcome_key);
+          } catch (error62) {
+            resultMap.set(climb.id, existing.outcome_key);
+            warnings.push(
+              `Failed to sync climb ${climb.name} (${climb.id}): ${error62 instanceof Error ? error62.message : String(error62)}`
+            );
+          }
+        } else if (autoTrackClimbs && climb.origin !== "archived") {
+          try {
+            const key2 = applyTrackClimbInTx(
+              tree,
+              projectId,
+              climb,
+              true,
+              txLinkedOutcomeToClimbId,
+              now,
+              nowMs,
+              warnings
+            );
+            resultMap.set(climb.id, key2);
+            outcomeKeys.add(key2);
+          } catch (error62) {
+            warnings.push(
+              `Failed to auto-track climb ${climb.name} (${climb.id}): ${error62 instanceof Error ? error62.message : String(error62)}`
+            );
+          }
+        }
+      }
+      return resultMap;
+    });
     return {
       ...scanned,
+      warnings,
       autoTrackClimbs,
       climbs: scanned.climbs.map((climb) => ({
         ...climb,
-        outcomeKey: linkedByName.get(climb.name) ?? null
+        outcomeKey: linkedById.get(climb.id) ?? null
       }))
     };
   }
@@ -43216,11 +45483,25 @@ function lintTree(input2, now = /* @__PURE__ */ new Date()) {
 }
 
 // src/mirror.ts
-import { mkdir, writeFile } from "node:fs/promises";
-import { dirname as dirname5, join as join6 } from "node:path";
+import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
+import { basename as basename4, dirname as dirname5, join as join6 } from "node:path";
 async function writeMirror(directory, tree) {
   const entries = [];
-  const add = (file2, lines) => entries.push([file2, lines.join("\n") + "\n"]);
+  const expectedByDir = /* @__PURE__ */ new Map([
+    ["goals", /* @__PURE__ */ new Set()],
+    ["outcomes", /* @__PURE__ */ new Set()],
+    ["plans", /* @__PURE__ */ new Set()]
+  ]);
+  const track2 = (file2) => {
+    const slash = file2.indexOf("/");
+    if (slash > 0) {
+      expectedByDir.get(file2.slice(0, slash))?.add(basename4(file2));
+    }
+  };
+  const add = (file2, lines) => {
+    track2(file2);
+    entries.push([file2, lines.join("\n") + "\n"]);
+  };
   for (const g of tree.goals) {
     add("goals/" + g.key + ".md", [
       "# " + g.title,
@@ -43246,8 +45527,10 @@ async function writeMirror(directory, tree) {
       )
     ]);
     const ledger = tree.evidence.filter((e) => e.key === o.key).map((e) => JSON.stringify(e));
+    const evidenceFile = "outcomes/" + o.key + ".evidence.jsonl";
+    track2(evidenceFile);
     entries.push([
-      "outcomes/" + o.key + ".evidence.jsonl",
+      evidenceFile,
       ledger.length ? ledger.join("\n") + "\n" : ""
     ]);
     for (const p2 of tree.plans.filter((p3) => p3.key === o.key)) {
@@ -43272,12 +45555,30 @@ async function writeMirror(directory, tree) {
     await mkdir(dirname5(fullPath), { recursive: true });
     await writeFile(fullPath, content, "utf8");
   }
-  return { root, files: entries.length };
+  let pruned = 0;
+  for (const subdir of ["outcomes", "plans", "goals"]) {
+    const expected = expectedByDir.get(subdir);
+    const dirPath = join6(root, subdir);
+    let dirEntries;
+    try {
+      dirEntries = await readdir(dirPath, { withFileTypes: true });
+    } catch (error62) {
+      if (error62?.code === "ENOENT") continue;
+      throw error62;
+    }
+    for (const entry of dirEntries) {
+      if (!expected.has(entry.name)) {
+        await rm(join6(dirPath, entry.name), { recursive: true, force: true });
+        pruned += 1;
+      }
+    }
+  }
+  return { root, files: entries.length, pruned };
 }
 
 // src/ci-ingest.ts
 import { readFileSync as readFileSync6 } from "node:fs";
-import { isAbsolute as isAbsolute2, resolve as resolve5 } from "node:path";
+import { isAbsolute as isAbsolute3, resolve as resolve5 } from "node:path";
 import {
   buildEvidence,
   parseReport,
@@ -43555,7 +45856,7 @@ function frozenBreaches(tree, frozenAt, keys) {
   return breaches;
 }
 function readReportText(file2, directory) {
-  const full = isAbsolute2(file2) ? file2 : resolve5(directory ?? process.cwd(), file2);
+  const full = isAbsolute3(file2) ? file2 : resolve5(directory ?? process.cwd(), file2);
   try {
     return readFileSync6(full, "utf8");
   } catch (error62) {
@@ -43723,11 +46024,11 @@ function postTestEvidenceBundle(repo, options) {
 }
 
 // src/studies.ts
-import { readFile, readdir, stat } from "node:fs/promises";
+import { readFile, readdir as readdir2, stat } from "node:fs/promises";
 import { posix } from "node:path";
 var join7 = posix.join;
 var resolve6 = posix.resolve;
-var isAbsolute3 = posix.isAbsolute;
+var isAbsolute4 = posix.isAbsolute;
 var STUDY_PREVIEW_SCHEMA = "hillclimb.study.preview.v1";
 var STUDY_REPORT_SCHEMA = "hillclimb.study.report.v1";
 var OUTPUT_LIMIT = 24e3;
@@ -43761,7 +46062,7 @@ function localStudyIO() {
     },
     async listDir(path) {
       try {
-        const entries = await readdir(path, { withFileTypes: true });
+        const entries = await readdir2(path, { withFileTypes: true });
         return {
           entries: entries.map((entry) => ({
             name: entry.name,
@@ -43784,8 +46085,8 @@ function isWithin(root, candidate) {
   const base = stripTrailing(root);
   const target = stripTrailing(candidate);
   if (target === base) return true;
-  const relative = posix.relative(base, target);
-  return relative !== "" && relative !== ".." && !relative.startsWith("../") && !posix.isAbsolute(relative);
+  const relative2 = posix.relative(base, target);
+  return relative2 !== "" && relative2 !== ".." && !relative2.startsWith("../") && !posix.isAbsolute(relative2);
 }
 function assertWithin(root, candidate, operation) {
   void operation;
@@ -43812,7 +46113,7 @@ function openStudySession(override, cwdOverride, io = localStudyIO()) {
   let root;
   let via;
   if (override !== null && override !== "") {
-    root = isAbsolute3(override) ? posix.resolve(override) : posix.resolve(cwd, override);
+    root = isAbsolute4(override) ? posix.resolve(override) : posix.resolve(cwd, override);
     via = "flag";
   } else {
     root = cwd;
@@ -44836,7 +47137,7 @@ async function collectRows(io, root, runs, filter, truncated) {
     const runText = await readStrictText(io, join7(runDir, "run.yaml"), "run record");
     if (runText === null) continue;
     const run = asRecord(parseYamlSubset(runText));
-    const runId = typeof run.run_id === "string" ? run.run_id : basename3(runDir);
+    const runId = typeof run.run_id === "string" ? run.run_id : basename5(runDir);
     if (filter.run !== null && runId !== filter.run) continue;
     runIds.push(runId);
     const hillclimbDir = resolveRunHillclimbDir(runDir);
@@ -45204,7 +47505,7 @@ async function runStudyReport(options = {}) {
   const artifactOption = stringOption(options.artifact);
   let artifactPath = null;
   if (artifactOption !== null) {
-    artifactPath = isAbsolute3(artifactOption) ? artifactOption : posix.resolve(session.root, artifactOption);
+    artifactPath = isAbsolute4(artifactOption) ? artifactOption : posix.resolve(session.root, artifactOption);
     assertWithin(session.root, artifactPath, "read");
   }
   const noiseFloor = options.noiseFloor === void 0 || options.noiseFloor === "" ? null : typeof options.noiseFloor === "number" ? options.noiseFloor : Number(options.noiseFloor);
@@ -45232,12 +47533,12 @@ async function runStudyReport(options = {}) {
 }
 async function resolveStudySpec(io, root, target) {
   if (target !== null && target !== "") {
-    const candidates2 = isAbsolute3(target) ? [target] : [resolve6(root, target), resolve6(root, "experiments", `${target}.yaml`), resolve6(root, "experiments", `${target}.yml`)];
+    const candidates2 = isAbsolute4(target) ? [target] : [resolve6(root, target), resolve6(root, "experiments", `${target}.yaml`), resolve6(root, "experiments", `${target}.yml`)];
     for (const candidate of candidates2) {
       if (!isWithin(root, candidate)) continue;
       if (await readText(io, candidate) !== null) return candidate;
     }
-    if (isAbsolute3(target) && !isWithin(root, target)) {
+    if (isAbsolute4(target) && !isWithin(root, target)) {
       throw new HillClimbError(`${target} is outside the selected directory ${root}`, {
         code: "path_outside_root",
         hint: "Study paths must stay under --dir; move the spec there or pass the right --dir."
@@ -45285,9 +47586,9 @@ function displayPath(path, base) {
   return path;
 }
 function specStem(path) {
-  return basename3(path).replace(/\.ya?ml$/i, "");
+  return basename5(path).replace(/\.ya?ml$/i, "");
 }
-function basename3(path) {
+function basename5(path) {
   const parts = path.split("/").filter((part) => part !== "");
   return parts[parts.length - 1] ?? path;
 }
@@ -45453,6 +47754,12 @@ function jsonResult(data, textSummary) {
     structuredContent: data
   };
 }
+function appJsonResult(data, textSummary = "OK") {
+  return {
+    content: [{ type: "text", text: cap2(textSummary) }],
+    structuredContent: data
+  };
+}
 function errorResult(error62) {
   const message2 = error62 instanceof Error ? error62.message : String(error62);
   const hint = error62 instanceof HillClimbError ? error62.hint : void 0;
@@ -45477,12 +47784,13 @@ function createHillClimbServer(repo, runtime) {
     if (envId && envId !== "outside-of-project" && projects.some((p2) => p2.id === envId)) {
       return envId;
     }
+    const summaries = new Map(repo.projectSummaries().map((s2) => [s2.project, s2]));
     let bestPopulated = null;
     for (const p2 of projects) {
-      const t = repo.read(p2.id);
-      if (t.outcomes.length > 0 || t.goals.length > 0) {
-        const lastAt = t.activity.length > 0 ? Date.parse(t.activity[t.activity.length - 1].at) || 0 : 0;
-        const score = lastAt > 0 ? lastAt : t.outcomes.length;
+      const meta3 = summaries.get(p2.id);
+      if (meta3 && (meta3.outcomeCount > 0 || meta3.goalCount > 0)) {
+        const lastAt = meta3.lastActivityAt ? Date.parse(meta3.lastActivityAt) || 0 : 0;
+        const score = lastAt > 0 ? lastAt : meta3.outcomeCount;
         if (!bestPopulated || score > bestPopulated.score) {
           bestPopulated = { id: p2.id, score };
         }
@@ -45494,7 +47802,7 @@ function createHillClimbServer(repo, runtime) {
     return projects[0]?.id ?? repo.resolveProjectId();
   };
   const server = new McpServer(
-    { name: "hillclimb", version: "0.3.1" },
+    { name: "hillclimb", version: "0.4.0" },
     {
       capabilities: {
         tools: {},
@@ -45549,9 +47857,9 @@ function createHillClimbServer(repo, runtime) {
         const projects = repo.listProjects();
         const chosen = args.projectId ? repo.resolveProjectId(args.projectId) : pickDefaultProject(projects);
         const track2 = args.track ?? "main";
-        const repoClimbs = scanAndSync(chosen);
+        const repoClimbs = scanAndSync(chosen, { rowLimit: 25, includeNotes: false });
         const tree = repo.view(chosen, track2);
-        const inboxCount = repo.projects().reduce((sum, id) => sum + repo.view(id).inbox, 0);
+        const inboxCount = repo.inboxCountTotal();
         const defaultPage = args.page ?? (tree.outcomes.length === 0 && repoClimbs.climbs.length > 0 ? "climbs" : "tree");
         const payload = {
           projects,
@@ -45564,7 +47872,7 @@ function createHillClimbServer(repo, runtime) {
           inboxCount
         };
         const summary = `Opened Hill Climb for project "${chosen}" (${tree.outcomes.length} outcomes, ${repoClimbs.climbs.length} repo climb(s), ${tree.next.length} ready next, ${tree.inbox} inbox item(s)).`;
-        return jsonResult(payload, summary);
+        return appJsonResult(payload, summary);
       } catch (error62) {
         return errorResult(error62);
       }
@@ -45597,14 +47905,23 @@ function createHillClimbServer(repo, runtime) {
       inputSchema: {
         name: external_exports.string().min(1).max(64).optional().describe("Climb name; omit if the repo has only one"),
         directory: external_exports.string().min(1).max(1024).optional().describe("Absolute repository path"),
-        last: external_exports.number().int().min(0).max(200).optional().describe("Number of log rows to include (default 15)")
+        last: external_exports.number().int().min(0).max(200).optional().describe("Number of log rows to include (default 10 compact, 15 full)"),
+        format: external_exports.enum(["compact", "full"]).default("compact").describe("compact omits duplicated recent-row array from structuredContent (trail remains in text); full includes complete rows")
       }
     },
-    async ({ name, directory, last }) => {
+    async ({ name, directory, last, format }) => {
       try {
         const dir = resolveRepoDirectory(directory);
-        const res = getClimbStatus(dir, name, last ?? 15);
-        return jsonResult({ directory: dir, engine: res.engine, ...res.summary }, res.textWithNext);
+        const rowCount = last ?? (format === "full" ? 15 : 10);
+        const res = getClimbStatus(dir, name, rowCount);
+        if (format === "full") {
+          return jsonResult({ directory: dir, engine: res.engine, ...res.summary }, res.textWithNext);
+        }
+        const { recent: _recent, ...compactSummary } = res.summary;
+        return jsonResult(
+          { directory: dir, engine: res.engine, ...compactSummary, recentCount: res.summary.recent.length },
+          res.textWithNext
+        );
       } catch (error62) {
         return errorResult(error62);
       }
@@ -45637,18 +47954,27 @@ function createHillClimbServer(repo, runtime) {
       description: "List all climbs (and prepared directories without card.json) in a git repository, optionally scanning linked git worktrees (including Antigravity swarm worktrees).",
       inputSchema: {
         directory: external_exports.string().min(1).max(1024).optional().describe("Absolute repository path"),
-        includeWorktrees: external_exports.boolean().default(true).describe("Also scan linked git worktrees and Antigravity swarm worktrees for this repo (default true)")
+        includeWorktrees: external_exports.boolean().default(true).describe("Also scan linked git worktrees and Antigravity swarm worktrees for this repo (default true)"),
+        includeRows: external_exports.boolean().default(false).describe("Include per-climb log rows in structuredContent (default false for compact output)"),
+        includeNotes: external_exports.boolean().default(false).describe("Include per-climb notes.md text in structuredContent (default false)")
       }
     },
-    async ({ directory, includeWorktrees }) => {
+    async ({ directory, includeWorktrees, includeRows, includeNotes }) => {
       try {
         const dir = resolveRepoDirectory(directory);
         if (includeWorktrees) {
-          const scanned = scanProjectClimbs(dir);
+          const scanned = scanProjectClimbs(dir, {
+            rowLimit: includeRows ? 50 : 0,
+            includeNotes
+          });
           const text3 = scanned.climbs.length === 0 ? `No climbs in ${dir} (checked ${scanned.worktreesScanned} linked worktree(s)).` : scanned.climbs.map(
             (c) => c.status === "active" ? `${c.name} (${c.isMainCheckout ? "main" : c.worktreeName}): ${c.baseline} -> ${c.best} (${c.direction}), ${c.steps} steps [${c.verdict}]` : `${c.name} (${c.isMainCheckout ? "main" : c.worktreeName}): preparing (${c.preparedFiles} staged files, awaiting climb.py init)`
           ).join("\n");
-          return jsonResult(scanned, text3);
+          const payload = includeRows || includeNotes ? scanned : {
+            ...scanned,
+            climbs: scanned.climbs.map(({ rows: _rows, notes: _notes, ...rest }) => rest)
+          };
+          return jsonResult(payload, text3);
         }
         const res = getClimbList(dir);
         return jsonResult({ directory: dir, climbs: res.climbs, prepared: res.prepared }, res.text);
@@ -45713,10 +48039,14 @@ function createHillClimbServer(repo, runtime) {
         projectId: external_exports.string().optional().describe("Project ID, name, or directory"),
         directory: external_exports.string().optional().describe("Workspace directory to resolve the project from"),
         key: external_exports.string().optional().describe("Specific outcome key to inspect"),
-        track: external_exports.string().optional().describe("Evidence track (defaults to main)")
+        track: external_exports.string().optional().describe("Evidence track (defaults to main)"),
+        limit: external_exports.number().int().min(1).max(200).default(50).describe("Max ranked outcomes returned when key is omitted"),
+        offset: external_exports.number().int().min(0).default(0).describe("Offset into ranked outcomes when key is omitted"),
+        evidenceLimit: external_exports.number().int().min(1).max(MAX_LIMIT).default(20).describe("Max recent evidence rows when key is set"),
+        commentLimit: external_exports.number().int().min(1).max(MAX_LIMIT).default(20).describe("Max recent comments when key is set")
       }
     },
-    async ({ projectId, directory, key: key2, track: track2 }) => {
+    async ({ projectId, directory, key: key2, track: track2, limit, offset, evidenceLimit, commentLimit }) => {
       try {
         const pid = repo.resolveProjectId(projectId, directory);
         const trackName = track2 ?? "main";
@@ -45725,24 +48055,54 @@ function createHillClimbServer(repo, runtime) {
         if (key2 && !s2.outcomes.some((o) => o.key === key2)) {
           throw new Error("Unknown outcome " + key2);
         }
-        const data = key2 ? {
-          projectId: pid,
-          track: trackName,
-          contract: s2.outcomes.find((o) => o.key === key2),
-          rank: s2.ranked.find((o) => o.key === key2),
-          plans: s2.plans.filter((p2) => p2.key === key2),
-          evidence: s2.evidence.filter((e) => e.key === key2 && e.track === trackName),
-          comments: s2.comments.filter((c) => c.key === key2),
-          inbox: s2.inbox
-        } : {
+        if (key2) {
+          const allPlans = s2.plans.filter((p2) => p2.key === key2);
+          const allEvidence = s2.evidence.filter((e) => e.key === key2 && e.track === trackName);
+          const allComments = s2.comments.filter((c) => c.key === key2);
+          const plans = allPlans.slice(-5).map((p2) => ({
+            ...p2,
+            body: bound2(p2.body, MAX_TEXT).text,
+            bodyTruncated: p2.body.length > MAX_TEXT
+          }));
+          const evidence = allEvidence.slice(-evidenceLimit).map((e) => ({
+            ...e,
+            text: bound2(e.text, MAX_EVIDENCE_TEXT2).text,
+            textTruncated: e.text.length > MAX_EVIDENCE_TEXT2
+          }));
+          const comments = allComments.slice(-commentLimit).map((c) => ({
+            ...c,
+            text: bound2(c.text, MAX_EVIDENCE_TEXT2).text,
+            textTruncated: c.text.length > MAX_EVIDENCE_TEXT2
+          }));
+          return jsonResult({
+            projectId: pid,
+            track: trackName,
+            contract: s2.outcomes.find((o) => o.key === key2),
+            rank: s2.ranked.find((o) => o.key === key2),
+            plans,
+            evidence,
+            comments,
+            counts: { plans: allPlans.length, evidence: allEvidence.length, comments: allComments.length },
+            inbox: s2.inbox
+          });
+        }
+        const rankedAll = s2.ranked.map(({ key: k2, signal: signal2, blockedBy, claim: claim3 }) => ({ key: k2, signal: signal2, blockedBy, claim: claim3 }));
+        const page = windowOf(rankedAll, limit, offset);
+        return jsonResult({
           projectId: pid,
           track: trackName,
           goals: s2.goals,
-          ranked: s2.ranked.map(({ key: k2, signal: signal2, blockedBy, claim: claim3 }) => ({ key: k2, signal: signal2, blockedBy, claim: claim3 })),
+          ranked: page.items,
+          pagination: {
+            total: page.total,
+            offset: page.offset,
+            limit: page.limit,
+            hasMore: page.hasMore,
+            nextOffset: page.nextOffset
+          },
           next: s2.next,
           inbox: s2.inbox
-        };
-        return jsonResult(data);
+        });
       } catch (error62) {
         return errorResult(error62);
       }
@@ -45758,18 +48118,22 @@ function createHillClimbServer(repo, runtime) {
         directory: external_exports.string().optional().describe("Workspace directory"),
         track: external_exports.string().optional(),
         limit: external_exports.number().int().min(1).max(MAX_LIMIT).default(DEFAULT_LIMIT),
-        offset: external_exports.number().int().min(0).default(0)
+        offset: external_exports.number().int().min(0).default(0),
+        includeContract: external_exports.boolean().default(false).describe("Include story, criteria, and dependsOn inline to save a hillclimb_outcome call"),
+        includeBlocked: external_exports.boolean().default(false).describe("Also list unverified outcomes currently blocked by unproven dependencies")
       }
     },
-    async ({ projectId, directory, track: track2, limit, offset }) => {
+    async ({ projectId, directory, track: track2, limit, offset, includeContract, includeBlocked }) => {
       try {
         const pid = repo.resolveProjectId(projectId, directory);
         const trackName = track2 ?? "main";
         scanAndSync(pid);
         const snapshot2 = repo.view(pid, trackName);
-        const rows = snapshot2.next.map((wanted) => {
-          const rank2 = snapshot2.ranked.find((r2) => r2.key === wanted);
-          const outcome2 = snapshot2.outcomes.find((row) => row.key === wanted);
+        const outcomeByKey = new Map(snapshot2.outcomes.map((row) => [row.key, row]));
+        const rankByKey = new Map(snapshot2.ranked.map((row) => [row.key, row]));
+        const formatRow = (wanted) => {
+          const rank2 = rankByKey.get(wanted);
+          const outcome2 = outcomeByKey.get(wanted);
           return {
             key: wanted,
             title: outcome2?.title ?? wanted,
@@ -45777,15 +48141,19 @@ function createHillClimbServer(repo, runtime) {
             version: outcome2?.version ?? null,
             signal: rank2?.signal ?? "unverified",
             blockedBy: rank2?.blockedBy ?? [],
-            claim: rank2?.claim ?? null
+            claim: rank2?.claim ?? null,
+            ...includeContract && outcome2 ? { story: outcome2.story, criteria: outcome2.criteria, dependsOn: outcome2.dependsOn } : {}
           };
-        });
+        };
+        const rows = snapshot2.next.map(formatRow);
         const counts = {};
         for (const rank2 of snapshot2.ranked) counts[rank2.signal] = (counts[rank2.signal] ?? 0) + 1;
+        const blocked = includeBlocked ? snapshot2.ranked.filter((r2) => r2.signal !== "verified" && r2.blockedBy.length > 0).map((r2) => formatRow(r2.key)) : void 0;
         return jsonResult({
           projectId: pid,
           track: trackName,
           queue: windowOf(rows, limit, offset),
+          ...includeBlocked ? { blocked: windowOf(blocked ?? [], limit, 0) } : {},
           outcomeCount: snapshot2.outcomes.length,
           bySignal: counts,
           inbox: inboxOf2(snapshot2)
@@ -45879,27 +48247,43 @@ function createHillClimbServer(repo, runtime) {
       inputSchema: {
         projectId: external_exports.string().optional(),
         directory: external_exports.string().optional(),
-        action: external_exports.union([external_exports.string(), external_exports.record(external_exports.string(), external_exports.unknown())]).describe("JSON string or object with `op` and its arguments")
+        action: external_exports.union([external_exports.string(), external_exports.record(external_exports.string(), external_exports.unknown())]).optional().describe("JSON string or object with `op` and its arguments"),
+        actions: external_exports.array(external_exports.union([external_exports.string(), external_exports.record(external_exports.string(), external_exports.unknown())])).min(1).max(50).optional().describe("Optional atomic batch of actions to apply in one transaction")
       }
     },
-    async ({ projectId, directory, action }) => {
+    async ({ projectId, directory, action, actions }) => {
       try {
         const pid = repo.resolveProjectId(projectId, directory);
-        const raw = typeof action === "string" ? JSON.parse(action) : action;
-        const parsed = actionSchema.parse(raw);
-        if (isDecision(parsed)) {
-          throw new HillClimbError("Review this decision in the Hill Climb UI inbox (human confirmation required).", {
-            code: "human_decision_required",
-            hint: "Call hillclimb_open with page='inbox' or page='roadmap' so the user can review and confirm."
-          });
+        const rawList = actions ?? (action !== void 0 ? [action] : []);
+        if (rawList.length === 0) {
+          throw new Error("Pass `action` or a non-empty `actions` array.");
         }
-        repo.act(pid, parsed);
+        const parsedList = rawList.map((item) => {
+          const raw = typeof item === "string" ? JSON.parse(item) : item;
+          const parsed = actionSchema.parse(raw);
+          if (isDecision(parsed)) {
+            throw new HillClimbError("Review this decision in the Hill Climb UI inbox (human confirmation required).", {
+              code: "human_decision_required",
+              hint: "Call hillclimb_open with page='inbox' or page='roadmap' so the user can review and confirm."
+            });
+          }
+          return parsed;
+        });
+        if (parsedList.length === 1) {
+          repo.act(pid, parsedList[0]);
+        } else {
+          repo.actBatch(pid, parsedList);
+        }
         const view = repo.view(pid);
+        const createdKeys = new Set(
+          parsedList.filter((p2) => p2.op === "create_goal" || p2.op === "create_outcome").map((p2) => p2.key)
+        );
         return jsonResult({
           ok: true,
           projectId: pid,
+          applied: parsedList.length,
           inbox: view.inbox,
-          ...parsed.op === "create_goal" || parsed.op === "create_outcome" ? { lint: lintTree(view).findings.filter((f2) => f2.itemKey === parsed.key) } : {}
+          ...createdKeys.size > 0 ? { lint: lintTree(view).findings.filter((f2) => createdKeys.has(f2.itemKey)) } : {}
         });
       } catch (error62) {
         return errorResult(error62);
@@ -46399,15 +48783,16 @@ function createHillClimbServer(repo, runtime) {
         directory: external_exports.string().optional(),
         key: keySchema,
         engine: external_exports.enum(["repo", "search"]),
-        rig: rigSchema.optional().describe("Provide to save a new verifier rig for the outcome's current contract version")
+        rig: external_exports.record(external_exports.string(), external_exports.unknown()).optional().describe("Verifier rig object ({engine:'repo', check, direction, target, guard, holdout, lock, ...} or {engine:'search', problemId, metric, higherIsBetter, target, verifier, baseline, ...}) validated against rigSchema")
       }
     },
     async ({ projectId, directory, key: key2, engine, rig }) => {
       try {
         const pid = repo.resolveProjectId(projectId, directory);
         if (rig) {
+          const parsedRig = rigSchema.parse(rig);
           const outcome2 = outcomeOf2(repo.read(pid), key2);
-          const saved = runtime.saveRig(pid, key2, outcome2.version, rig);
+          const saved = runtime.saveRig(pid, key2, outcome2.version, parsedRig);
           return jsonResult({ projectId: pid, key: key2, saved, rig: runtime.getRig(pid, key2, engine) });
         }
         return jsonResult({ projectId: pid, key: key2, engine, rig: runtime.getRig(pid, key2, engine) });
@@ -46697,8 +49082,8 @@ function createHillClimbServer(repo, runtime) {
     async () => {
       try {
         const projects = repo.listProjects();
-        const inboxCount = repo.projects().reduce((n2, id) => n2 + repo.view(id).inbox, 0);
-        return jsonResult({ projects, inboxCount });
+        const inboxCount = repo.inboxCountTotal();
+        return appJsonResult({ projects, inboxCount }, `${projects.length} project(s), ${inboxCount} inbox item(s)`);
       } catch (error62) {
         return errorResult(error62);
       }
@@ -46719,7 +49104,7 @@ function createHillClimbServer(repo, runtime) {
     async ({ id, name, directory }) => {
       try {
         const project = repo.registerProject({ id, name, directory: directory ?? null });
-        return jsonResult({ project, projects: repo.listProjects() });
+        return appJsonResult({ project, projects: repo.listProjects() }, `Registered project ${project.id}`);
       } catch (error62) {
         return errorResult(error62);
       }
@@ -46737,8 +49122,11 @@ function createHillClimbServer(repo, runtime) {
       try {
         const repoClimbs = scanAndSync(projectId, { force });
         const tree = repo.view(projectId, track2 ?? "main");
-        const inboxCount = repo.projects().reduce((n2, id) => n2 + repo.view(id).inbox, 0);
-        return jsonResult({ tree, repoClimbs, inboxCount });
+        const inboxCount = repo.inboxCountTotal();
+        return appJsonResult(
+          { tree, repoClimbs, inboxCount },
+          `Tree ${projectId} (${tree.outcomes.length} outcomes, ${repoClimbs.climbs.length} climb(s), ${inboxCount} inbox)`
+        );
       } catch (error62) {
         return errorResult(error62);
       }
@@ -46755,7 +49143,10 @@ function createHillClimbServer(repo, runtime) {
     async ({ projectId, force }) => {
       try {
         const repoClimbs = scanAndSync(projectId, { force: force ?? true });
-        return jsonResult(repoClimbs);
+        return appJsonResult(
+          repoClimbs,
+          `${repoClimbs.climbs.length} climb(s) in ${projectId}`
+        );
       } catch (error62) {
         return errorResult(error62);
       }
@@ -46774,8 +49165,11 @@ function createHillClimbServer(repo, runtime) {
         autoTracker.setAutoTrackEnabled(projectId, enabled);
         const repoClimbs = scanAndSync(projectId);
         const tree = repo.view(projectId, track2 ?? "main");
-        const inboxCount = repo.projects().reduce((n2, id) => n2 + repo.view(id).inbox, 0);
-        return jsonResult({ ok: true, autoTrackClimbs: enabled, tree, repoClimbs, inboxCount });
+        const inboxCount = repo.inboxCountTotal();
+        return appJsonResult(
+          { ok: true, autoTrackClimbs: enabled, tree, repoClimbs, inboxCount },
+          `Auto-track ${enabled ? "enabled" : "disabled"} for ${projectId}`
+        );
       } catch (error62) {
         return errorResult(error62);
       }
@@ -46800,8 +49194,11 @@ function createHillClimbServer(repo, runtime) {
         const outcomeKey2 = autoTracker.trackClimb(projectId, target, { autoCreated: false });
         const repoClimbs = autoTracker.syncScannedClimbs(projectId, scanned);
         const tree = repo.view(projectId, track2 ?? "main");
-        const inboxCount = repo.projects().reduce((n2, id) => n2 + repo.view(id).inbox, 0);
-        return jsonResult({ ok: true, outcomeKey: outcomeKey2, tree, repoClimbs, inboxCount });
+        const inboxCount = repo.inboxCountTotal();
+        return appJsonResult(
+          { ok: true, outcomeKey: outcomeKey2, tree, repoClimbs, inboxCount },
+          `Tracked climb ${climbId} as ${outcomeKey2}`
+        );
       } catch (error62) {
         return errorResult(error62);
       }
@@ -46814,19 +49211,22 @@ function createHillClimbServer(repo, runtime) {
       description: "Apply a tree action from UI (supports human-confirmed contract decisions)",
       inputSchema: {
         projectId: external_exports.string().min(1),
-        action: actionSchema,
-        confirmed: external_exports.boolean().optional()
+        action: external_exports.record(external_exports.string(), external_exports.unknown()),
+        confirmed: external_exports.boolean().optional(),
+        track: external_exports.string().optional()
       },
       _meta: APP_ONLY
     },
-    async ({ projectId, action, confirmed }) => {
+    async ({ projectId, action, confirmed, track: track2 }) => {
       try {
-        if (isDecision(action) && confirmed !== true) {
+        const parsed = actionSchema.parse(action);
+        if (isDecision(parsed) && confirmed !== true) {
           throw new Error("Human confirmation required before approving/rejecting a contract change or promoting a track.");
         }
-        repo.act(projectId, action);
-        const tree = repo.view(projectId);
-        return jsonResult({ ok: true, tree });
+        repo.act(projectId, parsed);
+        const tree = repo.view(projectId, track2 ?? "main");
+        const inboxCount = repo.inboxCountTotal();
+        return appJsonResult({ ok: true, tree, inboxCount }, `Applied ${parsed.op} on ${projectId}`);
       } catch (error62) {
         return errorResult(error62);
       }
@@ -46849,7 +49249,10 @@ function createHillClimbServer(repo, runtime) {
           from: p2.live ?? "missing",
           to: p2.track ?? "missing"
         }));
-        return jsonResult({ rows, summary: preview.summary, canApply: preview.canApply, reason: preview.reason });
+        return appJsonResult(
+          { rows, summary: preview.summary, canApply: preview.canApply, reason: preview.reason },
+          `Promotion preview: ${preview.summary.proven}/${preview.summary.total} proven`
+        );
       } catch (error62) {
         return errorResult(error62);
       }
@@ -46865,7 +49268,8 @@ function createHillClimbServer(repo, runtime) {
     },
     async ({ projectId, key: key2, engine }) => {
       try {
-        return jsonResult({ rig: runtime.getRig(projectId, key2, engine) });
+        const rig = runtime.getRig(projectId, key2, engine);
+        return appJsonResult({ rig }, rig ? `Rig loaded for ${key2} (${engine})` : `No ${engine} rig for ${key2}`);
       } catch (error62) {
         return errorResult(error62);
       }
@@ -46880,14 +49284,15 @@ function createHillClimbServer(repo, runtime) {
         projectId: external_exports.string().min(1),
         key: external_exports.string().min(1),
         version: external_exports.number().int().positive(),
-        rig: rigSchema
+        rig: external_exports.record(external_exports.string(), external_exports.unknown())
       },
       _meta: APP_ONLY
     },
     async ({ projectId, key: key2, version: version2, rig }) => {
       try {
-        const saved = runtime.saveRig(projectId, key2, version2, rig);
-        return jsonResult({ ok: true, saved });
+        const parsedRig = rigSchema.parse(rig);
+        const saved = runtime.saveRig(projectId, key2, version2, parsedRig);
+        return appJsonResult({ ok: true, saved }, `Saved ${parsedRig.engine} rig for ${key2} v${version2}`);
       } catch (error62) {
         return errorResult(error62);
       }
@@ -46910,7 +49315,7 @@ function createHillClimbServer(repo, runtime) {
     async ({ projectId, key: key2, engine, track: track2, deferWorkerLaunch }) => {
       try {
         const result = await runtime.dispatch(projectId, key2, engine, track2, { deferWorkerLaunch });
-        return jsonResult(result);
+        return appJsonResult(result, `Dispatched ${result.runId} for ${key2}`);
       } catch (error62) {
         return errorResult(error62);
       }
@@ -46927,7 +49332,7 @@ function createHillClimbServer(repo, runtime) {
     async ({ runId, conversationId }) => {
       try {
         const run = runtime.attachWorker(runId, conversationId);
-        return jsonResult({ ok: true, run });
+        return appJsonResult({ ok: true, run }, `Attached ${conversationId} to ${runId}`);
       } catch (error62) {
         return errorResult(error62);
       }
@@ -46948,10 +49353,10 @@ function createHillClimbServer(repo, runtime) {
           const dir = repo.getProject(projectId)?.directory ?? null;
           const fallback = autoTracker.liveForOutcome(projectId, key2, dir);
           if (fallback) {
-            return jsonResult(fallback);
+            return appJsonResult(fallback, `Live fallback for ${key2}`);
           }
         }
-        return jsonResult(live);
+        return appJsonResult(live, `Live status for ${key2}`);
       } catch (error62) {
         return errorResult(error62);
       }
@@ -46968,7 +49373,10 @@ function createHillClimbServer(repo, runtime) {
     async ({ projectId }) => {
       try {
         const report = await runtime.reconcile(projectId);
-        return jsonResult(report);
+        return appJsonResult(
+          report,
+          `Reconciled ${report.scanned} run(s): ${report.applied} applied`
+        );
       } catch (error62) {
         return errorResult(error62);
       }
@@ -46987,7 +49395,7 @@ function createHillClimbServer(repo, runtime) {
         const dir = repo.getProject(projectId)?.directory;
         if (!dir) throw new Error(`Project ${projectId} has no registered workspace directory.`);
         const res = await writeMirror(dir, repo.view(projectId));
-        return jsonResult(res);
+        return appJsonResult(res, `Synced ${res.files} files to ${res.root}`);
       } catch (error62) {
         return errorResult(error62);
       }
@@ -47004,7 +49412,10 @@ function createHillClimbServer(repo, runtime) {
     async ({ projectId }) => {
       try {
         const result = lintTree(repo.read(projectId));
-        return jsonResult(result);
+        return appJsonResult(
+          result,
+          `Lint ${result.passed ? "passed" : "failed"} (${result.errorCount} errors, ${result.warningCount} warnings)`
+        );
       } catch (error62) {
         return errorResult(error62);
       }
@@ -47015,7 +49426,7 @@ function createHillClimbServer(repo, runtime) {
 function isMainEntrypoint(metaUrl) {
   if (!process.argv[1]) return false;
   try {
-    return realpathSync(fileURLToPath4(metaUrl)) === realpathSync(process.argv[1]);
+    return realpathSync3(fileURLToPath4(metaUrl)) === realpathSync3(process.argv[1]);
   } catch {
     return resolve7(fileURLToPath4(metaUrl)) === resolve7(process.argv[1]);
   }
@@ -47030,10 +49441,7 @@ if (isEntrypoint) {
   const transport = new StdioServerTransport();
   const shutdown = () => {
     runtime.stop();
-    try {
-      db.close();
-    } catch {
-    }
+    repo.close();
     process.exit(0);
   };
   process.on("SIGINT", shutdown);
