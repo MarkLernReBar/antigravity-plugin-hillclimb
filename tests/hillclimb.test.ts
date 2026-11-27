@@ -22,6 +22,7 @@ import { blueprintActions, listBlueprints, parseMarkdownImport } from "../src/te
 import { createAutomationEngine, ingestAlert } from "../src/hooks.js";
 import { startLoopbackServer } from "../src/http-server.js";
 import { buildRig, draftForKit, emptyDraft, kitById, seedDraft, validateDraft } from "../src/ui/RigEditor.js";
+import { layoutTree, pendingProposedOutcomesByGoal } from "../src/ui/TreeView.js";
 import { readWorkspaceImageDataUri, scanDesignKit } from "../src/design-kit.js";
 import type { Outcome } from "../src/model.js";
 
@@ -1687,6 +1688,43 @@ experiments:
           arguments: { projectId: "design-demo", path: "../escape.png" },
         });
         assert.equal((readBad.structuredContent as { dataUri: string | null }).dataUri, null);
+
+        // UX-PROPOSED-TREE (v0.6.2): pending propose_outcome appears ghosted under its target goal, and clears upon approval
+        await client.callTool({
+          name: "hillclimb_propose_change",
+          arguments: {
+            projectId: "design-demo",
+            key: "UX-GHOST-1",
+            goalKey: "G-UX",
+            contract: {
+              title: "Ghost proposal row appears inline",
+              story: "As a reviewer, I want proposed outcomes visible under their goal, so that context is clear.",
+              criteria: [{ id: "c1", given: "pending create", when: "viewing Goals", then: "dashed ghost row renders" }],
+            },
+          },
+        });
+        const beforeApprove = await client.callTool({ name: "app_tree", arguments: { projectId: "design-demo" } });
+        const snapBefore = (beforeApprove.structuredContent as { tree: import("../src/model.js").Snapshot }).tree;
+        const groupedBefore = pendingProposedOutcomesByGoal(snapBefore.changes, new Set(snapBefore.goals.map((g) => g.key)));
+        assert.equal(groupedBefore.total, 1);
+        assert.equal(groupedBefore.byGoal.get("G-UX")?.[0]?.key, "UX-GHOST-1");
+        const layoutBefore = layoutTree(snapBefore.goals, snapBefore.outcomes, snapBefore.changes);
+        assert.ok(
+          layoutBefore.nodes.some((n) => n.kind === "proposed-outcome" && n.displayKey === "UX-GHOST-1" && n.goalKey === "G-UX"),
+          "layoutTree must place pending propose_outcome as a ghosted node under its target goal",
+        );
+
+        const ghostChangeId = groupedBefore.byGoal.get("G-UX")![0]!.id;
+        await client.callTool({
+          name: "app_act",
+          arguments: { projectId: "design-demo", action: { op: "approve_change", id: ghostChangeId }, confirmed: true },
+        });
+        const afterApprove = await client.callTool({ name: "app_tree", arguments: { projectId: "design-demo" } });
+        const snapAfter = (afterApprove.structuredContent as { tree: import("../src/model.js").Snapshot }).tree;
+        assert.equal(pendingProposedOutcomesByGoal(snapAfter.changes).total, 0);
+        const layoutAfter = layoutTree(snapAfter.goals, snapAfter.outcomes, snapAfter.changes);
+        assert.ok(!layoutAfter.nodes.some((n) => n.kind === "proposed-outcome"));
+        assert.ok(layoutAfter.nodes.some((n) => n.kind === "outcome" && n.key === "UX-GHOST-1"));
       } finally {
         await client.close();
       }

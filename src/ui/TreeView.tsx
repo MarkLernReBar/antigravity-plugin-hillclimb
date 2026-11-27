@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent, JSX, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react'
 import type { Action } from '../actions.js'
-import type { Activity, Goal, Outcome, OutcomeAvailability, Ranked, Signal, Snapshot } from '../model.js'
+import type { Activity, Change, Goal, Outcome, OutcomeAvailability, Ranked, Signal, Snapshot } from '../model.js'
 import type { SavedViewDto, ViewProps } from '../view-props.js'
 
 export type ViewMode = 'map' | 'outline'
@@ -71,9 +71,32 @@ export function sortOutcomes(a: Outcome, b: Outcome): number {
   return a.rank - b.rank || a.created.localeCompare(b.created) || a.key.localeCompare(b.key)
 }
 
+export function pendingProposedOutcomesByGoal(
+  changes: Change[],
+  knownGoalKeys?: ReadonlySet<string>,
+): { byGoal: Map<string, Change[]>; unassigned: Change[]; total: number } {
+  const pending = changes
+    .filter((c) => c.state === 'pending' && c.kind === 'create')
+    .slice()
+    .sort((a, b) => a.proposed.rank - b.proposed.rank || a.created.localeCompare(b.created) || a.key.localeCompare(b.key))
+  const byGoal = new Map<string, Change[]>()
+  const unassigned: Change[] = []
+  for (const change of pending) {
+    const gk = change.goalKey ?? null
+    if (gk && (!knownGoalKeys || knownGoalKeys.has(gk))) {
+      const list = byGoal.get(gk) ?? []
+      list.push(change)
+      byGoal.set(gk, list)
+    } else {
+      unassigned.push(change)
+    }
+  }
+  return { byGoal, unassigned, total: pending.length }
+}
+
 export interface LayoutNode {
   key: string
-  kind: 'goal' | 'outcome'
+  kind: 'goal' | 'outcome' | 'proposed-outcome'
   title: string
   depth: number
   x: number
@@ -82,6 +105,9 @@ export interface LayoutNode {
   h: number
   parent: string | null
   goalKey: string | null
+  changeId?: string
+  displayKey?: string
+  criteriaCount?: number
 }
 
 export interface Layout {
@@ -100,9 +126,10 @@ const NODE_H = 46
 
 /**
  * Tidy layout: each goal sits at its depth, vertically centred on its subtree.
- * Outcomes are the leaves, so a goal with nothing under it still gets a row.
+ * Outcomes (and optional pending proposed outcomes) are the leaves, so a goal
+ * with nothing under it still gets a row.
  */
-export function layoutTree(goals: Goal[], outcomes: Outcome[]): Layout {
+export function layoutTree(goals: Goal[], outcomes: Outcome[], pendingCreates: Change[] = []): Layout {
   const goalByKey = new Map(goals.map((goal) => [goal.key, goal]))
   const childGoals = new Map<string, Goal[]>()
   for (const goal of goals) {
@@ -118,6 +145,7 @@ export function layoutTree(goals: Goal[], outcomes: Outcome[]): Layout {
     list.push(outcome)
     ownOutcomes.set(outcome.goalKey, list)
   }
+  const { byGoal: proposedByGoal } = pendingProposedOutcomesByGoal(pendingCreates, new Set(goalByKey.keys()))
 
   const nodes: LayoutNode[] = []
   const byKey = new Map<string, LayoutNode>()
@@ -139,6 +167,7 @@ export function layoutTree(goals: Goal[], outcomes: Outcome[]): Layout {
     placed.add(key)
     const kids = (childGoals.get(key) ?? []).slice().sort(sortGoals)
     const leaves = (ownOutcomes.get(key) ?? []).slice().sort(sortOutcomes)
+    const proposedLeaves = proposedByGoal.get(key) ?? []
     const childYs: number[] = []
 
     for (const kid of kids) {
@@ -162,6 +191,28 @@ export function layoutTree(goals: Goal[], outcomes: Outcome[]): Layout {
         goalKey: key,
       })
       edges.push({ from: key, to: outcome.key })
+      childYs.push(y)
+    }
+    for (const change of proposedLeaves) {
+      const y = cursor
+      cursor += ROW_GAP
+      const nodeKey = `proposed:${change.id}`
+      add({
+        key: nodeKey,
+        kind: 'proposed-outcome',
+        title: change.proposed.title,
+        depth: depth + 1,
+        x: (depth + 1) * COL_GAP,
+        y,
+        w: OUTCOME_W,
+        h: NODE_H,
+        parent: key,
+        goalKey: key,
+        changeId: change.id,
+        displayKey: change.key,
+        criteriaCount: change.proposed.criteria.length,
+      })
+      edges.push({ from: key, to: nodeKey })
       childYs.push(y)
     }
 
@@ -495,7 +546,15 @@ function SignalBadge({ signal }: { signal: Signal }): JSX.Element {
   )
 }
 
-function CoverageBar({ coverage, replaying }: { coverage: Coverage; replaying: boolean }): JSX.Element {
+function CoverageBar({
+  coverage,
+  replaying,
+  proposedCount = 0,
+}: {
+  coverage: Coverage
+  replaying: boolean
+  proposedCount?: number
+}): JSX.Element {
   const segments: Array<{ id: string; count: number }> = [
     { id: 'verified', count: coverage.proven },
     { id: 'unverified', count: coverage.unverified },
@@ -525,6 +584,12 @@ function CoverageBar({ coverage, replaying }: { coverage: Coverage; replaying: b
       <p className="hc-coverage-text">
         <strong>{coverage.pct}%</strong> proven · {coverage.proven}/{coverage.total}{' '}
         {coverage.total === 1 ? 'outcome' : 'outcomes'}
+        {proposedCount > 0 ? (
+          <>
+            {' · '}
+            <strong>{proposedCount} proposed</strong>
+          </>
+        ) : null}
         {coverage.blocked > 0 ? ` · ${coverage.blocked} blocked` : ''}
         {coverage.broken > 0 ? ` · ${coverage.broken} broken` : ''}
         {coverage.stale > 0 ? ` · ${coverage.stale} stale` : ''}
@@ -675,10 +740,11 @@ interface MapProps {
   unreached: Set<string> | null
   /** Signals as recorded at the replay cursor, or null when not replaying. */
   recorded: Map<string, Signal> | null
+  onOpenInbox?: () => void
 }
 
 function MapCanvas(props: MapProps): JSX.Element {
-  const { layout, meta, visible, selected, select, view, unreached, recorded } = props
+  const { layout, meta, visible, selected, select, view, unreached, recorded, onOpenInbox } = props
   const nodes = layout.nodes.filter((node) => visible.has(node.key))
   const edges = layout.edges.filter((edge) => visible.has(edge.from) && visible.has(edge.to))
   const byKey = layout.byKey
@@ -713,7 +779,7 @@ function MapCanvas(props: MapProps): JSX.Element {
           return (
             <path
               key={`${edge.from}→${edge.to}`}
-              className={dim ? 'hc-edge is-unreached' : 'hc-edge'}
+              className={`${dim ? 'hc-edge is-unreached' : 'hc-edge'}${to.kind === 'proposed-outcome' ? ' is-proposed' : ''}`}
               d={`M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`}
             />
           )
@@ -721,6 +787,29 @@ function MapCanvas(props: MapProps): JSX.Element {
       </svg>
 
       {nodes.map((node) => {
+        if (node.kind === 'proposed-outcome') {
+          return (
+            <button
+              key={node.key}
+              type="button"
+              className="hc-node hc-node-proposed-create"
+              style={{ left: node.x, top: node.y - node.h / 2, width: node.w, height: node.h }}
+              onClick={() => onOpenInbox?.()}
+              aria-label={`Proposed outcome ${node.displayKey ?? node.key}: ${node.title}. Pending review`}
+              title="Proposed new outcome — click to review in Decisions or approve in List view"
+            >
+              <span className="hc-node-head">
+                <span className="hc-node-key">{node.displayKey ?? node.key}</span>
+                <span className="hc-node-proposed">Pending review</span>
+              </span>
+              <span className="hc-node-title">{node.title}</span>
+              <span className="hc-node-foot">
+                <span className="hc-chip hc-chip-warn">Pending review</span>
+                <span className="hc-chip">{node.criteriaCount ?? 0}c</span>
+              </span>
+            </button>
+          )
+        }
         const info = meta.get(node.key)
         const signal = (recorded ? recorded.get(node.key) : info?.signal) ?? 'unverified'
         const classes = [
@@ -812,10 +901,14 @@ interface OutlineProps {
   toggle: (key: string) => void
   sortMode: 'rank' | 'key'
   recorded: Map<string, Signal> | null
+  pendingCreates: Change[]
+  act: (action: Action) => Promise<void>
 }
 
 function OutlineList(props: OutlineProps): JSX.Element {
-  const { data, meta, visible, selected, select, collapsed, toggle, sortMode, recorded } = props
+  const { data, meta, visible, selected, select, collapsed, toggle, sortMode, recorded, pendingCreates, act } = props
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [decisionError, setDecisionError] = useState<string | null>(null)
   const byKey = new Map(data.goals.map((goal) => [goal.key, goal]))
   const children = new Map<string | null, Goal[]>()
   for (const goal of data.goals) {
@@ -830,9 +923,80 @@ function OutlineList(props: OutlineProps): JSX.Element {
     list.push(outcome)
     outcomes.set(outcome.goalKey, list)
   }
+  const { byGoal: proposedByGoal, unassigned: unassignedProposals } = pendingProposedOutcomesByGoal(
+    pendingCreates,
+    new Set(byKey.keys()),
+  )
   const order = sortMode === 'key' ? (a: Goal, b: Goal) => a.key.localeCompare(b.key) : sortGoals
   const orderOutcome =
     sortMode === 'key' ? (a: Outcome, b: Outcome) => a.key.localeCompare(b.key) : sortOutcomes
+
+  const handleProposedDecision = async (changeId: string, op: 'approve_change' | 'reject_change'): Promise<void> => {
+    setBusyId(`${op}:${changeId}`)
+    setDecisionError(null)
+    try {
+      await act({ op, id: changeId })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      if (!/cancelled/i.test(msg)) setDecisionError(msg)
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const renderProposedRow = (change: Change, level: number): JSX.Element => {
+    const isBusy = busyId !== null
+    const approving = busyId === `approve_change:${change.id}`
+    const rejecting = busyId === `reject_change:${change.id}`
+    return (
+      <li
+        key={`proposed:${change.id}`}
+        role="treeitem"
+        aria-selected={false}
+        aria-level={level}
+        className="hc-outline-proposed-item"
+      >
+        <div className="hc-outline-row hc-outline-proposed">
+          <span className="hc-twisty hc-twisty-empty" aria-hidden="true" />
+          <div className="hc-proposed-body">
+            <div className="hc-proposed-head">
+              <span className="hc-status-dot is-proposed" aria-hidden="true" />
+              <div className="hc-proposed-copy">
+                <span className="hc-outline-title">{change.proposed.title}</span>
+                <div className="hc-proposed-meta">
+                  <code>{change.key}</code>
+                  <span>
+                    {change.proposed.criteria.length}{' '}
+                    {change.proposed.criteria.length === 1 ? 'check' : 'checks'}
+                  </span>
+                  {change.actor ? <span>· proposed by {change.actor}</span> : <span>· proposed</span>}
+                </div>
+              </div>
+            </div>
+            <div className="hc-proposed-actions">
+              <span className="hc-chip hc-chip-warn">Pending review</span>
+              <button
+                type="button"
+                className="hc-btn hc-btn-primary hc-btn-xs"
+                disabled={isBusy}
+                onClick={() => void handleProposedDecision(change.id, 'approve_change')}
+              >
+                {approving ? 'Approving…' : 'Approve'}
+              </button>
+              <button
+                type="button"
+                className="hc-btn hc-btn-xs"
+                disabled={isBusy}
+                onClick={() => void handleProposedDecision(change.id, 'reject_change')}
+              >
+                {rejecting ? 'Rejecting…' : 'Reject'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </li>
+    )
+  }
 
   const row = (key: string, title: string, kind: 'goal' | 'outcome', hasKids: boolean): JSX.Element => {
     const info = meta.get(key)
@@ -904,7 +1068,8 @@ function OutlineList(props: OutlineProps): JSX.Element {
     const kids = (children.get(goal.key) ?? []).filter((kid) => visible.has(kid.key)).sort(order)
     const leaves = (outcomes.get(goal.key) ?? []).slice().sort(orderOutcome)
     const visibleLeaves = leaves.filter((leaf) => visible.has(leaf.key))
-    const hasKids = kids.length > 0 || visibleLeaves.length > 0
+    const goalProposals = (proposedByGoal.get(goal.key) ?? []).filter((ch) => visible.has(`proposed:${ch.id}`))
+    const hasKids = kids.length > 0 || visibleLeaves.length > 0 || goalProposals.length > 0
     const open = !collapsed.has(goal.key)
     return (
       <li key={goal.key} role="treeitem" aria-expanded={hasKids ? open : undefined} aria-selected={selected === goal.key} aria-level={depth + 1}>
@@ -931,6 +1096,7 @@ function OutlineList(props: OutlineProps): JSX.Element {
                 </li>
               )
             })}
+            {goalProposals.map((change) => renderProposedRow(change, depth + 2))}
           </ul>
         ) : null}
       </li>
@@ -938,13 +1104,22 @@ function OutlineList(props: OutlineProps): JSX.Element {
   }
 
   const roots = (children.get(null) ?? []).slice().sort(order)
-  if (roots.length === 0) {
+  const visibleUnassigned = unassignedProposals.filter((ch) => visible.has(`proposed:${ch.id}`))
+  if (roots.length === 0 && visibleUnassigned.length === 0) {
     return <p className="hc-empty-note">No goals yet.</p>
   }
   return (
-    <ul className="hc-outline" role="tree" aria-label="Requirement outline, ranked">
-      {roots.map((root) => renderGoal(root, 0))}
-    </ul>
+    <>
+      {decisionError ? (
+        <p className="hc-error" role="alert" style={{ margin: '8px 12px 0' }}>
+          {decisionError}
+        </p>
+      ) : null}
+      <ul className="hc-outline" role="tree" aria-label="Requirement outline, ranked">
+        {roots.map((root) => renderGoal(root, 0))}
+        {visibleUnassigned.map((change) => renderProposedRow(change, 1))}
+      </ul>
+    </>
   )
 }
 
@@ -1423,8 +1598,8 @@ export function TreeView(props: ViewProps): JSX.Element {
     setNow(Date.now())
   }, [data, windowKey])
 
-  const emptyTree = data.goals.length === 0 && data.outcomes.length === 0
-  const layout = useMemo(() => layoutTree(data.goals, data.outcomes), [data.goals, data.outcomes])
+  const emptyTree = data.goals.length === 0 && data.outcomes.length === 0 && pendingCreates.length === 0
+  const layout = useMemo(() => layoutTree(data.goals, data.outcomes, pendingCreates), [data.goals, data.outcomes, pendingCreates])
   const meta = useMemo(() => metaFor(data, track), [data, track])
   const events = useMemo(() => timelineOf(data, track), [data, track])
   const transitions = useMemo(() => signalTransitions(events), [events])
@@ -1663,13 +1838,32 @@ export function TreeView(props: ViewProps): JSX.Element {
         hops += 1
       }
     }
+    for (const change of pendingCreates) {
+      const hay = `${change.key} ${change.proposed.title} ${change.proposed.story}`.toLowerCase()
+      if (needle !== '' && !hay.includes(needle)) continue
+      if (signals.size > 0 && !signals.has('unverified')) continue
+      if (blockedOnly || availabilityFilter === 'blocked' || availabilityFilter === 'deferred') continue
+      if (selectedTag !== '') {
+        const goalTags = change.goalKey ? (goalByKey.get(change.goalKey)?.tags ?? []) : []
+        const propTags = change.proposed.tags ?? []
+        if (!propTags.includes(selectedTag) && !goalTags.includes(selectedTag)) continue
+      }
+      shown.add(`proposed:${change.id}`)
+      let parent: string | null = change.goalKey ?? null
+      let hops = 0
+      while (parent !== null && hops < 64) {
+        shown.add(parent)
+        parent = goalByKey.get(parent)?.parentGoalKey ?? null
+        hops += 1
+      }
+    }
     // Filters select work, not structure: with no text query or active scope every goal stays
     // on the map so hiding verified outcomes never deletes their parent.
     if (needle === '' && scopeOutcomeKeys === null && selectedTag === '') {
       for (const goal of data.goals) shown.add(goal.key)
     }
     return shown
-  }, [availabilityFilter, blockedOnly, data.goals, data.outcomes, matchesOutcome, meta, query, recorded, scopeOutcomeKeys, selectedTag, showAll, signals])
+  }, [availabilityFilter, blockedOnly, data.goals, data.outcomes, matchesOutcome, meta, pendingCreates, query, recorded, scopeOutcomeKeys, selectedTag, showAll, signals])
 
   const visibleOutcomeKeys = useMemo(
     () => data.outcomes.filter((outcome) => visible.has(outcome.key)).map((outcome) => outcome.key),
@@ -1760,7 +1954,7 @@ export function TreeView(props: ViewProps): JSX.Element {
       <header className="hc-toolbar">
         <div className="hc-toolbar-row">
           <div style={{ flex: '1 1 200px', minWidth: 0 }}>
-            <CoverageBar coverage={coverage} replaying={recorded !== null} />
+            <CoverageBar coverage={coverage} replaying={recorded !== null} proposedCount={pendingCreates.length} />
           </div>
           <div className="hc-toolbar-actions">
             {!emptyTree ? (
@@ -2172,6 +2366,7 @@ export function TreeView(props: ViewProps): JSX.Element {
             view={view}
             unreached={unreached}
             recorded={recorded}
+            onOpenInbox={onOpenInbox}
           />
         ) : (
           <OutlineList
@@ -2184,6 +2379,8 @@ export function TreeView(props: ViewProps): JSX.Element {
             toggle={toggleCollapsed}
             sortMode={sortMode}
             recorded={recorded}
+            pendingCreates={pendingCreates}
+            act={act}
           />
         )}
 
