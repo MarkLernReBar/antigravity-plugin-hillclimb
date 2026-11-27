@@ -264,6 +264,38 @@ function canUpgradePreparedContract(
   );
 }
 
+function shouldRecordAutoNote(
+  tree: Tree,
+  outcome: Outcome,
+  climb: ScannedClimb,
+  link: LinkRow,
+): boolean {
+  // Always record baseline measurement once
+  if (link.last_synced_steps < 0 && climb.baseline !== null) return true;
+  // Always record meaningful verdict transitions (e.g. plateau / stuck / bar-reached)
+  if (link.last_synced_verdict !== null && climb.verdict !== link.last_synced_verdict) return true;
+  if (climb.steps <= Math.max(0, link.last_synced_steps)) return false;
+  // Only record step updates when a new best commit/score landed (skip repetitive flat/undone step spam)
+  const sourcePrefix = `climb.py:${climb.name}`;
+  const commit = lastKeptCommit(climb);
+  const nextSource = commit ? `${sourcePrefix}@${commit}` : sourcePrefix;
+  const lastAutoNote = [...tree.evidence]
+    .reverse()
+    .find(
+      (e) =>
+        e.key === outcome.key &&
+        e.track === "main" &&
+        e.kind === "note" &&
+        e.source.startsWith(sourcePrefix),
+    );
+  if (!lastAutoNote) return true;
+  if (commit && lastAutoNote.source !== nextSource) return true;
+  // Also record if best score text changed even when commit wasn't recorded in fixture rows
+  const bestToken = `→ ${fmtNum(climb.best)}`;
+  if (climb.kept > 0 && !lastAutoNote.text.includes(bestToken)) return true;
+  return false;
+}
+
 export function climbToLiveData(climb: ScannedClimb): LiveData {
   const rows: LiveData["rows"] = [];
   let incumbentId: string | null = null;
@@ -548,10 +580,7 @@ export function createAutoTracker(repo: Repository) {
     if (!changed) return { treeWrite, linkWrite };
 
     linkWrite = true;
-    if (
-      climb.steps > Math.max(0, link.last_synced_steps) ||
-      (link.last_synced_steps < 0 && climb.baseline !== null)
-    ) {
+    if (shouldRecordAutoNote(tree, outcome, climb, link)) {
       treeWrite = true;
     }
     return { treeWrite, linkWrite };
@@ -730,7 +759,7 @@ export function createAutoTracker(repo: Repository) {
         },
         now,
       );
-    } else if (climb.steps > Math.max(0, link.last_synced_steps) || (link.last_synced_steps < 0 && climb.baseline !== null)) {
+    } else if (shouldRecordAutoNote(tree, outcome, climb, link)) {
       const targetPart = climb.target !== null ? ` (target ${climb.targetText ?? fmtNum(climb.target)})` : "";
       const text =
         climb.steps === 0

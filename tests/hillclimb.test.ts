@@ -1792,6 +1792,7 @@ experiments:
         tracker.syncScannedClimbs("auto-lint", {
           projectDirectory: repoDir,
           engineInstalled: true,
+          engineDrift: "current",
           worktreesScanned: 1,
           currentCount: 4,
           archivedCount: 0,
@@ -2223,6 +2224,185 @@ experiments:
       assert.match(skillMd, /Skeptic Audit/i);
       assert.match(skillMd, /OVERFIT WARNING/i);
       assert.match(climbingMd, /Never declare your own ceiling/i);
+    } finally {
+      rmSync(repoDir, { recursive: true, force: true });
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
+
+  it("v0.7.1 live-field upgrades: propose_change lint, contract-vs-check drift, de-noised auto-track, behind-base warning, fast-fail guards, near-miss variance, and UI engine upgrade", async () => {
+    const repoDir = tempDir("hc-v071-repo-");
+    const dataDir = tempDir("hc-v071-data-");
+    try {
+      initGitRepo(repoDir);
+      installEngine(repoDir);
+      const climbPy = join(repoDir, ".hill-climb", "engine", "climb.py");
+      const markerPath = join(dataDir, "check-ran-marker");
+
+      writeFileSync(join(repoDir, "app.py"), "def score():\n    return 0.50\ndef guard_ok():\n    return True\n", "utf8");
+      writeFileSync(
+        join(repoDir, "check_v071.py"),
+        `import pathlib, app\npathlib.Path(${JSON.stringify(markerPath)}).write_text("ran")\nprint(app.score())\n`,
+        "utf8",
+      );
+      writeFileSync(join(repoDir, "guard_v071.py"), "import sys, app\nsys.exit(0 if app.guard_ok() else 1)\n", "utf8");
+      execFileSync("git", ["add", "app.py", "check_v071.py", "guard_v071.py"], { cwd: repoDir });
+      execFileSync("git", ["commit", "-q", "-m", "seed v071 check and guard"], { cwd: repoDir });
+
+      execFileSync(
+        "python3",
+        [
+          climbPy, "init", "cov-climb",
+          "--goal", "Reach 0.80 coverage",
+          "--check", "python3 -B check_v071.py",
+          "--guard", "python3 -B guard_v071.py",
+          "--direction", "max",
+          "--target", "0.80",
+          "--min-gain", "0.020",
+          "--lock", "check_v071.py",
+          "--lock", "guard_v071.py",
+        ],
+        { cwd: repoDir, encoding: "utf8" },
+      );
+
+      // 1. Fast-fail --guards-first: broken guard undoes BEFORE running check!
+      rmSync(markerPath, { force: true });
+      writeFileSync(join(repoDir, "app.py"), "def score():\n    return 0.90\ndef guard_ok():\n    return False\n", "utf8");
+      const preFail = execFileSync("python3", [climbPy, "try", "--guards-first", "broken guard edit"], {
+        cwd: repoDir,
+        encoding: "utf8",
+      });
+      assert.match(preFail, /pre-check guard failed/);
+      assert.ok(!existsSync(markerPath), "slow check must not execute when pre-check guard fails");
+
+      // 2. Near-miss variance signal: 0.505 > 0.50 but +0.005 < min_gain 0.020
+      writeFileSync(join(repoDir, "app.py"), "def score():\n    return 0.505\ndef guard_ok():\n    return True\n", "utf8");
+      const nearMiss = execFileSync("python3", [climbPy, "try", "tiny improvement"], {
+        cwd: repoDir,
+        encoding: "utf8",
+      });
+      assert.match(nearMiss, /below min_gain \(\+0\.005 < 0\.02/);
+
+      // 3. Advance main by 1 commit so climb/cov-climb is 1 commit behind main -> behindBase warning!
+      execFileSync("git", ["switch", "-q", "main"], { cwd: repoDir });
+      writeFileSync(join(repoDir, "README.txt"), "main moved ahead\n", "utf8");
+      execFileSync("git", ["add", "README.txt"], { cwd: repoDir });
+      execFileSync("git", ["commit", "-q", "-m", "advance main"], { cwd: repoDir });
+      execFileSync("git", ["switch", "-q", "climb/cov-climb"], { cwd: repoDir });
+
+      const pySt = execFileSync("python3", [climbPy, "status"], { cwd: repoDir, encoding: "utf8" });
+      assert.match(pySt, /Branch warning: climb\/cov-climb is 1 commit behind main/);
+      const tsSt = getClimbStatus(repoDir);
+      assert.equal(tsSt.behindBase, 1);
+      assert.match(tsSt.textWithNext, /Branch warning: climb\/cov-climb is 1 commit behind main/);
+
+      // Drift local engine to verify UI + outcome drift detection + one-click upgrade
+      const origClimb = readFileSync(climbPy, "utf8");
+      writeFileSync(climbPy, `${origClimb}\n# outdated local fork\n`, "utf8");
+
+      const transport = new StdioClientTransport({
+        command: process.execPath,
+        args: [join(PLUGIN_ROOT, "dist", "mcp-server.mjs")],
+        env: { ...process.env, HILLCLIMB_DATA_DIR: dataDir },
+      });
+      const client = new Client({ name: "v071-test-client", version: "1.0.0" });
+      await client.connect(transport);
+      try {
+        await client.callTool({ name: "hillclimb_projects", arguments: { id: "v071", name: "V071", registerDirectory: repoDir } });
+        await client.callTool({
+          name: "hillclimb_act",
+          arguments: {
+            projectId: "v071",
+            action: { op: "create_goal", key: "CLIMBS", parentGoalKey: null, title: "Tracked climbs", brief: "Tracked repo climbs." },
+          },
+        });
+        await client.callTool({
+          name: "hillclimb_act",
+          arguments: {
+            projectId: "v071",
+            action: {
+              op: "create_outcome",
+              key: "COV-CLIMB",
+              goalKey: "CLIMBS",
+              contract: {
+                title: "Coverage reaches target",
+                story: "As a maintainer, I want coverage to reach 80%, so that regressions are caught.",
+                criteria: [{ id: "ac1", given: "dev suite", when: "evaluated", then: "coverage reaches 0.80" }],
+              },
+            },
+          },
+        });
+
+        // Initial sync links cov-climb -> COV-CLIMB and writes 1 baseline/update note
+        await client.callTool({ name: "app_tree", arguments: { projectId: "v071", force: true } });
+        const out1 = (await client.callTool({ name: "hillclimb_outcome", arguments: { projectId: "v071", key: "COV-CLIMB" } })).structuredContent as {
+          evidence: { total: number };
+          linkedClimb?: { engineDrift?: string; behindBase?: number; contractCheckDrift?: string };
+        };
+        const evCountBefore = out1.evidence.total;
+        assert.equal(out1.linkedClimb?.engineDrift, "diverged");
+        assert.equal(out1.linkedClimb?.behindBase, 1);
+
+        // 4. Another flat undone step must NOT add a duplicate note to evidence ledger!
+        writeFileSync(join(repoDir, "app.py"), "def score():\n    return 0.49\ndef guard_ok():\n    return True\n", "utf8");
+        execFileSync("python3", [climbPy, "try", "flat regression"], { cwd: repoDir, encoding: "utf8" });
+        await client.callTool({ name: "app_tree", arguments: { projectId: "v071", force: true } });
+        const out2 = (await client.callTool({ name: "hillclimb_outcome", arguments: { projectId: "v071", key: "COV-CLIMB" } })).structuredContent as {
+          evidence: { total: number };
+        };
+        assert.equal(out2.evidence.total, evCountBefore, "undone flat step should not spam redundant note evidence");
+
+        // Kept step MUST add a note!
+        writeFileSync(join(repoDir, "app.py"), "def score():\n    return 0.65\ndef guard_ok():\n    return True\n", "utf8");
+        execFileSync("python3", [climbPy, "try", "real gain to 0.65"], { cwd: repoDir, encoding: "utf8" });
+        await client.callTool({ name: "app_tree", arguments: { projectId: "v071", force: true } });
+        const out3 = (await client.callTool({ name: "hillclimb_outcome", arguments: { projectId: "v071", key: "COV-CLIMB" } })).structuredContent as {
+          evidence: { total: number };
+        };
+        assert.equal(out3.evidence.total, evCountBefore + 1, "kept win must record progress note");
+
+        // 5. propose_change runs 22-rule lintOutcome (catches O2 missing ", so that ...")
+        const badProp = (await client.callTool({
+          name: "hillclimb_propose_change",
+          arguments: {
+            projectId: "v071",
+            key: "COV-CLIMB",
+            contract: {
+              title: "Coverage reaches target with fallback",
+              story: "As a maintainer, I want coverage to reach 80% with fallback.",
+              criteria: [{ id: "ac1", given: "dev suite", when: "evaluated", then: "coverage reaches 0.80" }],
+            },
+          },
+        })).structuredContent as { proposed?: string; lint?: { passed: boolean; errorCount: number; findings: Array<{ checkCode: string }> } };
+        assert.equal(badProp.lint?.passed, false);
+        assert.equal(badProp.lint?.errorCount, 1);
+        assert.equal(badProp.lint?.findings[0]?.checkCode, "O2");
+
+        // Approve v2 -> hillclimb_outcome surfaces contractCheckDrift (reminding about relock)!
+        await client.callTool({
+          name: "app_act",
+          arguments: { projectId: "v071", action: { op: "approve_change", id: badProp.proposed! }, confirmed: true },
+        });
+        const outV2 = (await client.callTool({ name: "hillclimb_outcome", arguments: { projectId: "v071", key: "COV-CLIMB" } })).structuredContent as {
+          version: number;
+          linkedClimb?: { contractCheckDrift?: string };
+        };
+        assert.equal(outV2.version, 2);
+        assert.match(outV2.linkedClimb?.contractCheckDrift ?? "", /updated to v2.*climb\.py relock/);
+
+        // 6. UI one-click engine upgrade via app_repo_climbs(upgradeEngine: true) restores engineDrift === "current"
+        const beforeUp = (await client.callTool({ name: "app_repo_climbs", arguments: { projectId: "v071", force: true } })).structuredContent as {
+          engineDrift?: string;
+        };
+        assert.equal(beforeUp.engineDrift, "diverged");
+        const afterUp = (await client.callTool({
+          name: "app_repo_climbs",
+          arguments: { projectId: "v071", force: true, upgradeEngine: true },
+        })).structuredContent as { engineDrift?: string };
+        assert.equal(afterUp.engineDrift, "current");
+      } finally {
+        await client.close();
+      }
     } finally {
       rmSync(repoDir, { recursive: true, force: true });
       rmSync(dataDir, { recursive: true, force: true });

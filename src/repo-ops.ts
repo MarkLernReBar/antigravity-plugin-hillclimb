@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import { homedir } from "node:os";
@@ -334,23 +335,53 @@ export function checkEngineDrift(repoPath: string): {
   }
 }
 
+export function branchBehindBase(repoPath: string, branch?: string | null, base?: string | null): number {
+  if (!branch || !base || branch === base) return 0;
+  try {
+    const out = execFileSync("git", ["rev-list", "--count", `${branch}..${base}`], {
+      cwd: repoPath,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      timeout: 3000,
+    }).trim();
+    const n = Number.parseInt(out, 10);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
 export function getClimbStatus(repoPath: string, name?: string, last = 15) {
   const state = readState(repoPath, name);
   const summary = summarize(state, last);
   const text = formatSummary(summary);
   const drift = checkEngineDrift(repoPath);
+  const behindBase = branchBehindBase(repoPath, state.card.branch, state.card.base);
   const next =
     summary.verdict === "bar-reached"
       ? `\n\nNext: run the holdout, then the final review — ${climbCommand(repoPath)} holdout --why final`
       : `\n\nNext step in your shell: ${climbCommand(repoPath)} try "<idea>"`;
+  const branchNote =
+    behindBase > 0 && state.card.branch && state.card.base
+      ? `\nBranch warning: ${state.card.branch} is ${behindBase} commit${behindBase === 1 ? "" : "s"} behind ${state.card.base} — merge or rebase ${state.card.base} before landing.`
+      : "";
   const driftNote = drift.status === "diverged" && drift.hint ? `\n${drift.hint}` : "";
   return {
     summary,
     text,
-    textWithNext: `${text}${next}${driftNote}`,
+    textWithNext: `${text}${next}${branchNote}${driftNote}`,
     directory: repoPath,
     engine: engineDir(repoPath),
     engineDrift: drift.status,
+    behindBase,
+    cardStartedMs: typeof state.card.started === "number" ? state.card.started * 1000 : null,
+    lastRelockMs: (() => {
+      const relocks = state.rows.filter((r) => r.kind === "relock" && typeof r.time === "string");
+      if (relocks.length === 0) return null;
+      const raw = relocks[relocks.length - 1]!.time!;
+      const ms = Date.parse(raw.includes("T") ? raw : raw.replace(" ", "T"));
+      return Number.isFinite(ms) ? ms : null;
+    })(),
   };
 }
 
@@ -496,6 +527,7 @@ export interface ScannedClimb {
 export interface ScannedProjectClimbs {
   projectDirectory: string | null;
   engineInstalled: boolean;
+  engineDrift?: "current" | "missing" | "diverged";
   worktreesScanned: number;
   currentCount: number;
   archivedCount: number;
@@ -786,6 +818,7 @@ export function scanProjectClimbs(repoPath: string | null, opts?: ScanProjectCli
     return {
       projectDirectory: repoPath,
       engineInstalled: false,
+      engineDrift: "missing",
       worktreesScanned: 0,
       currentCount: 0,
       archivedCount: 0,
@@ -1058,6 +1091,7 @@ export function scanProjectClimbs(repoPath: string | null, opts?: ScanProjectCli
   const result: ScannedProjectClimbs = {
     projectDirectory: normalizedMain,
     engineInstalled,
+    engineDrift: checkEngineDrift(normalizedMain).status,
     worktreesScanned: worktrees.length,
     currentCount,
     archivedCount,

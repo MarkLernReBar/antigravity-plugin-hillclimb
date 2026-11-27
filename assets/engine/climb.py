@@ -874,7 +874,8 @@ def cmd_try(args):
     for path, branch in zip(roots, [card["branch"], *(extra["branch"] for extra in card.get("repos", []))]):
         if git("branch", "--show-current", cwd=path) != branch:
             raise Fail(f"Switch {path} to {branch} first.")
-    steps = [row for row in rows(folder) if row["kind"] == "step"]
+    log_before = rows(folder)
+    steps = [row for row in log_before if row["kind"] == "step"]
     over = []
     if card["max_steps"] and len(steps) >= card["max_steps"]:
         over.append(f"{len(steps)} of {card['max_steps']} steps")
@@ -899,7 +900,24 @@ def cmd_try(args):
     row = {"kind": "step", "step": step, "idea": args.idea}
     cache_path = folder / "candidate-cache.json"
     cache_env = _cache_env(folder, uuid.uuid4().hex)
+    timed_prior = [r["seconds"] for r in log_before if isinstance(r.get("seconds"), (int, float))]
+    avg_check_sec = (sum(timed_prior) / len(timed_prior)) if timed_prior else 0.0
+    run_guards_first = bool(card["guards"]) and not getattr(args, "no_guards_first", False) and (
+        getattr(args, "guards_first", False) or avg_check_sec >= 60.0
+    )
+    guards_passed_pre = False
     try:
+        if run_guards_first:
+            failed = failing_guards(card["guards"], card["timeout"], env=cache_env)
+            if failed:
+                undo(card)
+                append(folder, {**row, "result": "undone", "why": f"guard failed (pre-check): {failed[0]}"})
+                print(
+                    f"step {step} undone  (pre-check guard failed: {failed[0]})\n"
+                    f"{failed[1]}\nUndone before running slow check."
+                )
+                return
+            guards_passed_pre = True
         try:
             if card.get("paired"):
                 score, row["pair"], seconds = paired(folder, card, cache_env=cache_env)
@@ -920,17 +938,28 @@ def cmd_try(args):
             return
         row.update(score=score, seconds=round(seconds, 2))
         held = score >= best if card["direction"] == "max" else score <= best
+        strictly_better = score > best if card["direction"] == "max" else score < best
         if not (better(card, score, best) or args.fix and held):
             undo(card)
-            append(folder, {**row, "result": "undone", "why": "score got worse" if args.fix else "no gain"})
-            print(f"step {step} undone  {number(score)} (best {number(best)})  {args.idea}\nOutput: {folder / 'last.txt'}")
+            if args.fix:
+                reason = "score got worse"
+            elif strictly_better:
+                delta = abs(score - best)
+                need = threshold(card["min_gain"], best)
+                reason = f"below min_gain (+{number(delta)} < {number(need)} — improved slightly; check run variance)"
+            else:
+                reason = "no gain"
+            append(folder, {**row, "result": "undone", "why": reason})
+            extra = f"  [{reason}]" if strictly_better and not args.fix else ""
+            print(f"step {step} undone  {number(score)} (best {number(best)})  {args.idea}{extra}\nOutput: {folder / 'last.txt'}")
             return
-        failed = failing_guards(card["guards"], card["timeout"], env=cache_env)
-        if failed:
-            undo(card)
-            append(folder, {**row, "result": "undone", "why": f"guard failed: {failed[0]}"})
-            print(f"step {step} undone  {number(score)} but guard failed: {failed[0]}\n{failed[1]}")
-            return
+        if not guards_passed_pre:
+            failed = failing_guards(card["guards"], card["timeout"], env=cache_env)
+            if failed:
+                undo(card)
+                append(folder, {**row, "result": "undone", "why": f"guard failed: {failed[0]}"})
+                print(f"step {step} undone  {number(score)} but guard failed: {failed[0]}\n{failed[1]}")
+                return
     finally:
         cache_path.unlink(missing_ok=True)
     try:
@@ -1013,6 +1042,19 @@ def spark(values, direction):
     return "".join(BARS[round(level * (len(BARS) - 1))] for level in levels)
 
 
+def branch_behind_base(card):
+    """Return how many commits the climb branch is behind its base branch (0 if up to date or unknown)."""
+    branch = card.get("branch")
+    base = card.get("base")
+    if not branch or not base or branch == base:
+        return 0
+    out = git("rev-list", "--count", f"{branch}..{base}", check=False)
+    try:
+        return max(0, int(out))
+    except ValueError:
+        return 0
+
+
 def cmd_status(args):
     folder = resolve(args.name)
     card = load(folder)
@@ -1035,6 +1077,12 @@ def cmd_status(args):
     print(f"Time {hours(card):.1f}{limit} hours{pace}.")
     if timed:
         print(f"Check takes {sum(timed) / len(timed):.1f}s on average.")
+    behind = branch_behind_base(card)
+    if behind > 0:
+        print(
+            f"Branch warning: {card['branch']} is {behind} commit{'s' if behind != 1 else ''} behind "
+            f"{card['base']} — merge or rebase {card['base']} before landing."
+        )
     for row in log:
         if row["kind"] == "raise":
             print(f"Raised {row['why']}")
@@ -1309,6 +1357,8 @@ def parse(argv):
     attempt.add_argument("idea")
     attempt.add_argument("--fix", action="store_true", help="keep a fix that holds the score, for a break the guards missed")
     attempt.add_argument("--name")
+    attempt.add_argument("--guards-first", action="store_true", help="run guards before check so broken edits fail fast (automatic when avg check >= 60s)")
+    attempt.add_argument("--no-guards-first", action="store_true", help="always run check before guards even on slow checks")
 
     status = sub.add_parser("status", help="where the climb stands")
     status.add_argument("name", nargs="?")

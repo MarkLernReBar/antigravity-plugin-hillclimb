@@ -29,7 +29,7 @@ import {
   type ScanProjectClimbsOptions,
 } from "./repo-ops.js";
 import { actionSchema, type Action } from "./actions.js";
-import { lintTree } from "./linter.js";
+import { lintOutcome, lintTree } from "./linter.js";
 import { previewPromotion } from "./planning.js";
 import { writeMirror } from "./mirror.js";
 import { ingestJunitReport, postTestEvidenceBundle } from "./ci-ingest.js";
@@ -275,7 +275,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     return projects[0]?.id ?? repo.resolveProjectId();
   };
   const server = new McpServer(
-    { name: "hillclimb", version: "0.7.0" },
+    { name: "hillclimb", version: "0.7.1" },
     {
       capabilities: {
         tools: {},
@@ -413,7 +413,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
           const res = getClimbStatus(dir, name, rowCount);
           if (format === "full") {
             return jsonResult(
-              { directory: dir, engine: res.engine, engineDrift: res.engineDrift, ...res.summary },
+              { directory: dir, engine: res.engine, engineDrift: res.engineDrift, behindBase: res.behindBase, ...res.summary },
               res.textWithNext,
             );
           }
@@ -423,6 +423,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
               directory: dir,
               engine: res.engine,
               engineDrift: res.engineDrift,
+              behindBase: res.behindBase,
               ...compactSummary,
               recentCount: res.summary.recent.length,
             },
@@ -824,6 +825,39 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
               openAgentPins: frame.pins.filter((p) => !p.resolved && (p.forAgents ?? true)),
             })),
         );
+        let linkedClimb: Record<string, unknown> | null = null;
+        const linkInfo = autoTracker.linkedClimbForOutcome(pid, input.key);
+        if (linkInfo) {
+          try {
+            const st = getClimbStatus(linkInfo.directory, linkInfo.climbName, 0);
+            const outcomeUpdatedMs = Date.parse(outcome.updated);
+            const checkLockedMs = st.lastRelockMs ?? st.cardStartedMs;
+            const contractCheckDrift =
+              outcome.version > 1 &&
+              Number.isFinite(outcomeUpdatedMs) &&
+              checkLockedMs !== null &&
+              outcomeUpdatedMs > checkLockedMs
+                ? `Outcome ${outcome.key} was updated to v${outcome.version} after climb "${st.summary.name}" locked its check. Verify whether locked check/guards need updating via: climb.py relock --why "aligned with ${outcome.key} v${outcome.version}"`
+                : null;
+            linkedClimb = {
+              name: st.summary.name,
+              directory: linkInfo.directory,
+              branch: st.summary.branch,
+              baseline: st.summary.baseline,
+              best: st.summary.best,
+              target: st.summary.target,
+              steps: st.summary.steps,
+              kept: st.summary.kept,
+              verdict: st.summary.verdict,
+              engineDrift: st.engineDrift,
+              ...(st.behindBase > 0 ? { behindBase: st.behindBase } : {}),
+              ...(st.summary.holdoutWarning ? { holdoutWarning: st.summary.holdoutWarning } : {}),
+              ...(contractCheckDrift ? { contractCheckDrift } : {}),
+            };
+          } catch {
+            // ignore missing/archived climb directory
+          }
+        }
         return jsonResult({
           projectId: pid,
           track: trackName,
@@ -852,6 +886,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
           evidence: windowOf(evidence, input.evidenceLimit, input.evidenceOffset),
           comments: windowOf(comments, input.commentLimit, input.commentOffset),
           linkedFlows,
+          ...(linkedClimb ? { linkedClimb } : {}),
           pendingChange: snapshot.changes.filter((change) => change.key === input.key && change.state === "pending").at(-1) ?? null,
           pendingFlowProposals: snapshot.flowProposals.filter(
             (p) => p.state === "pending" && (p.frame?.key === input.key || (p.frames ?? []).some((f) => f.key === input.key)),
@@ -973,6 +1008,23 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
         }
         const after = repo.view(pid, "main");
         const pending = after.changes.filter((change) => change.key === input.key && change.state === "pending").at(-1) ?? null;
+        const lintFindings = lintOutcome(
+          {
+            key: input.key,
+            goalKey: input.goalKey ?? existing?.goalKey ?? "ROOT",
+            ...contract,
+          },
+          tree.outcomes,
+        );
+        const lintErrors = lintFindings.filter((f) => f.severity === "error").length;
+        const lintWarnings = lintFindings.filter((f) => f.severity === "warning").length;
+        const lintNote =
+          lintErrors > 0
+            ? ` Note: proposed contract has ${lintErrors} rubric lint error(s) (${lintFindings
+                .filter((f) => f.severity === "error")
+                .map((f) => f.checkCode)
+                .join(", ")}) — review \`lint.findings\`.`
+            : "";
         return jsonResult({
           projectId: pid,
           proposed: pending?.id ?? null,
@@ -980,7 +1032,13 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
           baseVersion: existing?.version ?? 0,
           state: pending?.state ?? "unknown",
           approved: false,
-          next: "Rendered an inline Approve/Reject decision card in this thread (and synced to Decisions). Stop calling tools and yield to the user now so the inline card stays visible; nothing changes until the user approves.",
+          lint: {
+            passed: lintErrors === 0,
+            errorCount: lintErrors,
+            warningCount: lintWarnings,
+            findings: lintFindings.slice(0, 10),
+          },
+          next: `Rendered an inline Approve/Reject decision card in this thread (and synced to Decisions). Stop calling tools and yield to the user now so the inline card stays visible; nothing changes until the user approves.${lintNote}`,
           inbox: inboxOf(after),
           ...(pending
             ? {
@@ -2489,15 +2547,26 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     "app_repo_climbs",
     {
       description: "UI climbs",
-      inputSchema: { projectId: z.string(), force: z.boolean().optional() },
+      inputSchema: {
+        projectId: z.string(),
+        force: z.boolean().optional(),
+        upgradeEngine: z.boolean().optional(),
+      },
       _meta: APP_ONLY,
     },
-    async ({ projectId, force }) => {
+    async ({ projectId, force, upgradeEngine }) => {
       try {
+        if (upgradeEngine) {
+          const dir = repo.getProject(projectId)?.directory ?? null;
+          if (!dir) throw new Error("Project has no linked local repository directory.");
+          installEngine(dir);
+        }
         const repoClimbs = scanAndSync(projectId, { force: force ?? true });
         return appJsonResult(
           repoClimbs as unknown as Record<string, unknown>,
-          `${repoClimbs.climbs.length} climb(s) in ${projectId}`,
+          upgradeEngine
+            ? `Upgraded climb.py engine and refreshed ${repoClimbs.climbs.length} climb(s) in ${projectId}`
+            : `${repoClimbs.climbs.length} climb(s) in ${projectId}`,
         );
       } catch (error) {
         return errorResult(error);

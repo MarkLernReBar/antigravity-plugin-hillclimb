@@ -444,6 +444,21 @@ function HillClimbApp() {
     [project, track, callTool],
   );
 
+  const handleUpgradeEngine = useCallback(async () => {
+    if (!project) return;
+    try {
+      const res = await callTool<RepoClimbsPayload>("app_repo_climbs", {
+        projectId: project,
+        force: true,
+        upgradeEngine: true,
+      });
+      setRepoClimbs(res);
+      setNotice("Upgraded .hill-climb/engine/ to the bundled Hill Climb plugin engine.");
+    } catch (e) {
+      setNotice(`Could not upgrade engine: ${errMsg(e)}`);
+    }
+  }, [project, callTool]);
+
   const handleTrackClimb = useCallback(
     async (climbId: string) => {
       if (!project) return;
@@ -565,7 +580,7 @@ function HillClimbApp() {
 
   // Connect once using the MCP Apps SDK
   useEffect(() => {
-    const app = new App({ name: "Hill Climb", version: "0.7.0" }, {});
+    const app = new App({ name: "Hill Climb", version: "0.7.1" }, {});
     appRef.current = app;
 
     const applyThemeFromContext = (ctx: ReturnType<App["getHostContext"]>) => {
@@ -1521,6 +1536,7 @@ function HillClimbApp() {
                 payload={repoClimbs}
                 loading={climbsLoading}
                 onRefresh={() => void loadRepoClimbs(project)}
+                onUpgradeEngine={handleUpgradeEngine}
                 onToggleAutoTrack={handleToggleAutoTrack}
                 onTrackClimb={handleTrackClimb}
                 onOpenOutcome={handleOpenOutcomeFromClimb}

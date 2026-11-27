@@ -51,6 +51,7 @@ export interface ScannedClimb {
 export interface RepoClimbsPayload {
   projectDirectory: string | null;
   engineInstalled: boolean;
+  engineDrift?: "current" | "missing" | "diverged";
   worktreesScanned: number;
   currentCount: number;
   archivedCount: number;
@@ -414,6 +415,7 @@ export function RepoClimbsView({
   payload,
   loading,
   onRefresh,
+  onUpgradeEngine,
   onToggleAutoTrack,
   onTrackClimb,
   onOpenOutcome,
@@ -424,6 +426,7 @@ export function RepoClimbsView({
   payload: RepoClimbsPayload | null;
   loading: boolean;
   onRefresh: () => void;
+  onUpgradeEngine?: () => Promise<void> | void;
   onToggleAutoTrack?: (enabled: boolean) => Promise<void> | void;
   onTrackClimb?: (climbId: string) => Promise<void> | void;
   onOpenOutcome?: (outcomeKey: string) => void;
@@ -435,6 +438,7 @@ export function RepoClimbsView({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [trackingId, setTrackingId] = useState<string | null>(null);
   const [togglingAuto, setTogglingAuto] = useState(false);
+  const [upgradingEngine, setUpgradingEngine] = useState(false);
 
   if (loading && !payload) {
     return <p className="cl-loading" role="status">Checking repository for active climbs…</p>;
@@ -511,6 +515,47 @@ export function RepoClimbsView({
           </button>
         </div>
       </div>
+
+      {payload.engineDrift === "diverged" || (payload.engineDrift === "missing" && payload.climbs.length > 0) ? (
+        <div
+          className="cl-banner cl-banner-warn"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 10,
+            padding: "8px 12px",
+            marginBottom: 10,
+            borderRadius: 8,
+            border: "1px solid var(--hc-warn-border, rgba(217, 119, 6, 0.35))",
+            background: "var(--hc-warn-bg, rgba(217, 119, 6, 0.08))",
+            fontSize: 12,
+          }}
+        >
+          <span>
+            {payload.engineDrift === "diverged"
+              ? "Local .hill-climb/engine/climb.py differs from the bundled Hill Climb plugin engine (may miss newer branch auto-resolution, skeptic review, and overfit gates)."
+              : "Hill Climb engine is not installed in this repository yet."}
+          </span>
+          {onUpgradeEngine ? (
+            <button
+              type="button"
+              className="hc-btn hc-btn-primary"
+              disabled={upgradingEngine}
+              onClick={async () => {
+                setUpgradingEngine(true);
+                try {
+                  await onUpgradeEngine();
+                } finally {
+                  setUpgradingEngine(false);
+                }
+              }}
+            >
+              {upgradingEngine ? "Upgrading…" : "Upgrade engine"}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       {visible.length === 0 ? (
         <div className="cl-empty">

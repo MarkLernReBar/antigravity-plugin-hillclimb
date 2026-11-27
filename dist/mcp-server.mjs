@@ -41690,6 +41690,7 @@ import { tmpdir } from "node:os";
 import { basename as basename3, dirname as dirname4, isAbsolute as isAbsolute2, join as join5, parse as parsePath, relative, resolve as resolve4, sep as sep2 } from "node:path";
 
 // src/repo-ops.ts
+import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync as mkdirSync2, readdirSync as readdirSync3, readFileSync as readFileSync3, realpathSync, statSync as statSync2, writeFileSync } from "node:fs";
 import { basename as basename2, dirname as dirname2, join as join3, resolve as resolve2, sep } from "node:path";
 import { homedir as homedir2 } from "node:os";
@@ -42044,25 +42045,52 @@ function checkEngineDrift(repoPath) {
     return { status: "current", hint: null };
   }
 }
+function branchBehindBase(repoPath, branch, base) {
+  if (!branch || !base || branch === base) return 0;
+  try {
+    const out = execFileSync("git", ["rev-list", "--count", `${branch}..${base}`], {
+      cwd: repoPath,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      timeout: 3e3
+    }).trim();
+    const n2 = Number.parseInt(out, 10);
+    return Number.isFinite(n2) && n2 > 0 ? n2 : 0;
+  } catch {
+    return 0;
+  }
+}
 function getClimbStatus(repoPath, name, last = 15) {
   const state = readState(repoPath, name);
   const summary = summarize(state, last);
   const text3 = formatSummary(summary);
   const drift = checkEngineDrift(repoPath);
+  const behindBase = branchBehindBase(repoPath, state.card.branch, state.card.base);
   const next = summary.verdict === "bar-reached" ? `
 
 Next: run the holdout, then the final review \u2014 ${climbCommand(repoPath)} holdout --why final` : `
 
 Next step in your shell: ${climbCommand(repoPath)} try "<idea>"`;
+  const branchNote = behindBase > 0 && state.card.branch && state.card.base ? `
+Branch warning: ${state.card.branch} is ${behindBase} commit${behindBase === 1 ? "" : "s"} behind ${state.card.base} \u2014 merge or rebase ${state.card.base} before landing.` : "";
   const driftNote = drift.status === "diverged" && drift.hint ? `
 ${drift.hint}` : "";
   return {
     summary,
     text: text3,
-    textWithNext: `${text3}${next}${driftNote}`,
+    textWithNext: `${text3}${next}${branchNote}${driftNote}`,
     directory: repoPath,
     engine: engineDir(repoPath),
-    engineDrift: drift.status
+    engineDrift: drift.status,
+    behindBase,
+    cardStartedMs: typeof state.card.started === "number" ? state.card.started * 1e3 : null,
+    lastRelockMs: (() => {
+      const relocks = state.rows.filter((r2) => r2.kind === "relock" && typeof r2.time === "string");
+      if (relocks.length === 0) return null;
+      const raw = relocks[relocks.length - 1].time;
+      const ms = Date.parse(raw.includes("T") ? raw : raw.replace(" ", "T"));
+      return Number.isFinite(ms) ? ms : null;
+    })()
   };
 }
 function getClimbCard(repoPath, name) {
@@ -42384,6 +42412,7 @@ function scanProjectClimbs(repoPath, opts) {
     return {
       projectDirectory: repoPath,
       engineInstalled: false,
+      engineDrift: "missing",
       worktreesScanned: 0,
       currentCount: 0,
       archivedCount: 0,
@@ -42608,6 +42637,7 @@ function scanProjectClimbs(repoPath, opts) {
   const result = {
     projectDirectory: normalizedMain,
     engineInstalled,
+    engineDrift: checkEngineDrift(normalizedMain).status,
     worktreesScanned: worktrees.length,
     currentCount,
     archivedCount,
@@ -46263,6 +46293,22 @@ function autoClaimWorkerId(climb) {
 function canUpgradePreparedContract(link, climb, outcome2, tree) {
   return link.auto_created === 1 && climb.status === "active" && outcome2.version === 1 && !tree.changes.some((c) => c.key === outcome2.key) && outcome2.criteria.length === 1 && outcome2.criteria[0]?.id === "C1" && (outcome2.criteria[0]?.when === "Initialized and iterated with climb.py" || outcome2.criteria[0]?.when === "The locked scoring check is initialized and run");
 }
+function shouldRecordAutoNote(tree, outcome2, climb, link) {
+  if (link.last_synced_steps < 0 && climb.baseline !== null) return true;
+  if (link.last_synced_verdict !== null && climb.verdict !== link.last_synced_verdict) return true;
+  if (climb.steps <= Math.max(0, link.last_synced_steps)) return false;
+  const sourcePrefix = `climb.py:${climb.name}`;
+  const commit = lastKeptCommit(climb);
+  const nextSource = commit ? `${sourcePrefix}@${commit}` : sourcePrefix;
+  const lastAutoNote = [...tree.evidence].reverse().find(
+    (e) => e.key === outcome2.key && e.track === "main" && e.kind === "note" && e.source.startsWith(sourcePrefix)
+  );
+  if (!lastAutoNote) return true;
+  if (commit && lastAutoNote.source !== nextSource) return true;
+  const bestToken = `\u2192 ${fmtNum(climb.best)}`;
+  if (climb.kept > 0 && !lastAutoNote.text.includes(bestToken)) return true;
+  return false;
+}
 function climbToLiveData(climb) {
   const rows = [];
   let incumbentId = null;
@@ -46489,7 +46535,7 @@ function createAutoTracker(repo) {
     const changed = climb.steps !== link.last_synced_steps || climb.verdict !== link.last_synced_verdict;
     if (!changed) return { treeWrite, linkWrite };
     linkWrite = true;
-    if (climb.steps > Math.max(0, link.last_synced_steps) || link.last_synced_steps < 0 && climb.baseline !== null) {
+    if (shouldRecordAutoNote(tree, outcome2, climb, link)) {
       treeWrite = true;
     }
     return { treeWrite, linkWrite };
@@ -46630,7 +46676,7 @@ function createAutoTracker(repo) {
         },
         now
       );
-    } else if (climb.steps > Math.max(0, link.last_synced_steps) || link.last_synced_steps < 0 && climb.baseline !== null) {
+    } else if (shouldRecordAutoNote(tree, outcome2, climb, link)) {
       const targetPart = climb.target !== null ? ` (target ${climb.targetText ?? fmtNum(climb.target)})` : "";
       const text3 = climb.steps === 0 ? `climb.py baseline measured: ${fmtNum(climb.baseline)}${targetPart}.` : `climb.py update (${climb.verdict}): ${fmtNum(climb.baseline)} \u2192 ${fmtNum(climb.best)}${targetPart} after ${climb.steps} step${climb.steps === 1 ? "" : "s"} (${climb.kept} kept).`;
       applyCore(
@@ -50846,7 +50892,7 @@ function createHillClimbServer(repo, runtime) {
     return projects[0]?.id ?? repo.resolveProjectId();
   };
   const server = new McpServer(
-    { name: "hillclimb", version: "0.7.0" },
+    { name: "hillclimb", version: "0.7.1" },
     {
       capabilities: {
         tools: {},
@@ -50966,7 +51012,7 @@ function createHillClimbServer(repo, runtime) {
           const res = getClimbStatus(dir, name, rowCount);
           if (format === "full") {
             return jsonResult(
-              { directory: dir, engine: res.engine, engineDrift: res.engineDrift, ...res.summary },
+              { directory: dir, engine: res.engine, engineDrift: res.engineDrift, behindBase: res.behindBase, ...res.summary },
               res.textWithNext
             );
           }
@@ -50976,6 +51022,7 @@ function createHillClimbServer(repo, runtime) {
               directory: dir,
               engine: res.engine,
               engineDrift: res.engineDrift,
+              behindBase: res.behindBase,
               ...compactSummary,
               recentCount: res.summary.recent.length
             },
@@ -51341,6 +51388,32 @@ ${drift.hint}` : "";
             openAgentPins: frame.pins.filter((p2) => !p2.resolved && (p2.forAgents ?? true))
           }))
         );
+        let linkedClimb = null;
+        const linkInfo = autoTracker.linkedClimbForOutcome(pid, input2.key);
+        if (linkInfo) {
+          try {
+            const st = getClimbStatus(linkInfo.directory, linkInfo.climbName, 0);
+            const outcomeUpdatedMs = Date.parse(outcome2.updated);
+            const checkLockedMs = st.lastRelockMs ?? st.cardStartedMs;
+            const contractCheckDrift = outcome2.version > 1 && Number.isFinite(outcomeUpdatedMs) && checkLockedMs !== null && outcomeUpdatedMs > checkLockedMs ? `Outcome ${outcome2.key} was updated to v${outcome2.version} after climb "${st.summary.name}" locked its check. Verify whether locked check/guards need updating via: climb.py relock --why "aligned with ${outcome2.key} v${outcome2.version}"` : null;
+            linkedClimb = {
+              name: st.summary.name,
+              directory: linkInfo.directory,
+              branch: st.summary.branch,
+              baseline: st.summary.baseline,
+              best: st.summary.best,
+              target: st.summary.target,
+              steps: st.summary.steps,
+              kept: st.summary.kept,
+              verdict: st.summary.verdict,
+              engineDrift: st.engineDrift,
+              ...st.behindBase > 0 ? { behindBase: st.behindBase } : {},
+              ...st.summary.holdoutWarning ? { holdoutWarning: st.summary.holdoutWarning } : {},
+              ...contractCheckDrift ? { contractCheckDrift } : {}
+            };
+          } catch {
+          }
+        }
         return jsonResult({
           projectId: pid,
           track: trackName,
@@ -51369,6 +51442,7 @@ ${drift.hint}` : "";
           evidence: windowOf(evidence, input2.evidenceLimit, input2.evidenceOffset),
           comments: windowOf(comments, input2.commentLimit, input2.commentOffset),
           linkedFlows,
+          ...linkedClimb ? { linkedClimb } : {},
           pendingChange: snapshot2.changes.filter((change2) => change2.key === input2.key && change2.state === "pending").at(-1) ?? null,
           pendingFlowProposals: snapshot2.flowProposals.filter(
             (p2) => p2.state === "pending" && (p2.frame?.key === input2.key || (p2.frames ?? []).some((f2) => f2.key === input2.key))
@@ -51484,6 +51558,17 @@ ${drift.hint}` : "";
         }
         const after = repo.view(pid, "main");
         const pending = after.changes.filter((change2) => change2.key === input2.key && change2.state === "pending").at(-1) ?? null;
+        const lintFindings = lintOutcome(
+          {
+            key: input2.key,
+            goalKey: input2.goalKey ?? existing?.goalKey ?? "ROOT",
+            ...contract3
+          },
+          tree.outcomes
+        );
+        const lintErrors = lintFindings.filter((f2) => f2.severity === "error").length;
+        const lintWarnings = lintFindings.filter((f2) => f2.severity === "warning").length;
+        const lintNote = lintErrors > 0 ? ` Note: proposed contract has ${lintErrors} rubric lint error(s) (${lintFindings.filter((f2) => f2.severity === "error").map((f2) => f2.checkCode).join(", ")}) \u2014 review \`lint.findings\`.` : "";
         return jsonResult({
           projectId: pid,
           proposed: pending?.id ?? null,
@@ -51491,7 +51576,13 @@ ${drift.hint}` : "";
           baseVersion: existing?.version ?? 0,
           state: pending?.state ?? "unknown",
           approved: false,
-          next: "Rendered an inline Approve/Reject decision card in this thread (and synced to Decisions). Stop calling tools and yield to the user now so the inline card stays visible; nothing changes until the user approves.",
+          lint: {
+            passed: lintErrors === 0,
+            errorCount: lintErrors,
+            warningCount: lintWarnings,
+            findings: lintFindings.slice(0, 10)
+          },
+          next: `Rendered an inline Approve/Reject decision card in this thread (and synced to Decisions). Stop calling tools and yield to the user now so the inline card stays visible; nothing changes until the user approves.${lintNote}`,
           inbox: inboxOf2(after),
           ...pending ? {
             inlineDecision: {
@@ -52885,15 +52976,24 @@ ${drift.hint}` : "";
     "app_repo_climbs",
     {
       description: "UI climbs",
-      inputSchema: { projectId: external_exports.string(), force: external_exports.boolean().optional() },
+      inputSchema: {
+        projectId: external_exports.string(),
+        force: external_exports.boolean().optional(),
+        upgradeEngine: external_exports.boolean().optional()
+      },
       _meta: APP_ONLY
     },
-    async ({ projectId, force }) => {
+    async ({ projectId, force, upgradeEngine }) => {
       try {
+        if (upgradeEngine) {
+          const dir = repo.getProject(projectId)?.directory ?? null;
+          if (!dir) throw new Error("Project has no linked local repository directory.");
+          installEngine(dir);
+        }
         const repoClimbs = scanAndSync(projectId, { force: force ?? true });
         return appJsonResult(
           repoClimbs,
-          `${repoClimbs.climbs.length} climb(s) in ${projectId}`
+          upgradeEngine ? `Upgraded climb.py engine and refreshed ${repoClimbs.climbs.length} climb(s) in ${projectId}` : `${repoClimbs.climbs.length} climb(s) in ${projectId}`
         );
       } catch (error62) {
         return errorResult(error62);

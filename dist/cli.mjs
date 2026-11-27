@@ -23942,6 +23942,7 @@ import { tmpdir } from "node:os";
 import { basename as basename3, dirname as dirname4, isAbsolute as isAbsolute2, join as join5, parse as parsePath, relative, resolve as resolve4, sep as sep2 } from "node:path";
 
 // src/repo-ops.ts
+import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync as mkdirSync2, readdirSync as readdirSync3, readFileSync as readFileSync3, realpathSync, statSync as statSync2, writeFileSync } from "node:fs";
 import { basename as basename2, dirname as dirname2, join as join3, resolve as resolve2, sep } from "node:path";
 import { homedir as homedir2 } from "node:os";
@@ -24296,25 +24297,52 @@ function checkEngineDrift(repoPath) {
     return { status: "current", hint: null };
   }
 }
+function branchBehindBase(repoPath, branch, base) {
+  if (!branch || !base || branch === base) return 0;
+  try {
+    const out = execFileSync("git", ["rev-list", "--count", `${branch}..${base}`], {
+      cwd: repoPath,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      timeout: 3e3
+    }).trim();
+    const n2 = Number.parseInt(out, 10);
+    return Number.isFinite(n2) && n2 > 0 ? n2 : 0;
+  } catch {
+    return 0;
+  }
+}
 function getClimbStatus(repoPath, name, last = 15) {
   const state = readState(repoPath, name);
   const summary = summarize(state, last);
   const text3 = formatSummary(summary);
   const drift = checkEngineDrift(repoPath);
+  const behindBase = branchBehindBase(repoPath, state.card.branch, state.card.base);
   const next = summary.verdict === "bar-reached" ? `
 
 Next: run the holdout, then the final review \u2014 ${climbCommand(repoPath)} holdout --why final` : `
 
 Next step in your shell: ${climbCommand(repoPath)} try "<idea>"`;
+  const branchNote = behindBase > 0 && state.card.branch && state.card.base ? `
+Branch warning: ${state.card.branch} is ${behindBase} commit${behindBase === 1 ? "" : "s"} behind ${state.card.base} \u2014 merge or rebase ${state.card.base} before landing.` : "";
   const driftNote = drift.status === "diverged" && drift.hint ? `
 ${drift.hint}` : "";
   return {
     summary,
     text: text3,
-    textWithNext: `${text3}${next}${driftNote}`,
+    textWithNext: `${text3}${next}${branchNote}${driftNote}`,
     directory: repoPath,
     engine: engineDir(repoPath),
-    engineDrift: drift.status
+    engineDrift: drift.status,
+    behindBase,
+    cardStartedMs: typeof state.card.started === "number" ? state.card.started * 1e3 : null,
+    lastRelockMs: (() => {
+      const relocks = state.rows.filter((r) => r.kind === "relock" && typeof r.time === "string");
+      if (relocks.length === 0) return null;
+      const raw = relocks[relocks.length - 1].time;
+      const ms = Date.parse(raw.includes("T") ? raw : raw.replace(" ", "T"));
+      return Number.isFinite(ms) ? ms : null;
+    })()
   };
 }
 function getClimbCard(repoPath, name) {
@@ -24636,6 +24664,7 @@ function scanProjectClimbs(repoPath, opts) {
     return {
       projectDirectory: repoPath,
       engineInstalled: false,
+      engineDrift: "missing",
       worktreesScanned: 0,
       currentCount: 0,
       archivedCount: 0,
@@ -24860,6 +24889,7 @@ function scanProjectClimbs(repoPath, opts) {
   const result = {
     projectDirectory: normalizedMain,
     engineInstalled,
+    engineDrift: checkEngineDrift(normalizedMain).status,
     worktreesScanned: worktrees.length,
     currentCount,
     archivedCount,
