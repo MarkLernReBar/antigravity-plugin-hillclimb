@@ -2051,4 +2051,181 @@ experiments:
       rmSync(dataDir, { recursive: true, force: true });
     }
   });
+
+  it("v0.7.0 anti-excuse & holdout-transfer guardrails: review plateau/skeptic gates, overfit warnings, holdout-regression confirms block, and early-release notice", async () => {
+    const repoDir = tempDir("hc-v070-repo-");
+    const dataDir = tempDir("hc-v070-data-");
+    try {
+      initGitRepo(repoDir);
+      installEngine(repoDir);
+      const climbPy = join(repoDir, ".hill-climb", "engine", "climb.py");
+
+      writeFileSync(join(repoDir, "app.py"), "def dev_score():\n    return 0.50\ndef holdout_score():\n    return 0.60\n", "utf8");
+      writeFileSync(
+        join(repoDir, "check_transfer.py"),
+        "import sys, app\nprint(app.holdout_score() if len(sys.argv) > 1 and sys.argv[1] == 'holdout' else app.dev_score())\n",
+        "utf8",
+      );
+      execFileSync("git", ["add", "app.py", "check_transfer.py"], { cwd: repoDir });
+      execFileSync("git", ["commit", "-q", "-m", "seed dev and holdout scores"], { cwd: repoDir });
+
+      execFileSync(
+        "python3",
+        [
+          climbPy, "init", "email-cov",
+          "--goal", "Reach 0.75 verified email coverage",
+          "--check", "python3 -B check_transfer.py dev",
+          "--holdout", "python3 -B check_transfer.py holdout",
+          "--direction", "max",
+          "--target", "0.75",
+          "--lock", "check_transfer.py",
+        ],
+        { cwd: repoDir, encoding: "utf8" },
+      );
+
+      // Step 1 (kept): dev 0.50 -> 0.65, holdout stays flat at 0.60
+      writeFileSync(join(repoDir, "app.py"), "def dev_score():\n    return 0.65\ndef holdout_score():\n    return 0.60\n", "utf8");
+      execFileSync("python3", [climbPy, "try", "improve dev to 0.65"], { cwd: repoDir, encoding: "utf8" });
+
+      // Step 2 (undone): sinceGain = 1 (nowhere near PLATEAU = 5)
+      writeFileSync(join(repoDir, "app.py"), "def dev_score():\n    return 0.64\ndef holdout_score():\n    return 0.60\n", "utf8");
+      execFileSync("python3", [climbPy, "try", "small regression"], { cwd: repoDir, encoding: "utf8" });
+
+      // 1. Premature review before PLATEAU is refused!
+      const earlyRev = spawnSync("python3", [climbPy, "review", "Physical ceiling reached, requires paid vendor API key"], {
+        cwd: repoDir,
+        encoding: "utf8",
+      });
+      assert.notEqual(earlyRev.status, 0);
+      assert.match(earlyRev.stderr, /Too early for a blocker review/);
+
+      // 2. Ceiling / vendor excuse with --force but without --skeptic is STILL refused!
+      const noSkeptic = spawnSync("python3", [climbPy, "review", "--force", "Physical ceiling reached, requires paid vendor API key"], {
+        cwd: repoDir,
+        encoding: "utf8",
+      });
+      assert.notEqual(noSkeptic.status, 0);
+      assert.match(noSkeptic.stderr, /without an independent first-principles audit/);
+
+      // 3. Ceiling / vendor excuse with substantive --skeptic succeeds and reminds about human approval below target!
+      const withSkeptic = execFileSync(
+        "python3",
+        [
+          climbPy, "review", "--force",
+          "Physical ceiling after exhausting local pipeline fixes",
+          "--skeptic", "Fresh skeptic subagent audited raw queries, raw uncached API responses, and official docs across 5 missed cases",
+        ],
+        { cwd: repoDir, encoding: "utf8" },
+      );
+      assert.match(withSkeptic, /Review logged after step 2/);
+      assert.match(withSkeptic, /Humans own abandoning --target/);
+
+      // 4. Flat holdout (dev +0.15, holdout +0.00) triggers OVERFIT WARNING in climb.py holdout, climb.py status, and TS getClimbStatus
+      const flatHoldout = execFileSync("python3", [climbPy, "holdout", "--why", "final"], { cwd: repoDir, encoding: "utf8" });
+      assert.match(flatHoldout, /Holdout 0\.6 -> 0\.6 \(\+0\), visible 0\.5 -> 0\.65 \(\+0\.15\)/);
+      assert.match(flatHoldout, /OVERFIT WARNING: visible improved 0\.5 -> 0\.65 \(\+0\.15\) while holdout stayed flat \(zero transfer\) 0\.6 -> 0\.6 \(\+0\)/);
+
+      const statusFlat = getClimbStatus(repoDir);
+      assert.equal(statusFlat.summary.holdoutGain, 0);
+      assert.match(statusFlat.summary.holdoutWarning ?? "", /OVERFIT WARNING/);
+      assert.match(statusFlat.text, /OVERFIT WARNING/);
+
+      // 5. MCP integration: hillclimb_add_evidence warns on flat holdout, blocks on regressed holdout, and hillclimb_release warns when below target
+      const transport = new StdioClientTransport({
+        command: process.execPath,
+        args: [join(PLUGIN_ROOT, "dist", "mcp-server.mjs")],
+        env: { ...process.env, HILLCLIMB_DATA_DIR: dataDir },
+      });
+      const client = new Client({ name: "v070-test-client", version: "1.0.0" });
+      await client.connect(transport);
+      try {
+        await client.callTool({ name: "hillclimb_projects", arguments: { id: "v070", name: "V070", registerDirectory: repoDir } });
+        await client.callTool({
+          name: "hillclimb_act",
+          arguments: {
+            projectId: "v070",
+            action: { op: "create_goal", key: "CLIMBS", parentGoalKey: null, title: "Tracked climbs", brief: "Tracked repo climbs." },
+          },
+        });
+        await client.callTool({
+          name: "hillclimb_act",
+          arguments: {
+            projectId: "v070",
+            action: {
+              op: "create_outcome",
+              key: "EMAIL-COV",
+              goalKey: "CLIMBS",
+              contract: {
+                title: "Verified email coverage reaches target",
+                story: "As a rep, I want verified corporate emails on admitted accounts, so that outreach reaches buyers.",
+                criteria: [
+                  { id: "ac1", given: "dev corpus", when: "evaluated", then: "reaches 0.75" },
+                  { id: "ac2", given: "unseen holdout corpus", when: "evaluated after climb", then: "holdout generalizes without regressing" },
+                ],
+              },
+            },
+          },
+        });
+        // Trigger auto-track link between email-cov climb and EMAIL-COV outcome
+        await client.callTool({ name: "app_tree", arguments: { projectId: "v070", force: true } });
+
+        // Flat holdout -> confirms on ac2 returns overfitWarning
+        const flatEv = await client.callTool({
+          name: "hillclimb_add_evidence",
+          arguments: {
+            projectId: "v070",
+            key: "EMAIL-COV",
+            kind: "confirms",
+            criterionIds: ["ac2"],
+            text: "Holdout measured 0.60 vs 0.60 baseline",
+            source: "climb.py:email-cov",
+          },
+        });
+        assert.ok(!flatEv.isError);
+        assert.match(String((flatEv.structuredContent as { overfitWarning?: string }).overfitWarning ?? ""), /OVERFIT WARNING/);
+
+        // Claim and release while still unverified & below target -> belowTargetNotice
+        await client.callTool({ name: "hillclimb_claim", arguments: { projectId: "v070", key: "EMAIL-COV" } });
+        const rel = await client.callTool({ name: "hillclimb_release", arguments: { projectId: "v070", key: "EMAIL-COV" } });
+        assert.ok(!rel.isError);
+        assert.match(String((rel.structuredContent as { belowTargetNotice?: string }).belowTargetNotice ?? ""), /Humans own abandoning --target/);
+
+        // Regressed holdout (0.60 -> 0.52 while dev improved 0.50 -> 0.68) -> hard-refuses confirms on holdout criterion!
+        writeFileSync(join(repoDir, "app.py"), "def dev_score():\n    return 0.68\ndef holdout_score():\n    return 0.52\n", "utf8");
+        execFileSync("python3", [climbPy, "try", "overfit dev while regressing holdout"], { cwd: repoDir, encoding: "utf8" });
+        const regHoldout = execFileSync("python3", [climbPy, "holdout", "--why", "recheck"], { cwd: repoDir, encoding: "utf8" });
+        assert.match(regHoldout, /OVERFIT WARNING:.*holdout regressed 0\.6 -> 0\.52 \(-0\.08\)/);
+
+        const regEv = await client.callTool({
+          name: "hillclimb_add_evidence",
+          arguments: {
+            projectId: "v070",
+            key: "EMAIL-COV",
+            kind: "confirms",
+            criterionIds: ["ac2"],
+            text: "Holdout check completed",
+            source: "climb.py:email-cov",
+          },
+        });
+        assert.equal(regEv.isError, true, "Regressed holdout must block confirms on holdout criterion");
+        const regErrText = (regEv.content as Array<{ text?: string }>)[0]?.text ?? "";
+        assert.match(regErrText, /Cannot record confirms evidence for a holdout criterion/);
+      } finally {
+        await client.close();
+      }
+
+      // 6. Verify rules & docs encode the Skeptic Audit, untrusted notes, and human bar-abandonment rules
+      const rulesMd = readFileSync(join(PLUGIN_ROOT, "rules", "AGENTS.md"), "utf8");
+      const skillMd = readFileSync(join(PLUGIN_ROOT, "skills", "hill-climb", "SKILL.md"), "utf8");
+      const climbingMd = readFileSync(join(PLUGIN_ROOT, "skills", "hill-climb", "references", "climbing.md"), "utf8");
+      assert.match(rulesMd, /Skeptic gate/i);
+      assert.match(rulesMd, /Humans own abandoning a bar/i);
+      assert.match(skillMd, /Skeptic Audit/i);
+      assert.match(skillMd, /OVERFIT WARNING/i);
+      assert.match(climbingMd, /Never declare your own ceiling/i);
+    } finally {
+      rmSync(repoDir, { recursive: true, force: true });
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
 });

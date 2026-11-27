@@ -1058,12 +1058,22 @@ export function createAutoTracker(repo: Repository) {
     return climbToLiveData(match);
   }
 
+  function linkedClimbForOutcome(
+    projectId: string,
+    outcomeKey: string,
+  ): { climbName: string; directory: string } | null {
+    const link = getLinkByOutcomeStmt.get(projectId, outcomeKey) as LinkRow | undefined;
+    if (!link) return null;
+    return { climbName: link.climb_name, directory: link.directory };
+  }
+
   return {
     isAutoTrackEnabled,
     setAutoTrackEnabled,
     trackClimb,
     syncScannedClimbs,
     liveForOutcome,
+    linkedClimbForOutcome,
   };
 }
 

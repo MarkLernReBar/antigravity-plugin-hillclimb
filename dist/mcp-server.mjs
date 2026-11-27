@@ -40501,6 +40501,20 @@ function summarize(files, recentLimit = 15, now = Date.now()) {
       note: redactSecrets(row.why ?? "")
     };
   });
+  const holdouts = rows.filter((row) => row.kind === "holdout").map((row) => ({ score: typeof row.score === "number" ? row.score : 0, why: redactSecrets(row.why ?? "") }));
+  const devGain = card.direction === "max" ? card.best.score - card.baseline : card.baseline - card.best.score;
+  let holdoutGain = null;
+  let holdoutWarning = null;
+  if (holdouts.length >= 2) {
+    const h0 = holdouts[0].score;
+    const h1 = holdouts[holdouts.length - 1].score;
+    holdoutGain = card.direction === "max" ? h1 - h0 : h0 - h1;
+    if (devGain > 1e-9 && holdoutGain <= 1e-9) {
+      const signed = (v2) => `${v2 >= 0 ? "+" : "-"}${number4(Math.abs(v2))}`;
+      const status = holdoutGain < -1e-9 ? "regressed" : "stayed flat (zero transfer)";
+      holdoutWarning = `OVERFIT WARNING: visible improved ${number4(card.baseline)} -> ${number4(card.best.score)} (${signed(card.best.score - card.baseline)}) while holdout ${status} ${number4(h0)} -> ${number4(h1)} (${signed(h1 - h0)}). Investigate why gains did not transfer before confirming holdout criteria or merging.`;
+    }
+  }
   return {
     name: card.name,
     goal: redactSecrets(card.goal),
@@ -40520,13 +40534,15 @@ function summarize(files, recentLimit = 15, now = Date.now()) {
     trail,
     spark: spark(trail, card.direction),
     raises: rows.filter((row) => row.kind === "raise").map((row) => redactSecrets(row.why ?? "")),
-    holdouts: rows.filter((row) => row.kind === "holdout").map((row) => ({ score: typeof row.score === "number" ? row.score : 0, why: redactSecrets(row.why ?? "") })),
+    holdouts,
     verdict,
     maxSteps: card.max_steps ?? null,
     maxHours: card.max_hours ?? null,
     pendingTree,
     hasHoldout: typeof card.holdout === "string" && card.holdout !== "",
     holdoutOnce: Boolean(card.holdout_once),
+    holdoutGain,
+    holdoutWarning,
     notes: notes === null ? null : redactSecrets(tail(notes, 40)),
     recent
   };
@@ -40563,6 +40579,7 @@ function formatSummary(summary) {
   for (const raised of summary.raises) lines.push(`Raised ${raised}`);
   if (summary.holdouts.length > 0) {
     lines.push(`Holdout ${summary.holdouts.map((row) => `${number4(row.score)} (${row.why})`).join(", ")}`);
+    if (summary.holdoutWarning) lines.push(summary.holdoutWarning);
   } else if (summary.hasHoldout && !summary.holdoutOnce) {
     lines.push(
       `Holdout baseline missing \u2014 do not inspect holdout files; run: climb.py holdout ${summary.name} --why baseline`
@@ -46885,12 +46902,18 @@ function createAutoTracker(repo) {
     if (!match) return null;
     return climbToLiveData(match);
   }
+  function linkedClimbForOutcome(projectId, outcomeKey2) {
+    const link = getLinkByOutcomeStmt.get(projectId, outcomeKey2);
+    if (!link) return null;
+    return { climbName: link.climb_name, directory: link.directory };
+  }
   return {
     isAutoTrackEnabled,
     setAutoTrackEnabled,
     trackClimb,
     syncScannedClimbs,
-    liveForOutcome
+    liveForOutcome,
+    linkedClimbForOutcome
   };
 }
 
@@ -50823,7 +50846,7 @@ function createHillClimbServer(repo, runtime) {
     return projects[0]?.id ?? repo.resolveProjectId();
   };
   const server = new McpServer(
-    { name: "hillclimb", version: "0.6.4" },
+    { name: "hillclimb", version: "0.7.0" },
     {
       capabilities: {
         tools: {},
@@ -51585,7 +51608,26 @@ ${drift.hint}` : "";
         repo.act(pid, { op: "release_outcome", key: input2.key, threadId: holder });
         const after = repo.view(pid, "main");
         const rank2 = after.ranked.find((r2) => r2.key === input2.key);
-        return jsonResult({ projectId: pid, key: input2.key, claim: rank2?.claim ?? null, inbox: inboxOf2(after) });
+        let belowTargetNotice;
+        if (rank2 && rank2.signal !== "verified" && rank2.signal !== "recheck") {
+          const linked = autoTracker.linkedClimbForOutcome(pid, input2.key);
+          if (linked) {
+            try {
+              const st = getClimbStatus(linked.directory, linked.climbName, 0).summary;
+              if (st.target !== null && st.verdict !== "bar-reached") {
+                belowTargetNotice = `Outcome ${input2.key} is still ${rank2.signal} and linked climb "${st.name}" is below target (${st.best} vs ${st.target}). Humans own abandoning --target: before stopping or merging below the bar, complete a fresh-context Skeptic Audit and post an inline hillclimb_comment(options=[...]) decision card.`;
+              }
+            } catch {
+            }
+          }
+        }
+        return jsonResult({
+          projectId: pid,
+          key: input2.key,
+          claim: rank2?.claim ?? null,
+          ...belowTargetNotice ? { belowTargetNotice } : {},
+          inbox: inboxOf2(after)
+        });
       } catch (error62) {
         return errorResult(error62);
       }
@@ -51821,6 +51863,31 @@ ${drift.hint}` : "";
         if (!tree.tracks.some((row) => row.name === trackName)) {
           throw new Error(`unknown track ${trackName}`);
         }
+        let overfitWarning;
+        if (input2.kind === "confirms") {
+          const linked = autoTracker.linkedClimbForOutcome(pid, input2.key);
+          if (linked) {
+            try {
+              const st = getClimbStatus(linked.directory, linked.climbName, 0).summary;
+              if (st.holdoutWarning) {
+                const targetedCriteria = input2.criterionIds.length > 0 ? outcome2.criteria.filter((c) => input2.criterionIds.includes(c.id)) : outcome2.criteria;
+                const holdoutMentioned = /\b(?:holdout|unseen|generaliz)/i.test(input2.text) || targetedCriteria.some((c) => /\b(?:holdout|unseen|generaliz)/i.test(`${c.given} ${c.when} ${c.then}`));
+                if (holdoutMentioned && st.holdoutGain !== null && st.holdoutGain < -1e-9) {
+                  throw new Error(
+                    `Cannot record confirms evidence for a holdout criterion on ${input2.key}: ${st.holdoutWarning}`
+                  );
+                }
+                if (holdoutMentioned) {
+                  overfitWarning = st.holdoutWarning;
+                }
+              }
+            } catch (err) {
+              if (err instanceof Error && err.message.startsWith("Cannot record confirms evidence")) {
+                throw err;
+              }
+            }
+          }
+        }
         const parsedAttachments = input2.attachments ? input2.attachments.map((a) => ({
           label: String(a.label ?? "Attachment"),
           path: String(a.path ?? ""),
@@ -51851,6 +51918,7 @@ ${drift.hint}` : "";
           track: trackName,
           signal: after.ranked.find((r2) => r2.key === input2.key)?.signal ?? "unverified",
           evidence: after.evidence.filter((row) => row.key === input2.key).at(-1)?.id ?? null,
+          ...overfitWarning ? { overfitWarning } : {},
           inbox: inboxOf2(after)
         });
       } catch (error62) {

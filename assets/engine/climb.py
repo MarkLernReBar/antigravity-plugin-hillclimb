@@ -960,6 +960,46 @@ def cmd_try(args):
         print(f"BAR REACHED: {number(score)} meets {number(card['target'])}. The card says: {card['after']}.")
         if holdout is not None:
             print(f"Holdout now {number(holdout)}. Compare it with the holdout baseline before you claim a win.")
+            warn = holdout_transfer_warning(card, [r for r in rows(folder) if r["kind"] == "holdout"])
+            if warn:
+                print(warn)
+
+
+_EXCUSE_CLAIM_RE = re.compile(
+    r"\b(?:ceiling|impossible|cannot\s+be|physically|unsolvable|maxed\s+out|hard\s+limit|structural\s+limit|"
+    r"requires?\s+(?:a\s+)?(?:paid|new|secondary|external|third[- ]party)|api\s+key|provider\s+key|buy\s+a|vendor)\b",
+    re.IGNORECASE,
+)
+
+
+def _signed_delta(delta):
+    sign = "+" if delta >= 0 else "-"
+    return f"{sign}{number(abs(delta))}"
+
+
+def holdout_transfer_warning(card, holdouts):
+    """Return an overfit warning when visible score improved but holdout stayed flat or regressed."""
+    if len(holdouts) < 2:
+        return None
+    baseline = card["baseline"]
+    best = card["best"]["score"]
+    direction = card["direction"]
+    dev_gain = (best - baseline) if direction == "max" else (baseline - best)
+    if dev_gain <= 1e-9:
+        return None
+    h0 = holdouts[0]["score"]
+    h1 = holdouts[-1]["score"]
+    h_gain = (h1 - h0) if direction == "max" else (h0 - h1)
+    if h_gain > 1e-9:
+        return None
+    status = "regressed" if h_gain < -1e-9 else "stayed flat (zero transfer)"
+    dev_delta = _signed_delta(best - baseline)
+    h_delta = _signed_delta(h1 - h0)
+    return (
+        f"OVERFIT WARNING: visible improved {number(baseline)} -> {number(best)} ({dev_delta}) "
+        f"while holdout {status} {number(h0)} -> {number(h1)} ({h_delta}). "
+        f"Investigate why gains did not transfer before confirming holdout criteria or merging."
+    )
 
 
 def spark(values, direction):
@@ -1001,6 +1041,9 @@ def cmd_status(args):
     holdouts = [row for row in log if row["kind"] == "holdout"]
     if holdouts:
         print("Holdout " + ", ".join(f"{number(row['score'])} ({row['why']})" for row in holdouts))
+        warn = holdout_transfer_warning(card, holdouts)
+        if warn:
+            print(warn)
     elif card.get("holdout") and not card.get("holdout_once"):
         print(f"Holdout baseline missing — do not inspect holdout files; run: climb.py holdout {card['name']} --why baseline")
     for row in log[-args.last:]:
@@ -1032,7 +1075,19 @@ def cmd_holdout(args):
         raise Fail("This climb has no holdout check.")
     if card.get("holdout_once") and any(row.get("kind") == "holdout" for row in rows(folder)):
         raise Fail("Holdout was already read once for this --holdout-once climb.")
-    print(f"Holdout {number(run_holdout(folder, card, args.why))}, visible best {number(card['best']['score'])}.")
+    score = run_holdout(folder, card, args.why)
+    holdouts = [row for row in rows(folder) if row["kind"] == "holdout"]
+    if len(holdouts) >= 2:
+        h0 = holdouts[0]["score"]
+        print(
+            f"Holdout {number(h0)} -> {number(score)} ({_signed_delta(score - h0)}), "
+            f"visible {number(card['baseline'])} -> {number(card['best']['score'])} ({_signed_delta(card['best']['score'] - card['baseline'])})."
+        )
+        warn = holdout_transfer_warning(card, holdouts)
+        if warn:
+            print(warn)
+    else:
+        print(f"Holdout {number(score)}, visible best {number(card['best']['score'])}.")
 
 
 def cmd_raise(args):
@@ -1095,9 +1150,44 @@ def cmd_budget(args):
 
 def cmd_review(args):
     folder = resolve(args.name)
-    steps = [row for row in rows(folder) if row["kind"] == "step"]
-    append(folder, {"kind": "review", "step": len(steps), "why": args.found})
+    card = load(folder)
+    log = rows(folder)
+    steps = [row for row in log if row["kind"] == "step"]
+    reviews = [row for row in log if row["kind"] == "review"]
+    since = len(steps) - card["best"]["step"]
+    last_review = reviews[-1]["step"] if reviews else None
+    since_review = len(steps) - last_review if last_review is not None else len(steps)
+    skeptic = (args.skeptic or "").strip()
+
+    if not args.force and (since < PLATEAU or (last_review is not None and since_review < PLATEAU)):
+        raise Fail(
+            f"Too early for a blocker review: {since} step(s) since last gain "
+            f"(plateau requires {PLATEAU} steps without gain). Keep climbing from first principles, "
+            f"or if a human asked to stop early, pass --force --skeptic \"<fresh-context audit findings>\"."
+        )
+
+    if _EXCUSE_CLAIM_RE.search(args.found) and len(skeptic) < 20:
+        raise Fail(
+            "Cannot declare a ceiling, impossibility, or external/vendor blocker without an independent "
+            "first-principles audit. Spawn a fresh-context skeptic subagent (ignoring prior notes.md) to inspect "
+            "raw inputs/queries, raw uncached upstream responses, and official docs on >=3 missed cases, "
+            "then re-run with --skeptic \"<concrete raw-evidence disproof summary>\"."
+        )
+
+    if args.skeptic is not None and len(skeptic) < 20:
+        raise Fail("--skeptic must summarize concrete raw-evidence checks (at least 20 chars).")
+
+    entry = {"kind": "review", "step": len(steps), "why": args.found}
+    if skeptic:
+        entry["skeptic"] = skeptic
+    append(folder, entry)
     print(f"Review logged after step {len(steps)}. Climb at least {PLATEAU} more steps before the next one.")
+    if card["target"] is not None and not reached(card, card["best"]["score"]):
+        print(
+            f"Bar not reached ({number(card['best']['score'])} vs {number(card['target'])}). "
+            "Humans own abandoning --target: do NOT merge, deploy, or close below the bar without posting an "
+            "inline hillclimb_comment(options=[...]) decision card and waiting for human approval."
+        )
 
 
 def cmd_drop(args):
@@ -1248,6 +1338,8 @@ def parse(argv):
     review = sub.add_parser("review", help="log a blocker review and what it found")
     review.add_argument("found")
     review.add_argument("--name")
+    review.add_argument("--skeptic", help="concrete raw-evidence summary from an independent fresh-context skeptic audit")
+    review.add_argument("--force", action="store_true", help="allow logging a review before PLATEAU steps (only when human-directed)")
 
     drop = sub.add_parser("drop", help="abandon a climb, go back to the base branch, keep the old branch")
     drop.add_argument("name", nargs="?")

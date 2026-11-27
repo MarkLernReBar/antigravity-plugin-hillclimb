@@ -193,10 +193,12 @@ Each step is one idea, one change, one `try`:
 | `check exited N and printed nothing that matches --score` | Read `last.txt`, fix check, then `relock --why` | Loosen `--score` regex |
 | `the check or a guard changed a locked file` | Make check read-only or move generated output out | Unlock check files |
 
-### 5. Stalls (`PLATEAU`) & 6. Reaching the bar
+### 5. Stalls (`PLATEAU`), First-Principles Skeptic Audit & 6. Reaching the bar
 
-- **`PLATEAU` (5 steps with no gain):** stop and profile where time/errors go, check noise/granularity/floor, log findings with `python3 "$CLIMB" review "<what you found>"`, and fix check/build bottlenecks first. Only ask the user if hardware, money, or access blocks all local paths (list as "Next climb" in the report).
-- **`BAR REACHED`:** `climb.py` runs the holdout. If holdout stays flat while visible improves, stop—it is overfitting. To push further on `--after raise`, check the floor first and run `python3 "$CLIMB" raise 2x --why "..."`.
+- **`PLATEAU` (5 steps with no gain):** stop and profile from **first principles** — never anchor on an earlier climb's `notes.md`, old `review` prose, wrapper summaries, or stale caches (treat all of them as untrusted hypotheses). Inspect the exact raw queries sent, raw crawled/input artifacts, raw uncached upstream API responses, and official tool/API docs on >=3 missed cases.
+- **Mandatory fresh-context Skeptic Audit before claiming a ceiling or external blocker:** The climber may **never** declare its own "physical/structural ceiling", "impossible", or "needs a new paid vendor/API." Spawn a fresh read-only `research` subagent (zero inherited narrative from the climber or prior `notes.md`) briefed ONLY with the missed cases, raw logs/responses, and official docs, tasked with **falsifying** the climber's excuse. `climb.py review` enforces both `PLATEAU` (5 steps since last gain) and `--skeptic "<concrete raw-evidence disproof summary>"` whenever a review cites a ceiling, impossibility, or external vendor.
+- **Humans own abandoning `--target`:** Never merge, deploy, or close a climb below `--target` unilaterally, and never suggest buying new external vendors unless explicitly asked or the Skeptic Audit proved zero local query/parser/cache/pipeline bugs remain. If genuinely blocked below `--target` after the Skeptic Audit, call `hillclimb_comment(options=["Keep climbing from first principles (no new vendors)", "Re-scope target bar", "Accept current gain and stop"])` as your **final tool call** and wait for the user's click.
+- **`BAR REACHED` & Holdout Transfer:** `climb.py` runs the holdout and computes transfer (`dev_delta` vs `holdout_delta`). If `OVERFIT WARNING` fires (visible improved while holdout stayed flat or regressed), **do NOT claim holdout certification or merge** — investigate why gains didn't generalize. To push further on `--after raise`, check the floor first and run `python3 "$CLIMB" raise 2x --why "..."`.
 
 ### Helpers: Antigravity subagents
 
@@ -235,7 +237,7 @@ Blockers: <exact blocker, or "none">
 | `holdout --why "..."` | Run unseen holdout check |
 | `raise <bar> --why "..."` | Raise bar after reaching current target |
 | `relock [name] --why "..."` | Accept edited locked check and re-measure baseline |
-| `review "<found>"` | Log a blocker review (clears `PLATEAU` for 5 steps) |
+| `review "<found>" [--skeptic "..."]` | Log a blocker review after `PLATEAU` (requires `--skeptic` fresh-context audit for any ceiling/impossibility/vendor claim) |
 | `budget [name] [--hours N] [--steps N] [--off]` | Extend or clear soft/strict budget limits |
 | `drop [name]` | Abandon climb, preserve branch, restore base checkout |
 | `list` | List climbs in this repo |

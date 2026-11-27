@@ -275,7 +275,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     return projects[0]?.id ?? repo.resolveProjectId();
   };
   const server = new McpServer(
-    { name: "hillclimb", version: "0.6.4" },
+    { name: "hillclimb", version: "0.7.0" },
     {
       capabilities: {
         tools: {},
@@ -1102,7 +1102,29 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
         repo.act(pid, { op: "release_outcome", key: input.key, threadId: holder });
         const after = repo.view(pid, "main");
         const rank = after.ranked.find((r) => r.key === input.key);
-        return jsonResult({ projectId: pid, key: input.key, claim: rank?.claim ?? null, inbox: inboxOf(after) });
+        let belowTargetNotice: string | undefined;
+        if (rank && rank.signal !== "verified" && rank.signal !== "recheck") {
+          const linked = autoTracker.linkedClimbForOutcome(pid, input.key);
+          if (linked) {
+            try {
+              const st = getClimbStatus(linked.directory, linked.climbName, 0).summary;
+              if (st.target !== null && st.verdict !== "bar-reached") {
+                belowTargetNotice =
+                  `Outcome ${input.key} is still ${rank.signal} and linked climb "${st.name}" is below target (${st.best} vs ${st.target}). ` +
+                  "Humans own abandoning --target: before stopping or merging below the bar, complete a fresh-context Skeptic Audit and post an inline hillclimb_comment(options=[...]) decision card.";
+              }
+            } catch {
+              // ignore unreadable climb directory
+            }
+          }
+        }
+        return jsonResult({
+          projectId: pid,
+          key: input.key,
+          claim: rank?.claim ?? null,
+          ...(belowTargetNotice ? { belowTargetNotice } : {}),
+          inbox: inboxOf(after),
+        });
       } catch (error) {
         return errorResult(error);
       }
@@ -1363,6 +1385,37 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
         if (!tree.tracks.some((row) => row.name === trackName)) {
           throw new Error(`unknown track ${trackName}`);
         }
+        let overfitWarning: string | undefined;
+        if (input.kind === "confirms") {
+          const linked = autoTracker.linkedClimbForOutcome(pid, input.key);
+          if (linked) {
+            try {
+              const st = getClimbStatus(linked.directory, linked.climbName, 0).summary;
+              if (st.holdoutWarning) {
+                const targetedCriteria =
+                  input.criterionIds.length > 0
+                    ? outcome.criteria.filter((c) => input.criterionIds.includes(c.id))
+                    : outcome.criteria;
+                const holdoutMentioned =
+                  /\b(?:holdout|unseen|generaliz)/i.test(input.text) ||
+                  targetedCriteria.some((c) => /\b(?:holdout|unseen|generaliz)/i.test(`${c.given} ${c.when} ${c.then}`));
+                if (holdoutMentioned && st.holdoutGain !== null && st.holdoutGain < -1e-9) {
+                  throw new Error(
+                    `Cannot record confirms evidence for a holdout criterion on ${input.key}: ${st.holdoutWarning}`,
+                  );
+                }
+                if (holdoutMentioned) {
+                  overfitWarning = st.holdoutWarning;
+                }
+              }
+            } catch (err) {
+              if (err instanceof Error && err.message.startsWith("Cannot record confirms evidence")) {
+                throw err;
+              }
+              // ignore unreadable climb directory
+            }
+          }
+        }
         const parsedAttachments = input.attachments
           ? input.attachments.map((a) => ({
               label: String(a.label ?? "Attachment"),
@@ -1395,6 +1448,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
           track: trackName,
           signal: after.ranked.find((r) => r.key === input.key)?.signal ?? "unverified",
           evidence: after.evidence.filter((row) => row.key === input.key).at(-1)?.id ?? null,
+          ...(overfitWarning ? { overfitWarning } : {}),
           inbox: inboxOf(after),
         });
       } catch (error) {

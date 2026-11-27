@@ -81,7 +81,9 @@ An outcome can list prerequisite outcome keys in `dependsOn` (set in `create_out
 
 ## When you're blocked
 
-- If a product or policy decision is needed from a person, ask with `hillclimb_comment` (passing `options` so it lands in the UI Inbox) and tell the user in chat.
+- **Never declare your own ceiling:** Before claiming a climb is "impossible", at a "physical/structural ceiling", or "needs a new paid vendor/API", spawn a fresh-context read-only `research` subagent (zero inherited narrative from the climber or prior climbs' `notes.md`) to audit raw inputs/queries, raw uncached upstream responses, and official docs on >=3 missed cases and try to **falsify** your excuse. Pass its concrete findings to `climb.py review "..." --skeptic "..."`.
+- **Humans own abandoning `--target`:** Never merge, deploy, or close an unverified outcome short of its bar unilaterally. Finish the Skeptic Audit, then post an inline `hillclimb_comment` (passing `options` so it renders an interactive decision card in chat and Inbox) as your **final tool call** and wait for human approval.
+- **Check holdout transfer honestly:** If visible score improved while holdout stayed flat or regressed (`OVERFIT WARNING`), diagnose why gains did not transfer rather than marking holdout criteria confirmed.
 - Release your claim (`hillclimb_release`) if nothing can move forward while waiting, and pick the next unblocked outcome.
 - Never mark an outcome `verified` with caveats.
 

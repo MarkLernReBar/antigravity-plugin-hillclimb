@@ -22753,6 +22753,20 @@ function summarize(files, recentLimit = 15, now = Date.now()) {
       note: redactSecrets(row.why ?? "")
     };
   });
+  const holdouts = rows.filter((row) => row.kind === "holdout").map((row) => ({ score: typeof row.score === "number" ? row.score : 0, why: redactSecrets(row.why ?? "") }));
+  const devGain = card.direction === "max" ? card.best.score - card.baseline : card.baseline - card.best.score;
+  let holdoutGain = null;
+  let holdoutWarning = null;
+  if (holdouts.length >= 2) {
+    const h0 = holdouts[0].score;
+    const h1 = holdouts[holdouts.length - 1].score;
+    holdoutGain = card.direction === "max" ? h1 - h0 : h0 - h1;
+    if (devGain > 1e-9 && holdoutGain <= 1e-9) {
+      const signed = (v) => `${v >= 0 ? "+" : "-"}${number4(Math.abs(v))}`;
+      const status = holdoutGain < -1e-9 ? "regressed" : "stayed flat (zero transfer)";
+      holdoutWarning = `OVERFIT WARNING: visible improved ${number4(card.baseline)} -> ${number4(card.best.score)} (${signed(card.best.score - card.baseline)}) while holdout ${status} ${number4(h0)} -> ${number4(h1)} (${signed(h1 - h0)}). Investigate why gains did not transfer before confirming holdout criteria or merging.`;
+    }
+  }
   return {
     name: card.name,
     goal: redactSecrets(card.goal),
@@ -22772,13 +22786,15 @@ function summarize(files, recentLimit = 15, now = Date.now()) {
     trail,
     spark: spark(trail, card.direction),
     raises: rows.filter((row) => row.kind === "raise").map((row) => redactSecrets(row.why ?? "")),
-    holdouts: rows.filter((row) => row.kind === "holdout").map((row) => ({ score: typeof row.score === "number" ? row.score : 0, why: redactSecrets(row.why ?? "") })),
+    holdouts,
     verdict,
     maxSteps: card.max_steps ?? null,
     maxHours: card.max_hours ?? null,
     pendingTree,
     hasHoldout: typeof card.holdout === "string" && card.holdout !== "",
     holdoutOnce: Boolean(card.holdout_once),
+    holdoutGain,
+    holdoutWarning,
     notes: notes === null ? null : redactSecrets(tail(notes, 40)),
     recent
   };
@@ -22815,6 +22831,7 @@ function formatSummary(summary) {
   for (const raised of summary.raises) lines.push(`Raised ${raised}`);
   if (summary.holdouts.length > 0) {
     lines.push(`Holdout ${summary.holdouts.map((row) => `${number4(row.score)} (${row.why})`).join(", ")}`);
+    if (summary.holdoutWarning) lines.push(summary.holdoutWarning);
   } else if (summary.hasHoldout && !summary.holdoutOnce) {
     lines.push(
       `Holdout baseline missing \u2014 do not inspect holdout files; run: climb.py holdout ${summary.name} --why baseline`
