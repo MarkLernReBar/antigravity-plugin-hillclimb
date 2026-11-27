@@ -275,7 +275,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     return projects[0]?.id ?? repo.resolveProjectId();
   };
   const server = new McpServer(
-    { name: "hillclimb", version: "0.9.1" },
+    { name: "hillclimb", version: "0.10.0" },
     {
       capabilities: {
         tools: {},
@@ -343,7 +343,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
           ? repo.resolveProjectId(args.projectId)
           : pickDefaultProject(projects);
         const track = args.track ?? "main";
-        const repoClimbs = scanAndSync(chosen, { rowLimit: 25, includeNotes: false });
+        const repoClimbs = scanAndSync(chosen, { rowLimit: 40, includeNotes: args.page === "climbs" });
         const tree = repo.view(chosen, track);
         const inboxCount = repo.inboxCountTotal();
         const defaultPage = args.page ?? (tree.outcomes.length === 0 && repoClimbs.climbs.length > 0 ? "climbs" : "tree");

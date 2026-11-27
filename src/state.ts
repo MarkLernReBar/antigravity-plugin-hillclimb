@@ -1443,6 +1443,21 @@ export interface LogRow {
   delta_summary?: string;
   commit?: string;
   prev_score?: number;
+  skeptic?: string;
+  visible?: number;
+}
+
+export interface ClimbBreakdownMetric {
+  key: string;
+  value: number;
+  raw?: string;
+  status?: "pass" | "fail" | null;
+  target?: string | null;
+}
+
+export interface ClimbBreakdown {
+  summaryLine: string | null;
+  metrics: ClimbBreakdownMetric[];
 }
 
 export interface ClimbFiles {
@@ -1474,7 +1489,7 @@ export interface ClimbSummary {
   trail: number[];
   spark: string;
   raises: string[];
-  holdouts: Array<{ score: number; why: string }>;
+  holdouts: Array<{ score: number; why: string; visible?: number | null }>;
   verdict: Verdict;
   maxSteps: number | null;
   maxHours: number | null;
@@ -1484,6 +1499,7 @@ export interface ClimbSummary {
   holdoutEvery: number | null;
   keptSinceHoldout: number;
   holdoutGain: number | null;
+  transferRatio: number | null;
   holdoutWarning: string | null;
   holdoutCheckpointWarning: string | null;
   relockCount: number;
@@ -1705,14 +1721,30 @@ export function summarize(files: ClimbFiles, recentLimit = 15, now = Date.now())
 
   const holdouts = rows
     .filter((row) => row.kind === "holdout")
-    .map((row) => ({ score: typeof row.score === "number" ? row.score : 0, why: redactSecrets(row.why ?? "") }));
+    .map((row) => ({
+      score: typeof row.score === "number" ? row.score : 0,
+      why: redactSecrets(row.why ?? ""),
+      visible: typeof row.visible === "number" && Number.isFinite(row.visible) ? row.visible : null,
+    }));
   const devGain = card.direction === "max" ? card.best.score - card.baseline : card.baseline - card.best.score;
   let holdoutGain: number | null = null;
+  let transferRatio: number | null = null;
   let holdoutWarning: string | null = null;
   if (holdouts.length >= 2) {
     const h0 = holdouts[0]!.score;
     const h1 = holdouts[holdouts.length - 1]!.score;
     holdoutGain = card.direction === "max" ? h1 - h0 : h0 - h1;
+    const v0 = holdouts[0]!.visible;
+    const v1 = holdouts[holdouts.length - 1]!.visible;
+    const winDevGain =
+      v0 !== null && v1 !== null && Math.abs(v1 - v0) > 1e-9
+        ? card.direction === "max"
+          ? v1 - v0
+          : v0 - v1
+        : devGain;
+    if (winDevGain > 1e-9) {
+      transferRatio = Math.round((holdoutGain / winDevGain) * 1000) / 1000;
+    }
     if (devGain > 1e-9 && holdoutGain <= 1e-9) {
       const signed = (v: number) => `${v >= 0 ? "+" : "-"}${number(Math.abs(v))}`;
       const status = holdoutGain < -1e-9 ? "regressed" : "stayed flat (zero transfer)";
@@ -1785,6 +1817,7 @@ export function summarize(files: ClimbFiles, recentLimit = 15, now = Date.now())
     holdoutEvery,
     keptSinceHoldout,
     holdoutGain,
+    transferRatio,
     holdoutWarning,
     holdoutCheckpointWarning,
     relockCount,
@@ -1800,6 +1833,91 @@ export function summarize(files: ClimbFiles, recentLimit = 15, now = Date.now())
 export function tail(text: string, lines: number): string {
   const all = text.trimEnd().split("\n");
   return all.slice(Math.max(0, all.length - lines)).join("\n");
+}
+
+const BREAKDOWN_ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]/g;
+const BREAKDOWN_LOG_RE = /^(?:\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}|(?:INFO|DEBUG|WARNING|ERROR|TRACE)\b|\$\s)/;
+const BREAKDOWN_NUM_RE = /^[-+]?(?:\d+\.\d*|\.\d+|\d+)(?:[eE][-+]?\d+)?$/;
+const BREAKDOWN_SKIP_KEYS = new Set([
+  "time", "sec", "secs", "seconds", "ms", "elapsed", "pid", "port", "saved", "live",
+  "missing", "errors", "sample", "cases", "valid", "floor", "seed", "step", "w", "se",
+  "ci", "bar", "target", "version", "http", "code", "status", "pass", "passed", "fail",
+  "failed", "total", "count", "eval_cases", "pillars", "buckets", "n",
+]);
+
+/**
+ * Format-agnostic parser for structured per-case / sub-metric breakdowns in best.txt.
+ * Extracts the summary headline line plus up to 16 key/value or tabular pillar metrics.
+ */
+export function parseBestBreakdown(rawText: string | null): ClimbBreakdown | null {
+  if (!rawText) return null;
+  const clean = rawText.slice(0, 65_536).replace(BREAKDOWN_ANSI_RE, "");
+  const lines = clean
+    .split("\n")
+    .map((l) => l.replace(/\r$/, "").split("\r").pop() ?? "")
+    .filter((l) => {
+      const s = l.trim();
+      return s !== "" && !BREAKDOWN_LOG_RE.test(s) && !BREAKDOWN_NUM_RE.test(s);
+    });
+  if (lines.length === 0) return null;
+
+  let summaryLine: string | null = null;
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    const s = lines[i]!.trim();
+    if (/^(?:SUMMARY|TOTAL|OVERALL|COMPOSITE|RESULT|SCORE)\b/i.test(s) || s.includes(" | ")) {
+      summaryLine = redactSecrets(s).slice(0, 280);
+      break;
+    }
+  }
+  if (!summaryLine) {
+    for (let i = lines.length - 1; i >= 0; i -= 1) {
+      const s = lines[i]!.trim();
+      if ((s.includes("=") || s.includes("|")) && !s.startsWith("===")) {
+        summaryLine = redactSecrets(s).slice(0, 280);
+        break;
+      }
+    }
+  }
+
+  const byKey = new Map<string, ClimbBreakdownMetric>();
+  const kvRe = /(?<![A-Za-z0-9_./-])([A-Za-z][A-Za-z0-9_.-]{1,36})=([-+]?(?:\d+\.\d+|\d+))(\([^)\s]{1,28}\))?(?![A-Za-z0-9_./-])/g;
+  const tabRe = /^\s*([A-Za-z][A-Za-z0-9_.-]{1,42})\s{2,}([-+]?(?:\d+\.\d+|\d+))(?:\s+\(([^)]{1,28})\))?(?:\s+\[(PASS|FAIL|OK|WARN)\])?/i;
+
+  // 1. Capture inline key=value(n/m) metrics across non-tabular lines
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line.includes("=") || /\[(PASS|FAIL|OK|WARN)\]/i.test(line)) continue;
+    for (const m of line.matchAll(kvRe)) {
+      const key = m[1]!;
+      const val = Number(m[2]);
+      const extra = m[3] ?? "";
+      if (!Number.isFinite(val) || BREAKDOWN_SKIP_KEYS.has(key.toLowerCase())) continue;
+      if (!byKey.has(key)) {
+        byKey.set(key, { key, value: val, raw: `${m[2]}${extra}`, status: null, target: null });
+      }
+    }
+  }
+
+  // 2. Also capture tabular rows with optional (bar >= X) and [PASS]/[FAIL] status tags
+  for (const line of lines) {
+    if (line.includes("=") && !/\[(PASS|FAIL|OK|WARN)\]/i.test(line)) continue;
+    const tm = tabRe.exec(line);
+    if (!tm) continue;
+    const key = tm[1]!;
+    const val = Number(tm[2]);
+    if (!Number.isFinite(val) || BREAKDOWN_SKIP_KEYS.has(key.toLowerCase())) continue;
+    const targetText = tm[3]?.trim() || null;
+    const rawTag = tm[4]?.toUpperCase();
+    const status: "pass" | "fail" | null =
+      rawTag === "PASS" || rawTag === "OK" ? "pass" : rawTag === "FAIL" || rawTag === "WARN" ? "fail" : null;
+    if (!byKey.has(key) || status !== null) {
+      byKey.set(key, { key, value: val, raw: tm[2], status, target: targetText });
+    }
+  }
+
+  const metrics = [...byKey.values()].slice(0, 16);
+  if (!summaryLine && metrics.length === 0) return null;
+  return { summaryLine, metrics };
 }
 
 /** The single line an agent must act on. */

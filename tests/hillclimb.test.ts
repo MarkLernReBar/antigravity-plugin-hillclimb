@@ -11,6 +11,7 @@ import { createRepository, openDatabase } from "../src/repository.js";
 import { conversationServiceGuardReason, createRuntime } from "../src/runtime.js";
 import { buildOutcomeContract, createAutoTracker } from "../src/auto-track.js";
 import { clearScanCache, getClimbCard, getClimbList, getClimbStatus, getClimbVerdict, installEngine, redactSecrets, scanProjectClimbs } from "../src/repo-ops.js";
+import { parseBestBreakdown } from "../src/state.js";
 import { actionSchema } from "../src/actions.js";
 import { lintTree } from "../src/linter.js";
 import { writeMirror } from "../src/mirror.js";
@@ -2792,6 +2793,164 @@ experiments:
       assert.match(skillMd, /"\$CLIMB" audit/);
       assert.match(checksMd, /Anti-Goodhart/);
       assert.match(climbingMd, /Auditing wins/i);
+    } finally {
+      rmSync(repoDir, { recursive: true, force: true });
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
+
+  it("v0.10.0 Climbs Live Cockpit: running.json heartbeat, parseBestBreakdown, rich scanProjectClimbs & app_repo_climbs payloads, and bundled UI", async () => {
+    const repoDir = tempDir("hc-v010-repo-");
+    const dataDir = tempDir("hc-v010-data-");
+    try {
+      // 1. Format-agnostic parseBestBreakdown handles inline key=val(n/m), tabular [PASS]/[FAIL], and redacts secrets
+      const rawBest = [
+        "SUMMARY composite=0.7800 | pass=18/20 | token=ghp_supersecret1234567890",
+        "  recall_rate              0.8500  (bar >= 0.70)  [PASS]",
+        "  precision_rate           0.6200  (bar >= 0.75)  [FAIL]",
+        "METRICS latency_score=0.910(19/20) edge_cases=0.700(7/10)",
+        "0.7800",
+      ].join("\n");
+      const parsed = parseBestBreakdown(rawBest);
+      assert.ok(parsed, "parseBestBreakdown must return breakdown");
+      assert.match(parsed.summaryLine ?? "", /composite=0\.7800/);
+      assert.doesNotMatch(parsed.summaryLine ?? "", /ghp_supersecret/, "must redact secrets in breakdown summary");
+      const recall = parsed.metrics.find((m) => m.key === "recall_rate");
+      const precision = parsed.metrics.find((m) => m.key === "precision_rate");
+      const latency = parsed.metrics.find((m) => m.key === "latency_score");
+      assert.equal(recall?.status, "pass");
+      assert.equal(recall?.target, "bar >= 0.70");
+      assert.equal(precision?.status, "fail");
+      assert.equal(latency?.raw, "0.910(19/20)");
+
+      // 2. Real git repo with climb: probe, holdout-every, cancel-out discard, relock, review with skeptic, running.json heartbeat
+      initGitRepo(repoDir);
+      installEngine(repoDir);
+      const climbPy = join(repoDir, ".hill-climb", "engine", "climb.py");
+      writeFileSync(join(repoDir, "solver.py"), "A = 0.50\nB = 0.50\nH = 0.50\n", "utf8");
+      writeFileSync(
+        join(repoDir, "check_dev.py"),
+        [
+          "import solver",
+          'sa = "PASS" if solver.A >= 0.70 else "FAIL"',
+          'sb = "PASS" if solver.B >= 0.70 else "FAIL"',
+          'print(f"SUMMARY mean={(solver.A + solver.B)/2:.4f} | buckets=2")',
+          'print(f"  bucket_alpha             {solver.A:.4f}  (bar >= 0.70)  [{sa}]")',
+          'print(f"  bucket_beta              {solver.B:.4f}  (bar >= 0.70)  [{sb}]")',
+          'print(f"{(solver.A + solver.B) / 2:.4f}")',
+        ].join("\n") + "\n",
+        "utf8",
+      );
+      writeFileSync(join(repoDir, "check_holdout.py"), "import solver\nprint(f'{solver.H:.4f}')\n", "utf8");
+      writeFileSync(join(repoDir, "probe.py"), "print('probe ok')\n", "utf8");
+      execFileSync("git", ["add", "solver.py", "check_dev.py", "check_holdout.py", "probe.py"], { cwd: repoDir });
+      execFileSync("git", ["commit", "-q", "-m", "seed cockpit repo"], { cwd: repoDir });
+
+      execFileSync(
+        "python3",
+        [
+          climbPy, "init", "cockpit-demo",
+          "--goal", "Raise composite quality to 0.85",
+          "--check", "python3 -B check_dev.py",
+          "--probe", "python3 -B probe.py",
+          "--holdout", "python3 -B check_holdout.py",
+          "--holdout-every", "2",
+          "--direction", "max",
+          "--target", "0.85",
+          "--min-gain", "0.01",
+          "--lock", "check_dev.py",
+          "--lock", "check_holdout.py",
+        ],
+        { cwd: repoDir, encoding: "utf8" },
+      );
+
+      // Step 1: kept win
+      writeFileSync(join(repoDir, "solver.py"), "A = 0.72\nB = 0.54\nH = 0.62\n", "utf8");
+      execFileSync("python3", [climbPy, "try", "improve alpha matcher"], { cwd: repoDir, encoding: "utf8" });
+
+      // Step 2: discarded cancel-out (A up, B down, same mean)
+      writeFileSync(join(repoDir, "solver.py"), "A = 0.78\nB = 0.48\nH = 0.62\n", "utf8");
+      execFileSync("python3", [climbPy, "try", "aggressive alpha weight"], { cwd: repoDir, encoding: "utf8" });
+
+      // Relock + skeptic-audited review
+      writeFileSync(join(repoDir, "check_dev.py"), readFileSync(join(repoDir, "check_dev.py"), "utf8") + "# tightened\n", "utf8");
+      execFileSync("python3", [climbPy, "relock", "--why", "tighten precision guard"], { cwd: repoDir, encoding: "utf8" });
+      execFileSync(
+        "python3",
+        [climbPy, "review", "beta misses need fallback parser", "--force", "--skeptic", "Inspected 3 raw beta misses: parser drops trailing tokens"],
+        { cwd: repoDir, encoding: "utf8" },
+      );
+
+      // Step 3: second kept win triggers automatic holdout checkpoint
+      writeFileSync(join(repoDir, "solver.py"), "A = 0.76\nB = 0.72\nH = 0.74\n", "utf8");
+      execFileSync("python3", [climbPy, "try", "fix trailing token parser"], { cwd: repoDir, encoding: "utf8" });
+
+      // Confirm climb.py cleaned up running.json upon exit
+      const runningPath = join(repoDir, ".hill-climb", "cockpit-demo", "running.json");
+      assert.equal(existsSync(runningPath), false, "climb.py must remove running.json on completion");
+
+      // Dead PID in running.json must be ignored
+      writeFileSync(
+        runningPath,
+        JSON.stringify({ kind: "try", phase: "check", step: 4, idea: "stale crash", started_at: Date.now() / 1000 - 12, pid: 999999 }),
+        "utf8",
+      );
+      clearScanCache();
+      let scan = scanProjectClimbs(repoDir, { rowLimit: 40, includeNotes: true });
+      assert.equal(scan.climbs.length, 1);
+      assert.equal(scan.climbs[0]?.running, null, "dead PID heartbeat must be ignored");
+
+      // Live PID (process.pid) in running.json must surface running state + isLive=true
+      writeFileSync(
+        runningPath,
+        JSON.stringify({ kind: "try", phase: "probe", step: 4, idea: "test fast slice candidate", started_at: Date.now() / 1000 - 5, pid: process.pid }),
+        "utf8",
+      );
+      clearScanCache();
+      scan = scanProjectClimbs(repoDir, { rowLimit: 40, includeNotes: true });
+      const c = scan.climbs[0]!;
+      assert.equal(c.isLive, true);
+      assert.equal(c.running?.phase, "probe");
+      assert.equal(c.running?.step, 4);
+      assert.equal(c.running?.idea, "test fast slice candidate");
+      assert.equal(c.probe, "python3 -B probe.py");
+      assert.equal(c.holdoutEvery, 2);
+      assert.equal(c.relockCount, 1);
+      assert.equal(c.hasBestOutput, true);
+      assert.equal(c.hasLastOutput, true);
+      assert.ok(typeof c.transferRatio === "number" && c.transferRatio > 0.8, `expected positive transferRatio, got ${c.transferRatio}`);
+      assert.ok((c.breakdown?.metrics.length ?? 0) >= 2, "breakdown must expose parsed best.txt metrics");
+      assert.ok(c.rows.some((r) => r.kind === "review" && r.skeptic?.includes("trailing tokens")), "review row must expose skeptic evidence");
+      assert.ok(c.rows.some((r) => r.kind === "relock" && r.files?.includes("check_dev.py")), "relock row must expose changed locked files");
+      assert.ok(c.rows.some((r) => r.kind === "step" && typeof r.seconds === "number" && typeof r.diffLines === "number"), "step rows must expose duration and diffLines");
+
+      // 3. End-to-end MCP app_repo_climbs returns the full cockpit payload
+      const transport = new StdioClientTransport({
+        command: process.execPath,
+        args: [join(PLUGIN_ROOT, "dist", "mcp-server.mjs")],
+        env: { ...process.env, HILLCLIMB_DATA_DIR: dataDir },
+      });
+      const client = new Client({ name: "v010-test-client", version: "1.0.0" });
+      await client.connect(transport);
+      try {
+        await client.callTool({ name: "hillclimb_projects", arguments: { id: "v010", name: "V010", registerDirectory: repoDir } });
+        const uiRes = (await client.callTool({
+          name: "app_repo_climbs",
+          arguments: { projectId: "v010" },
+        })).structuredContent as { climbs: Array<{ running?: { phase: string } | null; breakdown?: { metrics: unknown[] } | null; transferRatio?: number | null }> };
+        assert.equal(uiRes.climbs[0]?.running?.phase, "probe");
+        assert.ok((uiRes.climbs[0]?.breakdown?.metrics.length ?? 0) >= 2);
+        assert.ok((uiRes.climbs[0]?.transferRatio ?? 0) > 0.8);
+      } finally {
+        await client.close();
+      }
+
+      // 4. Built UI bundle includes the Climbs Live Cockpit surfaces
+      const appHtml = readFileSync(join(PLUGIN_ROOT, "dist", "app.html"), "utf8");
+      assert.match(appHtml, /Latest score breakdown/);
+      assert.match(appHtml, /Skeptic-audited/);
+      assert.match(appHtml, /Check lock/);
+      assert.match(appHtml, /Running blind holdout check/);
     } finally {
       rmSync(repoDir, { recursive: true, force: true });
       rmSync(dataDir, { recursive: true, force: true });

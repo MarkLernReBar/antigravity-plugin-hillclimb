@@ -22880,14 +22880,25 @@ function summarize(files, recentLimit = 15, now = Date.now()) {
       note: redactSecrets(row.why ?? "")
     };
   });
-  const holdouts = rows.filter((row) => row.kind === "holdout").map((row) => ({ score: typeof row.score === "number" ? row.score : 0, why: redactSecrets(row.why ?? "") }));
+  const holdouts = rows.filter((row) => row.kind === "holdout").map((row) => ({
+    score: typeof row.score === "number" ? row.score : 0,
+    why: redactSecrets(row.why ?? ""),
+    visible: typeof row.visible === "number" && Number.isFinite(row.visible) ? row.visible : null
+  }));
   const devGain = card.direction === "max" ? card.best.score - card.baseline : card.baseline - card.best.score;
   let holdoutGain = null;
+  let transferRatio = null;
   let holdoutWarning = null;
   if (holdouts.length >= 2) {
     const h0 = holdouts[0].score;
     const h1 = holdouts[holdouts.length - 1].score;
     holdoutGain = card.direction === "max" ? h1 - h0 : h0 - h1;
+    const v0 = holdouts[0].visible;
+    const v1 = holdouts[holdouts.length - 1].visible;
+    const winDevGain = v0 !== null && v1 !== null && Math.abs(v1 - v0) > 1e-9 ? card.direction === "max" ? v1 - v0 : v0 - v1 : devGain;
+    if (winDevGain > 1e-9) {
+      transferRatio = Math.round(holdoutGain / winDevGain * 1e3) / 1e3;
+    }
     if (devGain > 1e-9 && holdoutGain <= 1e-9) {
       const signed = (v) => `${v >= 0 ? "+" : "-"}${number4(Math.abs(v))}`;
       const status = holdoutGain < -1e-9 ? "regressed" : "stayed flat (zero transfer)";
@@ -22939,6 +22950,7 @@ function summarize(files, recentLimit = 15, now = Date.now()) {
     holdoutEvery,
     keptSinceHoldout,
     holdoutGain,
+    transferRatio,
     holdoutWarning,
     holdoutCheckpointWarning,
     relockCount,
@@ -22953,6 +22965,107 @@ function summarize(files, recentLimit = 15, now = Date.now()) {
 function tail(text3, lines) {
   const all = text3.trimEnd().split("\n");
   return all.slice(Math.max(0, all.length - lines)).join("\n");
+}
+var BREAKDOWN_ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]/g;
+var BREAKDOWN_LOG_RE = /^(?:\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}|(?:INFO|DEBUG|WARNING|ERROR|TRACE)\b|\$\s)/;
+var BREAKDOWN_NUM_RE = /^[-+]?(?:\d+\.\d*|\.\d+|\d+)(?:[eE][-+]?\d+)?$/;
+var BREAKDOWN_SKIP_KEYS = /* @__PURE__ */ new Set([
+  "time",
+  "sec",
+  "secs",
+  "seconds",
+  "ms",
+  "elapsed",
+  "pid",
+  "port",
+  "saved",
+  "live",
+  "missing",
+  "errors",
+  "sample",
+  "cases",
+  "valid",
+  "floor",
+  "seed",
+  "step",
+  "w",
+  "se",
+  "ci",
+  "bar",
+  "target",
+  "version",
+  "http",
+  "code",
+  "status",
+  "pass",
+  "passed",
+  "fail",
+  "failed",
+  "total",
+  "count",
+  "eval_cases",
+  "pillars",
+  "buckets",
+  "n"
+]);
+function parseBestBreakdown(rawText) {
+  if (!rawText) return null;
+  const clean = rawText.slice(0, 65536).replace(BREAKDOWN_ANSI_RE, "");
+  const lines = clean.split("\n").map((l) => l.replace(/\r$/, "").split("\r").pop() ?? "").filter((l) => {
+    const s2 = l.trim();
+    return s2 !== "" && !BREAKDOWN_LOG_RE.test(s2) && !BREAKDOWN_NUM_RE.test(s2);
+  });
+  if (lines.length === 0) return null;
+  let summaryLine = null;
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    const s2 = lines[i].trim();
+    if (/^(?:SUMMARY|TOTAL|OVERALL|COMPOSITE|RESULT|SCORE)\b/i.test(s2) || s2.includes(" | ")) {
+      summaryLine = redactSecrets(s2).slice(0, 280);
+      break;
+    }
+  }
+  if (!summaryLine) {
+    for (let i = lines.length - 1; i >= 0; i -= 1) {
+      const s2 = lines[i].trim();
+      if ((s2.includes("=") || s2.includes("|")) && !s2.startsWith("===")) {
+        summaryLine = redactSecrets(s2).slice(0, 280);
+        break;
+      }
+    }
+  }
+  const byKey2 = /* @__PURE__ */ new Map();
+  const kvRe = /(?<![A-Za-z0-9_./-])([A-Za-z][A-Za-z0-9_.-]{1,36})=([-+]?(?:\d+\.\d+|\d+))(\([^)\s]{1,28}\))?(?![A-Za-z0-9_./-])/g;
+  const tabRe = /^\s*([A-Za-z][A-Za-z0-9_.-]{1,42})\s{2,}([-+]?(?:\d+\.\d+|\d+))(?:\s+\(([^)]{1,28})\))?(?:\s+\[(PASS|FAIL|OK|WARN)\])?/i;
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line.includes("=") || /\[(PASS|FAIL|OK|WARN)\]/i.test(line)) continue;
+    for (const m of line.matchAll(kvRe)) {
+      const key2 = m[1];
+      const val = Number(m[2]);
+      const extra = m[3] ?? "";
+      if (!Number.isFinite(val) || BREAKDOWN_SKIP_KEYS.has(key2.toLowerCase())) continue;
+      if (!byKey2.has(key2)) {
+        byKey2.set(key2, { key: key2, value: val, raw: `${m[2]}${extra}`, status: null, target: null });
+      }
+    }
+  }
+  for (const line of lines) {
+    if (line.includes("=") && !/\[(PASS|FAIL|OK|WARN)\]/i.test(line)) continue;
+    const tm = tabRe.exec(line);
+    if (!tm) continue;
+    const key2 = tm[1];
+    const val = Number(tm[2]);
+    if (!Number.isFinite(val) || BREAKDOWN_SKIP_KEYS.has(key2.toLowerCase())) continue;
+    const targetText = tm[3]?.trim() || null;
+    const rawTag = tm[4]?.toUpperCase();
+    const status = rawTag === "PASS" || rawTag === "OK" ? "pass" : rawTag === "FAIL" || rawTag === "WARN" ? "fail" : null;
+    if (!byKey2.has(key2) || status !== null) {
+      byKey2.set(key2, { key: key2, value: val, raw: tm[2], status, target: targetText });
+    }
+  }
+  const metrics = [...byKey2.values()].slice(0, 16);
+  if (!summaryLine && metrics.length === 0) return null;
+  return { summaryLine, metrics };
 }
 function verdictLine(summary) {
   switch (summary.verdict) {
@@ -24762,6 +24875,36 @@ var LIVE_RECENCY_MS = 15 * 60 * 1e3;
 var CLIMB_STAT_MEMO_MAX = 500;
 var scanCache = /* @__PURE__ */ new Map();
 var climbStatMemo = /* @__PURE__ */ new Map();
+function isPidAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return err?.code === "EPERM";
+  }
+}
+function readRunningHeartbeat(climbDir, nowMs) {
+  const file2 = readLocalFile(joinPath(climbDir, "running.json"));
+  if (file2.text === null) return null;
+  try {
+    const raw = JSON.parse(file2.text);
+    const pid = typeof raw.pid === "number" ? raw.pid : 0;
+    const startedAt = typeof raw.started_at === "number" ? raw.started_at : 0;
+    if (!isPidAlive(pid)) return null;
+    if (startedAt <= 0 || nowMs - startedAt * 1e3 > 6 * 36e5) return null;
+    return {
+      kind: typeof raw.kind === "string" ? raw.kind : "try",
+      phase: typeof raw.phase === "string" ? raw.phase : "check",
+      step: typeof raw.step === "number" ? raw.step : null,
+      idea: typeof raw.idea === "string" && raw.idea.trim() !== "" ? redactSecrets(raw.idea) : null,
+      startedAt,
+      pid
+    };
+  } catch {
+    return null;
+  }
+}
 function safeRealpath(path) {
   try {
     return realpathSync(path);
@@ -24890,15 +25033,26 @@ function scanProjectClimbs(repoPath, opts) {
         const cardPath = joinPath(climbDir, "card.json");
         const logPath = joinPath(climbDir, "log.jsonl");
         const lastPath = joinPath(climbDir, "last.txt");
+        const bestPath = joinPath(climbDir, "best.txt");
+        const notesPath = joinPath(climbDir, "notes.md");
         const cardSig = statSignature(cardPath);
         if (!cardSig) continue;
         const logSig = statSignature(logPath);
         const lastMtimeMs = statMtimeMs(lastPath);
+        const bestMtimeMs = statMtimeMs(bestPath);
+        const notesMtimeMs = statMtimeMs(notesPath);
         const logMtimeMs = logSig?.mtimeMs ?? 0;
         const logSize = logSig?.size ?? 0;
-        const latestMtimeMs = Math.max(cardSig.mtimeMs, logMtimeMs, lastMtimeMs);
+        const running = readRunningHeartbeat(climbDir, nowMs);
+        const latestMtimeMs = Math.max(
+          cardSig.mtimeMs,
+          logMtimeMs,
+          lastMtimeMs,
+          bestMtimeMs,
+          running ? running.startedAt * 1e3 : 0
+        );
         const memo2 = !bypassCache ? climbStatMemo.get(climbDir) : void 0;
-        if (memo2 && memo2.cardMtimeMs === cardSig.mtimeMs && memo2.cardSize === cardSig.size && memo2.logMtimeMs === logMtimeMs && memo2.logSize === logSize) {
+        if (memo2 && memo2.cardMtimeMs === cardSig.mtimeMs && memo2.cardSize === cardSig.size && memo2.logMtimeMs === logMtimeMs && memo2.logSize === logSize && memo2.notesMtimeMs === notesMtimeMs && memo2.bestMtimeMs === bestMtimeMs) {
           parsedEntries.push({
             dirName,
             climbDir,
@@ -24906,6 +25060,10 @@ function scanProjectClimbs(repoPath, opts) {
             rows: memo2.rows,
             summary: memo2.summary,
             checks: memo2.checks,
+            breakdown: memo2.breakdown,
+            hasBestOutput: bestMtimeMs > 0,
+            hasLastOutput: lastMtimeMs > 0,
+            running,
             latestMtimeMs
           });
           continue;
@@ -24915,8 +25073,14 @@ function scanProjectClimbs(repoPath, opts) {
         const logText = logSig ? readFileSync3(logPath, "utf8") : "";
         const rows = logText === "" ? [] : parseLog(logText);
         const pendingTree = existsSync(joinPath(climbDir, "pending-tree"));
-        const summary = summarize({ card, rows, notes: null, pendingTree }, 0, nowMs);
+        const notesText = notesMtimeMs > 0 ? readLocalFile(notesPath).text : null;
+        const summary = summarize(
+          { card, rows, notes: notesText, notesMtimeMs: notesMtimeMs > 0 ? notesMtimeMs : null, pendingTree },
+          0,
+          nowMs
+        );
         const checks = Array.isArray(card.check) ? card.check : card.check === void 0 ? [] : [card.check];
+        const breakdown = bestMtimeMs > 0 ? parseBestBreakdown(readLocalFile(bestPath).text) : null;
         if (climbStatMemo.size >= CLIMB_STAT_MEMO_MAX) {
           climbStatMemo.clear();
         }
@@ -24925,12 +25089,27 @@ function scanProjectClimbs(repoPath, opts) {
           cardSize: cardSig.size,
           logMtimeMs,
           logSize,
+          notesMtimeMs,
+          bestMtimeMs,
           card,
           rows,
           summary,
-          checks
+          checks,
+          breakdown
         });
-        parsedEntries.push({ dirName, climbDir, card, rows, summary, checks, latestMtimeMs });
+        parsedEntries.push({
+          dirName,
+          climbDir,
+          card,
+          rows,
+          summary,
+          checks,
+          breakdown,
+          hasBestOutput: bestMtimeMs > 0,
+          hasLastOutput: lastMtimeMs > 0,
+          running,
+          latestMtimeMs
+        });
       } catch (error62) {
         warnings.push(
           `Failed to read climb ${dirName} in ${root}: ${error62 instanceof Error ? error62.message : String(error62)}`
@@ -24956,7 +25135,19 @@ function scanProjectClimbs(repoPath, opts) {
         }
       }
     }
-    for (const { dirName: name, climbDir, card, rows: allRows, summary, checks, latestMtimeMs } of parsedEntries) {
+    for (const {
+      dirName: name,
+      climbDir,
+      card,
+      rows: allRows,
+      summary,
+      checks,
+      breakdown,
+      hasBestOutput,
+      hasLastOutput,
+      running,
+      latestMtimeMs
+    } of parsedEntries) {
       const cardName = card.name?.trim() || name;
       if (cardName !== name && (canonicalNames.has(cardName) || referencedSiblingDirs.has(name) || allRows.length === 0)) {
         continue;
@@ -24969,13 +25160,22 @@ function scanProjectClimbs(repoPath, opts) {
         idea: typeof r.idea === "string" ? redactSecrets(r.idea) : null,
         why: typeof r.why === "string" ? redactSecrets(r.why) : null,
         time: r.time ?? null,
-        commit: null
+        commit: typeof r.commit === "string" ? r.commit : null,
+        seconds: typeof r.seconds === "number" && Number.isFinite(r.seconds) ? r.seconds : null,
+        diffLines: typeof r.diff_lines === "number" && Number.isFinite(r.diff_lines) ? r.diff_lines : null,
+        files: Array.isArray(r.files) ? r.files.filter((f) => typeof f === "string") : void 0,
+        deltaSummary: typeof r.delta_summary === "string" ? redactSecrets(r.delta_summary) : null,
+        skeptic: typeof r.skeptic === "string" ? redactSecrets(r.skeptic) : null,
+        prevScore: typeof r.prev_score === "number" && Number.isFinite(r.prev_score) ? r.prev_score : null,
+        visible: typeof r.visible === "number" && Number.isFinite(r.visible) ? r.visible : null
       }));
       const rawTargetText = card.target_text ?? null;
       const targetTextMatches = rawTargetText !== null && (summary.target === null || Number.isFinite(Number(rawTargetText)) && Math.abs(Number(rawTargetText) - summary.target) < 1e-9);
-      const isLive = (summary.verdict === "climbing" || summary.verdict === "plateau") && latestMtimeMs > 0 && nowMs - latestMtimeMs <= LIVE_RECENCY_MS;
+      const isLive = Boolean(running) || (summary.verdict === "climbing" || summary.verdict === "plateau") && latestMtimeMs > 0 && nowMs - latestMtimeMs <= LIVE_RECENCY_MS;
       const rawNotes = includeNotes ? readLocalFile(joinPath(climbDir, "notes.md")).text : null;
       const notes = rawNotes === null ? null : redactSecrets(rawNotes);
+      const behindBase = branchBehindBase(root, card.branch ?? branch, card.base);
+      const branchWarning = behindBase > 0 && (card.branch ?? branch) && card.base ? `${card.branch ?? branch} is ${behindBase} commit${behindBase === 1 ? "" : "s"} behind ${card.base} \u2014 merge or rebase ${card.base} before landing.` : null;
       const updatedAt = allRows[allRows.length - 1]?.time ?? (latestMtimeMs > 0 ? new Date(latestMtimeMs).toISOString() : latestMtimeIso(climbDir));
       climbs.push({
         id: `${root}::${name}`,
@@ -24989,6 +25189,7 @@ function scanProjectClimbs(repoPath, opts) {
         isMainCheckout: isMain,
         conversationId,
         branch: card.branch ?? branch,
+        base: card.base ?? null,
         goal: typeof card.goal === "string" ? redactSecrets(card.goal) : null,
         direction: card.direction,
         baseline: summary.baseline,
@@ -25002,8 +25203,10 @@ function scanProjectClimbs(repoPath, opts) {
         verdict: summary.verdict,
         sparkline: summary.spark,
         check: checks.map(redactSecrets),
+        probe: card.probe ? redactSecrets(card.probe) : null,
         guards: (card.guards ?? []).map(redactSecrets),
         holdout: card.holdout ? redactSecrets(card.holdout) : null,
+        holdoutEvery: summary.holdoutEvery,
         locked: card.lock ?? [],
         scoreMode: card.score_mode ?? "failure-count",
         rows,
@@ -25011,7 +25214,26 @@ function scanProjectClimbs(repoPath, opts) {
         bestCommit: card.best.commit?.trim() || null,
         preparedFiles: 0,
         preparedSampleFiles: [],
-        updatedAt
+        updatedAt,
+        running,
+        avgCheckSeconds: summary.checkSeconds,
+        keptSinceHoldout: summary.keptSinceHoldout,
+        relockCount: summary.relockCount,
+        behindBase,
+        notesStaleSteps: summary.notesStaleSteps,
+        holdoutGain: summary.holdoutGain,
+        transferRatio: summary.transferRatio,
+        health: {
+          overfitWarning: summary.holdoutWarning,
+          holdoutCheckpointWarning: summary.holdoutCheckpointWarning,
+          thrashWarning: summary.thrashWarning,
+          stallWarning: summary.stallWarning,
+          notesWarning: summary.notesWarning,
+          branchWarning
+        },
+        breakdown,
+        hasBestOutput,
+        hasLastOutput
       });
     }
     for (const name of found.prepared) {

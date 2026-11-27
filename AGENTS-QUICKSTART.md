@@ -1,6 +1,6 @@
 # Hill Climb — Agent Quickstart (`llms.txt`)
 
-Zero-install, local-first contract tree + locked repo hill-climbing engine (`v0.9.1`).
+Zero-install, local-first contract tree + locked repo hill-climbing engine (`v0.10.0`).
 Everything lives locally in SQLite (`~/.gemini/antigravity/plugin_data/hillclimb/hillclimb.db`).
 
 ## 1. Connect Any MCP-Compatible Agent

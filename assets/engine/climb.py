@@ -638,7 +638,7 @@ def save_kit(folder, card):
     inside = [lock for lock in card["lock"] if not lock.startswith("..")]
     names = git("ls-files", "--", *inside).splitlines() if inside else []
     names += [str(path.relative_to(root)) for path in sorted(folder.rglob("*"))
-              if path.name not in ("card.json", "log.jsonl", "last.txt", "best.txt", "pending-tree")
+              if path.name not in ("card.json", "log.jsonl", "last.txt", "best.txt", "pending-tree", "running.json")
               and "data" not in path.relative_to(folder).parts[:1]]
     files = [name for name in dict.fromkeys(names) if (root / name).is_file() and (root / name).stat().st_size <= FILE_LIMIT]
     meta = {key: card.get(key) for key in KIT_KEYS}
@@ -718,6 +718,30 @@ def _cache_env(folder, token):
         "HILLCLIMB_CACHE_FILE": str(folder / "candidate-cache.json"),
         "HILLCLIMB_CACHE_TOKEN": token,
     }
+
+
+def _set_running(folder, kind, *, phase=None, step=None, idea=None, started_at=None):
+    """Write live running.json heartbeat so the UI shows what climb.py is doing in real time."""
+    payload = {
+        "kind": kind,
+        "phase": phase or kind,
+        "step": step,
+        "idea": (idea or "")[:240] or None,
+        "started_at": started_at if started_at is not None else time.time(),
+        "pid": os.getpid(),
+    }
+    try:
+        (folder / "running.json").write_text(json.dumps(payload) + "\n")
+    except OSError:
+        pass
+    return payload["started_at"]
+
+
+def _clear_running(folder):
+    try:
+        (folder / "running.json").unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 def run_holdout(folder, card, reason):
@@ -935,6 +959,7 @@ def cmd_try(args):
     )
     probe_cmd = getattr(args, "probe", None) or (None if getattr(args, "no_probe", False) else card.get("probe"))
     guards_passed_pre = False
+    started_at = _set_running(folder, "try", phase="guards" if run_guards_first else ("probe" if probe_cmd else "check"), step=step, idea=args.idea)
     try:
         if run_guards_first:
             failed = failing_guards(card["guards"], card["timeout"], env=cache_env)
@@ -950,6 +975,7 @@ def cmd_try(args):
                 return
             guards_passed_pre = True
         if probe_cmd:
+            _set_running(folder, "try", phase="probe", step=step, idea=args.idea, started_at=started_at)
             probe_res, probe_out, probe_err = _run(probe_cmd, card["timeout"], env=cache_env)
             if probe_res is None or probe_res.returncode:
                 undo(card)
@@ -966,6 +992,7 @@ def cmd_try(args):
                 for warning in stall_and_notes_warnings(folder, card, steps + [logged]):
                     print(warning)
                 return
+        _set_running(folder, "try", phase="check", step=step, idea=args.idea, started_at=started_at)
         try:
             if card.get("paired"):
                 score, row["pair"], seconds = paired(folder, card, cache_env=cache_env)
@@ -1016,6 +1043,7 @@ def cmd_try(args):
                 print(warning)
             return
         if not guards_passed_pre:
+            _set_running(folder, "try", phase="guards", step=step, idea=args.idea, started_at=started_at)
             failed = failing_guards(card["guards"], card["timeout"], env=cache_env)
             if failed:
                 undo(card)
@@ -1024,6 +1052,7 @@ def cmd_try(args):
                 return
     finally:
         cache_path.unlink(missing_ok=True)
+        _clear_running(folder)
     try:
         moved = card["lock"] and fingerprint(card["lock"]) != card["fingerprint"]
     except Fail:
@@ -1047,7 +1076,12 @@ def cmd_try(args):
     append(folder, {**row, "result": "kept", "gain": better(card, score, best)})
     print(f"step {step} kept    {number(score)} (was {number(best)}, start {number(card['baseline'])})  {args.idea}")
     if reached(card, score):
-        holdout = None if card.get("holdout_once") else run_holdout(folder, card, "bar reached")
+        if card.get("holdout") and not card.get("holdout_once"):
+            _set_running(folder, "holdout", phase="holdout", step=step, idea="bar reached holdout check")
+        try:
+            holdout = None if card.get("holdout_once") else run_holdout(folder, card, "bar reached")
+        finally:
+            _clear_running(folder)
         print(f"BAR REACHED: {number(score)} meets {number(card['target'])}. The card says: {card['after']}.")
         if holdout is not None:
             print(f"Holdout now {number(holdout)}. Compare it with the holdout baseline before you claim a win.")
@@ -1060,6 +1094,7 @@ def cmd_try(args):
         since_h = kept_since_holdout(log_now)
         every = card.get("holdout_every")
         if every and since_h >= every:
+            _set_running(folder, "holdout", phase="holdout", step=step, idea=f"checkpoint step {step}")
             try:
                 h_score = run_holdout(folder, card, f"checkpoint step {step}")
                 holdouts_now = [r for r in rows(folder) if r["kind"] == "holdout"]
@@ -1076,6 +1111,8 @@ def cmd_try(args):
                     print(f"Holdout checkpoint: {number(h_score)} (visible {number(score)}).")
             except Fail as error:
                 print(f"Warning: automatic holdout checkpoint failed ({str(error).splitlines()[0]}). Kept step stands.")
+            finally:
+                _clear_running(folder)
         else:
             cp_warn = holdout_checkpoint_warning(card, log_now)
             if cp_warn:
@@ -1568,7 +1605,11 @@ def cmd_holdout(args):
         raise Fail("This climb has no holdout check.")
     if card.get("holdout_once") and any(row.get("kind") == "holdout" for row in rows(folder)):
         raise Fail("Holdout was already read once for this --holdout-once climb.")
-    score = run_holdout(folder, card, args.why)
+    _set_running(folder, "holdout", phase="holdout", idea=args.why)
+    try:
+        score = run_holdout(folder, card, args.why)
+    finally:
+        _clear_running(folder)
     holdouts = [row for row in rows(folder) if row["kind"] == "holdout"]
     if len(holdouts) >= 2:
         h0 = holdouts[0]["score"]
@@ -1611,14 +1652,17 @@ def cmd_relock(args):
     cache_path = folder / "candidate-cache.json"
     guard_env = _cache_env(folder, uuid.uuid4().hex)
     measure_env = _cache_env(folder, uuid.uuid4().hex)
+    _set_running(folder, "relock", phase="guards", idea=args.why)
     try:
         failed = failing_guards(card["guards"], card["timeout"], env=guard_env)
         if failed:
             raise Fail(f"A guard fails with the changed check: {failed[0]}\n{failed[1]}")
         commit(roots, f"climb({card['name']}): fix the check\n\n{args.why}")
+        _set_running(folder, "relock", phase="check", idea=args.why)
         score, _, _ = measure(card["check"], card["runs"], card["timeout"], folder / "best.txt", card["score"], score_mode(card), env=measure_env)
     finally:
         cache_path.unlink(missing_ok=True)
+        _clear_running(folder)
     new_head = git("rev-parse", "HEAD")
     card["fingerprint"] = fingerprint(card["lock"])
     card["best"] = {"score": score, "commit": new_head, "step": len([r for r in rows(folder) if r["kind"] == "step"])}

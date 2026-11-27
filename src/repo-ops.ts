@@ -23,11 +23,13 @@ import {
   formatSummary,
   listClimbs,
   number,
+  parseBestBreakdown,
   parseCard,
   parseLog,
   redactSecrets,
   summarize,
   verdictLine,
+  type ClimbBreakdown,
   type ClimbCard,
   type ClimbFiles,
   type ClimbSummary,
@@ -508,6 +510,31 @@ export interface ScannedClimbRow {
   why: string | null;
   time: string | null;
   commit: string | null;
+  seconds?: number | null;
+  diffLines?: number | null;
+  files?: string[];
+  deltaSummary?: string | null;
+  skeptic?: string | null;
+  prevScore?: number | null;
+  visible?: number | null;
+}
+
+export interface ScannedClimbRunning {
+  kind: string;
+  phase: string;
+  step: number | null;
+  idea: string | null;
+  startedAt: number;
+  pid: number;
+}
+
+export interface ScannedClimbHealth {
+  overfitWarning: string | null;
+  holdoutCheckpointWarning: string | null;
+  thrashWarning: string | null;
+  stallWarning: string | null;
+  notesWarning: string | null;
+  branchWarning: string | null;
 }
 
 export interface ScannedClimb {
@@ -522,6 +549,7 @@ export interface ScannedClimb {
   isMainCheckout: boolean;
   conversationId: string | null;
   branch: string | null;
+  base?: string | null;
   goal: string | null;
   direction: "min" | "max" | null;
   baseline: number | null;
@@ -535,8 +563,10 @@ export interface ScannedClimb {
   verdict: string;
   sparkline: string;
   check: string[];
+  probe?: string | null;
   guards: string[];
   holdout: string | null;
+  holdoutEvery?: number | null;
   locked: string[];
   scoreMode: string | null;
   rows: ScannedClimbRow[];
@@ -545,6 +575,18 @@ export interface ScannedClimb {
   preparedFiles: number;
   preparedSampleFiles: string[];
   updatedAt: string | null;
+  running?: ScannedClimbRunning | null;
+  avgCheckSeconds?: number | null;
+  keptSinceHoldout?: number;
+  relockCount?: number;
+  behindBase?: number;
+  notesStaleSteps?: number;
+  holdoutGain?: number | null;
+  transferRatio?: number | null;
+  health?: ScannedClimbHealth;
+  breakdown?: ClimbBreakdown | null;
+  hasBestOutput?: boolean;
+  hasLastOutput?: boolean;
 }
 
 export interface ScannedProjectClimbs {
@@ -732,12 +774,47 @@ const climbStatMemo = new Map<
     cardSize: number;
     logMtimeMs: number;
     logSize: number;
+    notesMtimeMs: number;
+    bestMtimeMs: number;
     card: ClimbCard;
     rows: LogRow[];
     summary: ClimbSummary;
     checks: string[];
+    breakdown: ClimbBreakdown | null;
   }
 >();
+
+function isPidAlive(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return (err as NodeJS.ErrnoException | null)?.code === "EPERM";
+  }
+}
+
+function readRunningHeartbeat(climbDir: string, nowMs: number): ScannedClimbRunning | null {
+  const file = readLocalFile(joinPath(climbDir, "running.json"));
+  if (file.text === null) return null;
+  try {
+    const raw = JSON.parse(file.text) as Record<string, unknown>;
+    const pid = typeof raw.pid === "number" ? raw.pid : 0;
+    const startedAt = typeof raw.started_at === "number" ? raw.started_at : 0;
+    if (!isPidAlive(pid)) return null;
+    if (startedAt <= 0 || nowMs - startedAt * 1000 > 6 * 3_600_000) return null;
+    return {
+      kind: typeof raw.kind === "string" ? raw.kind : "try",
+      phase: typeof raw.phase === "string" ? raw.phase : "check",
+      step: typeof raw.step === "number" ? raw.step : null,
+      idea: typeof raw.idea === "string" && raw.idea.trim() !== "" ? redactSecrets(raw.idea) : null,
+      startedAt,
+      pid,
+    };
+  } catch {
+    return null;
+  }
+}
 
 function safeRealpath(path: string): string | null {
   try {
@@ -888,6 +965,10 @@ export function scanProjectClimbs(repoPath: string | null, opts?: ScanProjectCli
       rows: LogRow[];
       summary: ClimbSummary;
       checks: string[];
+      breakdown: ClimbBreakdown | null;
+      hasBestOutput: boolean;
+      hasLastOutput: boolean;
+      running: ScannedClimbRunning | null;
       latestMtimeMs: number;
     }> = [];
 
@@ -897,13 +978,24 @@ export function scanProjectClimbs(repoPath: string | null, opts?: ScanProjectCli
         const cardPath = joinPath(climbDir, "card.json");
         const logPath = joinPath(climbDir, "log.jsonl");
         const lastPath = joinPath(climbDir, "last.txt");
+        const bestPath = joinPath(climbDir, "best.txt");
+        const notesPath = joinPath(climbDir, "notes.md");
         const cardSig = statSignature(cardPath);
         if (!cardSig) continue;
         const logSig = statSignature(logPath);
         const lastMtimeMs = statMtimeMs(lastPath);
+        const bestMtimeMs = statMtimeMs(bestPath);
+        const notesMtimeMs = statMtimeMs(notesPath);
         const logMtimeMs = logSig?.mtimeMs ?? 0;
         const logSize = logSig?.size ?? 0;
-        const latestMtimeMs = Math.max(cardSig.mtimeMs, logMtimeMs, lastMtimeMs);
+        const running = readRunningHeartbeat(climbDir, nowMs);
+        const latestMtimeMs = Math.max(
+          cardSig.mtimeMs,
+          logMtimeMs,
+          lastMtimeMs,
+          bestMtimeMs,
+          running ? running.startedAt * 1000 : 0,
+        );
 
         const memo = !bypassCache ? climbStatMemo.get(climbDir) : undefined;
         if (
@@ -911,7 +1003,9 @@ export function scanProjectClimbs(repoPath: string | null, opts?: ScanProjectCli
           memo.cardMtimeMs === cardSig.mtimeMs &&
           memo.cardSize === cardSig.size &&
           memo.logMtimeMs === logMtimeMs &&
-          memo.logSize === logSize
+          memo.logSize === logSize &&
+          memo.notesMtimeMs === notesMtimeMs &&
+          memo.bestMtimeMs === bestMtimeMs
         ) {
           parsedEntries.push({
             dirName,
@@ -920,6 +1014,10 @@ export function scanProjectClimbs(repoPath: string | null, opts?: ScanProjectCli
             rows: memo.rows,
             summary: memo.summary,
             checks: memo.checks,
+            breakdown: memo.breakdown,
+            hasBestOutput: bestMtimeMs > 0,
+            hasLastOutput: lastMtimeMs > 0,
+            running,
             latestMtimeMs,
           });
           continue;
@@ -930,8 +1028,14 @@ export function scanProjectClimbs(repoPath: string | null, opts?: ScanProjectCli
         const logText = logSig ? readFileSync(logPath, "utf8") : "";
         const rows = logText === "" ? [] : parseLog(logText);
         const pendingTree = existsSync(joinPath(climbDir, "pending-tree"));
-        const summary = summarize({ card, rows, notes: null, pendingTree }, 0, nowMs);
+        const notesText = notesMtimeMs > 0 ? readLocalFile(notesPath).text : null;
+        const summary = summarize(
+          { card, rows, notes: notesText, notesMtimeMs: notesMtimeMs > 0 ? notesMtimeMs : null, pendingTree },
+          0,
+          nowMs,
+        );
         const checks = Array.isArray(card.check) ? card.check : card.check === undefined ? [] : [card.check];
+        const breakdown = bestMtimeMs > 0 ? parseBestBreakdown(readLocalFile(bestPath).text) : null;
 
         if (climbStatMemo.size >= CLIMB_STAT_MEMO_MAX) {
           climbStatMemo.clear();
@@ -941,12 +1045,27 @@ export function scanProjectClimbs(repoPath: string | null, opts?: ScanProjectCli
           cardSize: cardSig.size,
           logMtimeMs,
           logSize,
+          notesMtimeMs,
+          bestMtimeMs,
           card,
           rows,
           summary,
           checks,
+          breakdown,
         });
-        parsedEntries.push({ dirName, climbDir, card, rows, summary, checks, latestMtimeMs });
+        parsedEntries.push({
+          dirName,
+          climbDir,
+          card,
+          rows,
+          summary,
+          checks,
+          breakdown,
+          hasBestOutput: bestMtimeMs > 0,
+          hasLastOutput: lastMtimeMs > 0,
+          running,
+          latestMtimeMs,
+        });
       } catch (error) {
         warnings.push(
           `Failed to read climb ${dirName} in ${root}: ${error instanceof Error ? error.message : String(error)}`,
@@ -976,7 +1095,19 @@ export function scanProjectClimbs(repoPath: string | null, opts?: ScanProjectCli
       }
     }
 
-    for (const { dirName: name, climbDir, card, rows: allRows, summary, checks, latestMtimeMs } of parsedEntries) {
+    for (const {
+      dirName: name,
+      climbDir,
+      card,
+      rows: allRows,
+      summary,
+      checks,
+      breakdown,
+      hasBestOutput,
+      hasLastOutput,
+      running,
+      latestMtimeMs,
+    } of parsedEntries) {
       const cardName = card.name?.trim() || name;
       // Skip orphaned/moved fixture directories that still contain a stale card.json from an earlier init
       // (folder name != card.name when the real climb exists alongside it, is referenced as fixtures, or has no log).
@@ -997,7 +1128,14 @@ export function scanProjectClimbs(repoPath: string | null, opts?: ScanProjectCli
               idea: typeof r.idea === "string" ? redactSecrets(r.idea) : null,
               why: typeof r.why === "string" ? redactSecrets(r.why) : null,
               time: r.time ?? null,
-              commit: null,
+              commit: typeof r.commit === "string" ? r.commit : null,
+              seconds: typeof r.seconds === "number" && Number.isFinite(r.seconds) ? r.seconds : null,
+              diffLines: typeof r.diff_lines === "number" && Number.isFinite(r.diff_lines) ? r.diff_lines : null,
+              files: Array.isArray(r.files) ? r.files.filter((f): f is string => typeof f === "string") : undefined,
+              deltaSummary: typeof r.delta_summary === "string" ? redactSecrets(r.delta_summary) : null,
+              skeptic: typeof r.skeptic === "string" ? redactSecrets(r.skeptic) : null,
+              prevScore: typeof r.prev_score === "number" && Number.isFinite(r.prev_score) ? r.prev_score : null,
+              visible: typeof r.visible === "number" && Number.isFinite(r.visible) ? r.visible : null,
             }));
       const rawTargetText = card.target_text ?? null;
       const targetTextMatches =
@@ -1005,11 +1143,17 @@ export function scanProjectClimbs(repoPath: string | null, opts?: ScanProjectCli
         (summary.target === null ||
           (Number.isFinite(Number(rawTargetText)) && Math.abs(Number(rawTargetText) - summary.target) < 1e-9));
       const isLive =
-        (summary.verdict === "climbing" || summary.verdict === "plateau") &&
-        latestMtimeMs > 0 &&
-        nowMs - latestMtimeMs <= LIVE_RECENCY_MS;
+        Boolean(running) ||
+        ((summary.verdict === "climbing" || summary.verdict === "plateau") &&
+          latestMtimeMs > 0 &&
+          nowMs - latestMtimeMs <= LIVE_RECENCY_MS);
       const rawNotes = includeNotes ? readLocalFile(joinPath(climbDir, "notes.md")).text : null;
       const notes = rawNotes === null ? null : redactSecrets(rawNotes);
+      const behindBase = branchBehindBase(root, card.branch ?? branch, card.base);
+      const branchWarning =
+        behindBase > 0 && (card.branch ?? branch) && card.base
+          ? `${card.branch ?? branch} is ${behindBase} commit${behindBase === 1 ? "" : "s"} behind ${card.base} — merge or rebase ${card.base} before landing.`
+          : null;
       const updatedAt =
         allRows[allRows.length - 1]?.time ??
         (latestMtimeMs > 0 ? new Date(latestMtimeMs).toISOString() : latestMtimeIso(climbDir));
@@ -1025,6 +1169,7 @@ export function scanProjectClimbs(repoPath: string | null, opts?: ScanProjectCli
         isMainCheckout: isMain,
         conversationId,
         branch: card.branch ?? branch,
+        base: card.base ?? null,
         goal: typeof card.goal === "string" ? redactSecrets(card.goal) : null,
         direction: card.direction,
         baseline: summary.baseline,
@@ -1038,8 +1183,10 @@ export function scanProjectClimbs(repoPath: string | null, opts?: ScanProjectCli
         verdict: summary.verdict,
         sparkline: summary.spark,
         check: checks.map(redactSecrets),
+        probe: card.probe ? redactSecrets(card.probe) : null,
         guards: (card.guards ?? []).map(redactSecrets),
         holdout: card.holdout ? redactSecrets(card.holdout) : null,
+        holdoutEvery: summary.holdoutEvery,
         locked: card.lock ?? [],
         scoreMode: card.score_mode ?? "failure-count",
         rows,
@@ -1048,6 +1195,25 @@ export function scanProjectClimbs(repoPath: string | null, opts?: ScanProjectCli
         preparedFiles: 0,
         preparedSampleFiles: [],
         updatedAt,
+        running,
+        avgCheckSeconds: summary.checkSeconds,
+        keptSinceHoldout: summary.keptSinceHoldout,
+        relockCount: summary.relockCount,
+        behindBase,
+        notesStaleSteps: summary.notesStaleSteps,
+        holdoutGain: summary.holdoutGain,
+        transferRatio: summary.transferRatio,
+        health: {
+          overfitWarning: summary.holdoutWarning,
+          holdoutCheckpointWarning: summary.holdoutCheckpointWarning,
+          thrashWarning: summary.thrashWarning,
+          stallWarning: summary.stallWarning,
+          notesWarning: summary.notesWarning,
+          branchWarning,
+        },
+        breakdown,
+        hasBestOutput,
+        hasLastOutput,
       });
     }
 
