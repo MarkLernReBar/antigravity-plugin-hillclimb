@@ -50412,7 +50412,7 @@ function createHillClimbServer(repo, runtime) {
     return projects[0]?.id ?? repo.resolveProjectId();
   };
   const server = new McpServer(
-    { name: "hillclimb", version: "0.5.1" },
+    { name: "hillclimb", version: "0.5.2" },
     {
       capabilities: {
         tools: {},
@@ -50420,6 +50420,7 @@ function createHillClimbServer(repo, runtime) {
       }
     }
   );
+  const INLINE_DECISION_META = { ui: { resourceUri: APP_URI } };
   N3(
     server,
     "Hill Climb Workspace",
@@ -50968,23 +50969,26 @@ function createHillClimbServer(repo, runtime) {
       }
     }
   );
-  server.registerTool(
+  K3(
+    server,
     "hillclimb_propose_change",
     {
       title: "Propose edit",
-      description: "File a pending contract edit for human review in Inbox.",
+      description: "File a pending contract edit (or new outcome via `goalKey`) for human Yes/No approval inline in this thread and in Decisions.",
       inputSchema: {
         projectId: external_exports.string().optional(),
         directory: external_exports.string().optional(),
         key: keySchema,
+        goalKey: keySchema.optional().describe("Pass `goalKey` to propose a brand-new outcome instead of editing an existing one"),
         contract: external_exports.record(external_exports.string(), external_exports.unknown())
-      }
+      },
+      _meta: INLINE_DECISION_META
     },
     async (input2) => {
       try {
         const pid = repo.resolveProjectId(input2.projectId, input2.directory);
         const tree = repo.read(pid);
-        const outcome2 = outcomeOf2(tree, input2.key);
+        const existing = tree.outcomes.find((row) => row.key === input2.key) ?? null;
         const parsedContract = contractInputSchema.parse(input2.contract);
         const contract3 = {
           title: parsedContract.title,
@@ -50994,18 +50998,40 @@ function createHillClimbServer(repo, runtime) {
           rank: parsedContract.rank,
           recheckDays: parsedContract.recheckDays
         };
-        repo.act(pid, { op: "propose_change", key: input2.key, version: outcome2.version, contract: contract3 });
+        const actor = defaultSessionActor();
+        if (input2.goalKey !== void 0 && existing === null) {
+          repo.act(
+            pid,
+            { op: "propose_outcome", key: input2.key, goalKey: input2.goalKey, contract: contract3, threadId: actor },
+            { actor, via: "mcp" }
+          );
+        } else {
+          const outcome2 = outcomeOf2(tree, input2.key);
+          repo.act(
+            pid,
+            { op: "propose_change", key: input2.key, version: outcome2.version, contract: contract3, threadId: actor },
+            { actor, via: "mcp" }
+          );
+        }
         const after = repo.view(pid, "main");
-        const pending = after.changes.filter((change2) => change2.key === input2.key && change2.state === "pending").at(-1);
+        const pending = after.changes.filter((change2) => change2.key === input2.key && change2.state === "pending").at(-1) ?? null;
         return jsonResult({
           projectId: pid,
           proposed: pending?.id ?? null,
           key: input2.key,
-          baseVersion: outcome2.version,
+          baseVersion: existing?.version ?? 0,
           state: pending?.state ?? "unknown",
           approved: false,
-          next: "A person reviews this in the Hill Climb Inbox; nothing about the outcome changed yet.",
-          inbox: inboxOf2(after)
+          next: "Rendered an inline Approve/Reject decision card in this thread (and synced to Decisions). Nothing changed until the user approves.",
+          inbox: inboxOf2(after),
+          ...pending ? {
+            inlineDecision: {
+              kind: "change",
+              projectId: pid,
+              change: pending,
+              currentOutcome: existing
+            }
+          } : {}
         });
       } catch (error62) {
         return errorResult(error62);
@@ -51159,11 +51185,12 @@ function createHillClimbServer(repo, runtime) {
       }
     }
   );
-  server.registerTool(
+  K3(
+    server,
     "hillclimb_comment",
     {
       title: "Post comment, question, or answer",
-      description: "Post a comment or multi-option decision question on an outcome, or record a user's answer to an open question.",
+      description: "Post a comment or multi-option decision question inline in this thread (and synced to Decisions), or record a user's answer.",
       inputSchema: {
         projectId: external_exports.string().optional(),
         directory: external_exports.string().optional(),
@@ -51173,7 +51200,8 @@ function createHillClimbServer(repo, runtime) {
         parentId: external_exports.string().trim().min(1).nullable().default(null),
         planVersion: external_exports.number().int().positive().nullable().optional().describe("Optional plan version this comment refers to"),
         answer: external_exports.object({ id: external_exports.string().trim().min(1), answer: external_exports.string().trim().min(1) }).optional()
-      }
+      },
+      _meta: INLINE_DECISION_META
     },
     async (input2) => {
       try {
@@ -51182,19 +51210,28 @@ function createHillClimbServer(repo, runtime) {
         if (input2.answer !== void 0) {
           repo.act(pid, { op: "answer", id: input2.answer.id, answer: input2.answer.answer }, { actor, via: "mcp" });
           const after2 = repo.view(pid, "main");
-          const answered = after2.comments.find((c) => c.id === input2.answer?.id);
+          const answered = after2.comments.find((c) => c.id === input2.answer?.id) ?? null;
+          const outcomeTitle = answered ? after2.outcomes.find((o) => o.key === answered.key)?.title ?? answered.key : "";
           return jsonResult({
             projectId: pid,
             answered: input2.answer.id,
             key: answered?.key ?? null,
             answer: answered?.answer ?? null,
-            inbox: inboxOf2(after2)
+            inbox: inboxOf2(after2),
+            ...answered ? {
+              inlineDecision: {
+                kind: "question",
+                projectId: pid,
+                comment: answered,
+                outcomeTitle
+              }
+            } : {}
           });
         }
         if (input2.key === void 0 || input2.text === void 0) {
           throw new Error("pass either `answer: {id, answer}`, or `key` and `text` to post a comment");
         }
-        outcomeOf2(repo.read(pid), input2.key);
+        const outcome2 = outcomeOf2(repo.read(pid), input2.key);
         repo.act(
           pid,
           {
@@ -51209,13 +51246,21 @@ function createHillClimbServer(repo, runtime) {
           { actor, via: "mcp" }
         );
         const after = repo.view(pid, "main");
-        const posted = after.comments.filter((c) => c.key === input2.key).at(-1);
+        const posted = after.comments.filter((c) => c.key === input2.key).at(-1) ?? null;
         return jsonResult({
           projectId: pid,
           comment: posted?.id ?? null,
           key: input2.key,
           isQuestion: input2.options.length > 0,
-          inbox: inboxOf2(after)
+          inbox: inboxOf2(after),
+          ...posted ? {
+            inlineDecision: {
+              kind: "question",
+              projectId: pid,
+              comment: posted,
+              outcomeTitle: outcome2.title
+            }
+          } : {}
         });
       } catch (error62) {
         return errorResult(error62);
@@ -52558,6 +52603,33 @@ function createHillClimbServer(repo, runtime) {
           },
           `${mode} ${built.actions.length} action(s)`
         );
+      } catch (error62) {
+        return errorResult(error62);
+      }
+    }
+  );
+  K3(
+    server,
+    "app_decision_state",
+    {
+      description: "Read current state of one proposed change or question for inline chat decision cards",
+      inputSchema: {
+        projectId: external_exports.string().min(1),
+        kind: external_exports.enum(["change", "question"]),
+        id: external_exports.string().min(1)
+      },
+      _meta: APP_ONLY
+    },
+    async ({ projectId, kind, id }) => {
+      try {
+        const tree = repo.read(projectId);
+        if (kind === "change") {
+          const change2 = tree.changes.find((c) => c.id === id) ?? null;
+          const currentOutcome = change2 ? tree.outcomes.find((o) => o.key === change2.key) ?? null : null;
+          return appJsonResult({ change: change2, currentOutcome }, change2 ? `Change ${id}: ${change2.state}` : `Change ${id} not found`);
+        }
+        const comment = tree.comments.find((c) => c.id === id) ?? null;
+        return appJsonResult({ comment }, comment ? `Comment ${id}` : `Comment ${id} not found`);
       } catch (error62) {
         return errorResult(error62);
       }

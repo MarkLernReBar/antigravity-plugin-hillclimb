@@ -27,6 +27,7 @@ import { Portfolio, type PromotionPreviewRow } from "./ui/Portfolio.js";
 import { RepoClimbsView, type RepoClimbsPayload } from "./ui/RepoClimbsView.js";
 import { InsightsView } from "./ui/InsightsView.js";
 import { ReportsView } from "./ui/ReportsView.js";
+import { InlineDecisionCard, type InlineDecisionPayload } from "./ui/InlineDecisionCard.js";
 import "./ui/shell.css";
 import "./ui/tree.css";
 import "./ui/portfolio.css";
@@ -51,6 +52,7 @@ interface InitialPayload {
   views?: SavedViewDto[];
   scopes?: FocusScopeDto[];
   settings?: ProjectSettingsDto;
+  inlineDecision?: InlineDecisionPayload;
 }
 
 interface LintFinding {
@@ -214,6 +216,9 @@ function HillClimbApp() {
   const appRef = useRef<App | null>(null);
   const [connected, setConnected] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
+  const [inlineDecision, setInlineDecision] = useState<InlineDecisionPayload | null>(null);
+  const [expectInline, setExpectInline] = useState(false);
+  const inlineModeRef = useRef(false);
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [project, setProject] = useState<string>("");
   const [page, setPage] = useState<Page>("tree");
@@ -525,7 +530,7 @@ function HillClimbApp() {
 
   // Connect once using the MCP Apps SDK
   useEffect(() => {
-    const app = new App({ name: "Hill Climb", version: "0.5.0" }, {});
+    const app = new App({ name: "Hill Climb", version: "0.5.2" }, {});
     appRef.current = app;
 
     const applyThemeFromContext = (ctx: ReturnType<App["getHostContext"]>) => {
@@ -539,11 +544,25 @@ function HillClimbApp() {
       }
     };
 
-    app.ontoolinput = () => {};
+    app.ontoolinput = ({ arguments: args }) => {
+      if (args && typeof args === "object" && ("contract" in args || "options" in args || "answer" in args || "text" in args)) {
+        inlineModeRef.current = true;
+        setExpectInline(true);
+      }
+    };
 
     app.ontoolresult = (result) => {
       try {
         const data = unwrapToolResult<InitialPayload>(result);
+        if (data.inlineDecision) {
+          inlineModeRef.current = true;
+          setInlineDecision(data.inlineDecision);
+          setExpectInline(false);
+          return;
+        }
+        inlineModeRef.current = false;
+        setInlineDecision(null);
+        setExpectInline(false);
         if (data.projects) setProjects(data.projects);
         if (data.projectId) setProject(data.projectId);
         if (data.page && PAGES.includes(data.page)) setPage(data.page);
@@ -584,14 +603,22 @@ function HillClimbApp() {
   }, []);
 
   useEffect(() => {
-    if (!connected) return;
+    const isInline = inlineDecision !== null || expectInline;
+    document.documentElement.classList.toggle("hill-inline-mode", isInline);
+    return () => {
+      document.documentElement.classList.remove("hill-inline-mode");
+    };
+  }, [inlineDecision, expectInline]);
+
+  useEffect(() => {
+    if (!connected || inlineDecision !== null || expectInline || inlineModeRef.current) return;
     if (projects.length === 0) {
       void loadProjects().catch((e) => setTreeError(errMsg(e)));
     }
-  }, [connected, projects.length, loadProjects]);
+  }, [connected, inlineDecision, expectInline, projects.length, loadProjects]);
 
   useEffect(() => {
-    if (!connected || !project) return;
+    if (!connected || !project || inlineDecision !== null || expectInline || inlineModeRef.current) return;
     const init = initialLoadedRef.current;
     if (init && init.projectId === project && init.track === track && tree !== null) {
       initialLoadedRef.current = null;
@@ -599,17 +626,17 @@ function HillClimbApp() {
     }
     initialLoadedRef.current = null;
     void loadTree(project, track);
-  }, [connected, project, track, loadTree]);
+  }, [connected, project, track, inlineDecision, expectInline, loadTree]);
 
   useEffect(() => {
-    if (!connected || !project) return;
+    if (!connected || !project || inlineDecision !== null || expectInline || inlineModeRef.current) return;
     if (page === "climbs") {
       const timer = setInterval(() => void pollRepoClimbs(project, false), 10_000);
       return () => clearInterval(timer);
     }
     const timer = setInterval(() => void loadTree(project, track), 30_000);
     return () => clearInterval(timer);
-  }, [connected, project, track, page, loadTree, pollRepoClimbs]);
+  }, [connected, project, track, page, inlineDecision, expectInline, loadTree, pollRepoClimbs]);
 
   // Global Cmd+K / Ctrl+K shortcut
   useEffect(() => {
@@ -962,6 +989,35 @@ function HillClimbApp() {
     }
   };
 
+  const handleInlineAct = useCallback(
+    async (projectId: string, action: Action) => {
+      await callTool("app_act", { projectId, action, confirmed: true, track: "main" });
+    },
+    [callTool],
+  );
+
+  const handleInlineRefresh = useCallback(
+    async (projectId: string, kind: "change" | "question", id: string) => {
+      return callTool<{
+        change?: import("./model.js").Change | null;
+        currentOutcome?: Outcome | null;
+        comment?: import("./model.js").Comment | null;
+      }>("app_decision_state", { projectId, kind, id });
+    },
+    [callTool],
+  );
+
+  const handleNotifyThread = useCallback(async (text: string): Promise<boolean> => {
+    const client = appRef.current;
+    if (!client || !client.getHostCapabilities()?.message) return false;
+    try {
+      await client.sendMessage({ role: "user", content: [{ type: "text", text }] });
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
   const activeSecondary = SECONDARY_PAGES.find((p) => p.id === page) ?? null;
 
   if (connectError) {
@@ -970,6 +1026,26 @@ function HillClimbApp() {
         <h1 style={{ fontSize: 16, margin: "0 0 8px" }}>Hill Climb</h1>
         <p role="alert">Could not connect to Antigravity MCP Apps host: {connectError}</p>
       </main>
+    );
+  }
+
+  if (inlineDecision !== null) {
+    return (
+      <InlineDecisionCard
+        decision={inlineDecision}
+        canNotifyThread={Boolean(appRef.current?.getHostCapabilities()?.message)}
+        onAct={handleInlineAct}
+        onRefreshState={handleInlineRefresh}
+        onNotifyThread={handleNotifyThread}
+      />
+    );
+  }
+
+  if (expectInline) {
+    return (
+      <section className="hill-inline-card">
+        <p className="hill-inline-muted" role="status">Preparing decision…</p>
+      </section>
     );
   }
 

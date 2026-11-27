@@ -1369,6 +1369,90 @@ experiments:
           arguments: { projectId: "p3", action: { op: "accept_flow_change", id: "fp-none" } },
         });
         assert.equal(refusedFlow.isError, true, "hillclimb_act must refuse accept_flow_change");
+
+        // v0.5.2: Inline chat decision cards on hillclimb_propose_change & hillclimb_comment + app_decision_state sync
+        const proposeToolMeta = listed.tools.find((t) => t.name === "hillclimb_propose_change")?._meta as
+          | { ui?: { resourceUri?: string }; "com.google.antigravity/ui"?: unknown }
+          | undefined;
+        assert.equal(proposeToolMeta?.ui?.resourceUri, "ui://hillclimb/app.html");
+        assert.equal(proposeToolMeta?.["com.google.antigravity/ui"], undefined, "propose_change must render inline, not steal aux_pane");
+
+        const commentToolMeta = listed.tools.find((t) => t.name === "hillclimb_comment")?._meta as
+          | { ui?: { resourceUri?: string }; "com.google.antigravity/ui"?: unknown }
+          | undefined;
+        assert.equal(commentToolMeta?.ui?.resourceUri, "ui://hillclimb/app.html");
+        assert.equal(commentToolMeta?.["com.google.antigravity/ui"], undefined, "comment must render inline, not steal aux_pane");
+
+        // Propose brand-new outcome inline via goalKey
+        const newProposal = await client.callTool({
+          name: "hillclimb_propose_change",
+          arguments: {
+            projectId: "p3",
+            key: "INLINE-NEW",
+            goalKey: "G-API",
+            contract: {
+              title: "Rate limit returns Retry-After header",
+              story: "Clients back off cleanly when throttled.",
+              criteria: [
+                { id: "ac1", given: "a client exceeding quota", when: "receiving 429", then: "Retry-After header is set" },
+              ],
+            },
+          },
+        });
+        assert.ok(!newProposal.isError);
+        const newPropData = newProposal.structuredContent as {
+          proposed: string;
+          inlineDecision?: { kind: string; change: { id: string; kind?: string; state: string } };
+        };
+        assert.equal(newPropData.inlineDecision?.kind, "change");
+        assert.equal(newPropData.inlineDecision?.change.kind, "create");
+        assert.equal(newPropData.inlineDecision?.change.state, "pending");
+
+        // Post inline multiple-choice question
+        const qRes = await client.callTool({
+          name: "hillclimb_comment",
+          arguments: {
+            projectId: "p3",
+            key: "API-IDEMPOTENCY",
+            text: "TTL for stored idempotency keys?",
+            options: ["24 hours", "7 days"],
+          },
+        });
+        assert.ok(!qRes.isError);
+        const qData = qRes.structuredContent as {
+          comment: string;
+          inlineDecision?: { kind: string; comment: { id: string; options: string[]; answer: string | null }; outcomeTitle: string };
+        };
+        assert.equal(qData.inlineDecision?.kind, "question");
+        assert.deepEqual(qData.inlineDecision?.comment.options, ["24 hours", "7 days"]);
+        assert.equal(qData.inlineDecision?.comment.answer, null);
+
+        // Live sync via app_decision_state before & after app_act
+        const beforeState = await client.callTool({
+          name: "app_decision_state",
+          arguments: { projectId: "p3", kind: "change", id: newPropData.proposed },
+        });
+        assert.equal((beforeState.structuredContent as { change: { state: string } }).change.state, "pending");
+
+        await client.callTool({
+          name: "app_act",
+          arguments: { projectId: "p3", action: { op: "approve_change", id: newPropData.proposed }, confirmed: true },
+        });
+        const afterState = await client.callTool({
+          name: "app_decision_state",
+          arguments: { projectId: "p3", kind: "change", id: newPropData.proposed },
+        });
+        assert.equal((afterState.structuredContent as { change: { state: string } }).change.state, "approved");
+
+        await client.callTool({
+          name: "app_act",
+          arguments: { projectId: "p3", action: { op: "answer", id: qData.comment, answer: "24 hours" }, confirmed: true },
+        });
+        const afterQ = await client.callTool({
+          name: "app_decision_state",
+          arguments: { projectId: "p3", kind: "question", id: qData.comment },
+        });
+        assert.equal((afterQ.structuredContent as { comment: { answer: string } }).comment.answer, "24 hours");
       } finally {
         await client.close();
       }

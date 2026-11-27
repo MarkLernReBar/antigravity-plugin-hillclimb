@@ -245,7 +245,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     return projects[0]?.id ?? repo.resolveProjectId();
   };
   const server = new McpServer(
-    { name: "hillclimb", version: "0.5.1" },
+    { name: "hillclimb", version: "0.5.2" },
     {
       capabilities: {
         tools: {},
@@ -253,6 +253,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
       },
     },
   );
+  const INLINE_DECISION_META = { ui: { resourceUri: APP_URI } };
 
   // -------------------------------------------------------------------------
   // MCP App UI Resource
@@ -865,23 +866,27 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     },
   );
 
-  server.registerTool(
+  registerAppTool(
+    server,
     "hillclimb_propose_change",
     {
       title: "Propose edit",
-      description: "File a pending contract edit for human review in Inbox.",
+      description:
+        "File a pending contract edit (or new outcome via `goalKey`) for human Yes/No approval inline in this thread and in Decisions.",
       inputSchema: {
         projectId: z.string().optional(),
         directory: z.string().optional(),
         key: keySchema,
+        goalKey: keySchema.optional().describe("Pass `goalKey` to propose a brand-new outcome instead of editing an existing one"),
         contract: z.record(z.string(), z.unknown()),
       },
+      _meta: INLINE_DECISION_META,
     },
     async (input) => {
       try {
         const pid = repo.resolveProjectId(input.projectId, input.directory);
         const tree = repo.read(pid);
-        const outcome = outcomeOf(tree, input.key);
+        const existing = tree.outcomes.find((row) => row.key === input.key) ?? null;
         const parsedContract = contractInputSchema.parse(input.contract);
         const contract: Contract = {
           title: parsedContract.title,
@@ -891,18 +896,42 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
           rank: parsedContract.rank,
           recheckDays: parsedContract.recheckDays,
         };
-        repo.act(pid, { op: "propose_change", key: input.key, version: outcome.version, contract });
+        const actor = defaultSessionActor();
+        if (input.goalKey !== undefined && existing === null) {
+          repo.act(
+            pid,
+            { op: "propose_outcome", key: input.key, goalKey: input.goalKey, contract, threadId: actor },
+            { actor, via: "mcp" },
+          );
+        } else {
+          const outcome = outcomeOf(tree, input.key);
+          repo.act(
+            pid,
+            { op: "propose_change", key: input.key, version: outcome.version, contract, threadId: actor },
+            { actor, via: "mcp" },
+          );
+        }
         const after = repo.view(pid, "main");
-        const pending = after.changes.filter((change) => change.key === input.key && change.state === "pending").at(-1);
+        const pending = after.changes.filter((change) => change.key === input.key && change.state === "pending").at(-1) ?? null;
         return jsonResult({
           projectId: pid,
           proposed: pending?.id ?? null,
           key: input.key,
-          baseVersion: outcome.version,
+          baseVersion: existing?.version ?? 0,
           state: pending?.state ?? "unknown",
           approved: false,
-          next: "A person reviews this in the Hill Climb Inbox; nothing about the outcome changed yet.",
+          next: "Rendered an inline Approve/Reject decision card in this thread (and synced to Decisions). Nothing changed until the user approves.",
           inbox: inboxOf(after),
+          ...(pending
+            ? {
+                inlineDecision: {
+                  kind: "change" as const,
+                  projectId: pid,
+                  change: pending,
+                  currentOutcome: existing,
+                },
+              }
+            : {}),
         });
       } catch (error) {
         return errorResult(error);
@@ -1067,11 +1096,13 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     },
   );
 
-  server.registerTool(
+  registerAppTool(
+    server,
     "hillclimb_comment",
     {
       title: "Post comment, question, or answer",
-      description: "Post a comment or multi-option decision question on an outcome, or record a user's answer to an open question.",
+      description:
+        "Post a comment or multi-option decision question inline in this thread (and synced to Decisions), or record a user's answer.",
       inputSchema: {
         projectId: z.string().optional(),
         directory: z.string().optional(),
@@ -1082,6 +1113,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
         planVersion: z.number().int().positive().nullable().optional().describe("Optional plan version this comment refers to"),
         answer: z.object({ id: z.string().trim().min(1), answer: z.string().trim().min(1) }).optional(),
       },
+      _meta: INLINE_DECISION_META,
     },
     async (input) => {
       try {
@@ -1090,19 +1122,30 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
         if (input.answer !== undefined) {
           repo.act(pid, { op: "answer", id: input.answer.id, answer: input.answer.answer }, { actor, via: "mcp" });
           const after = repo.view(pid, "main");
-          const answered = after.comments.find((c) => c.id === input.answer?.id);
+          const answered = after.comments.find((c) => c.id === input.answer?.id) ?? null;
+          const outcomeTitle = answered ? (after.outcomes.find((o) => o.key === answered.key)?.title ?? answered.key) : "";
           return jsonResult({
             projectId: pid,
             answered: input.answer.id,
             key: answered?.key ?? null,
             answer: answered?.answer ?? null,
             inbox: inboxOf(after),
+            ...(answered
+              ? {
+                  inlineDecision: {
+                    kind: "question" as const,
+                    projectId: pid,
+                    comment: answered,
+                    outcomeTitle,
+                  },
+                }
+              : {}),
           });
         }
         if (input.key === undefined || input.text === undefined) {
           throw new Error("pass either `answer: {id, answer}`, or `key` and `text` to post a comment");
         }
-        outcomeOf(repo.read(pid), input.key);
+        const outcome = outcomeOf(repo.read(pid), input.key);
         repo.act(
           pid,
           {
@@ -1117,13 +1160,23 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
           { actor, via: "mcp" },
         );
         const after = repo.view(pid, "main");
-        const posted = after.comments.filter((c) => c.key === input.key).at(-1);
+        const posted = after.comments.filter((c) => c.key === input.key).at(-1) ?? null;
         return jsonResult({
           projectId: pid,
           comment: posted?.id ?? null,
           key: input.key,
           isQuestion: input.options.length > 0,
           inbox: inboxOf(after),
+          ...(posted
+            ? {
+                inlineDecision: {
+                  kind: "question" as const,
+                  projectId: pid,
+                  comment: posted,
+                  outcomeTitle: outcome.title,
+                },
+              }
+            : {}),
         });
       } catch (error) {
         return errorResult(error);
@@ -2541,6 +2594,34 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
           },
           `${mode} ${built.actions.length} action(s)`,
         );
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  );
+
+  registerAppTool(
+    server,
+    "app_decision_state",
+    {
+      description: "Read current state of one proposed change or question for inline chat decision cards",
+      inputSchema: {
+        projectId: z.string().min(1),
+        kind: z.enum(["change", "question"]),
+        id: z.string().min(1),
+      },
+      _meta: APP_ONLY,
+    },
+    async ({ projectId, kind, id }) => {
+      try {
+        const tree = repo.read(projectId);
+        if (kind === "change") {
+          const change = tree.changes.find((c) => c.id === id) ?? null;
+          const currentOutcome = change ? (tree.outcomes.find((o) => o.key === change.key) ?? null) : null;
+          return appJsonResult({ change, currentOutcome }, change ? `Change ${id}: ${change.state}` : `Change ${id} not found`);
+        }
+        const comment = tree.comments.find((c) => c.id === id) ?? null;
+        return appJsonResult({ comment }, comment ? `Comment ${id}` : `Comment ${id} not found`);
       } catch (error) {
         return errorResult(error);
       }
