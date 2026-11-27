@@ -419,8 +419,8 @@ export function RepoClimbsView({
         <div className="cl-empty">
           <h3>No repository linked</h3>
           <p>
-            Click <strong>+ Project</strong> above to link a local git repository. Any active or completed{" "}
-            <code>climb.py</code> runs in the repo or its Antigravity swarm worktrees will appear here automatically.
+            Choose <strong>+ Link repository…</strong> from the project menu above to connect a local git repository.
+            Active and completed climbs will appear here automatically.
           </p>
         </div>
       </section>
@@ -691,7 +691,7 @@ export function RepoClimbsView({
                   <StepTimeline key={chosen.id} climb={chosen} />
 
                   {chosen.notes ? (
-                    <details className="cl-disclosure" open>
+                    <details className="cl-disclosure">
                       <summary>Agent notes (notes.md)</summary>
                       <pre className="cl-pre">{chosen.notes}</pre>
                     </details>

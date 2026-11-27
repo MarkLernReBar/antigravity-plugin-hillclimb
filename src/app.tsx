@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import {
   App,
@@ -72,6 +73,13 @@ interface LintReport {
 const PAGES = ["tree", "climbs", "inbox", "roadmap", "flows", "insights", "reports"] as const;
 type Page = (typeof PAGES)[number];
 
+const SECONDARY_PAGES: ReadonlyArray<{ id: Page; label: string; desc: string }> = [
+  { id: "roadmap", label: "Roadmap", desc: "Releases, timelines & track cutovers" },
+  { id: "flows", label: "Flows", desc: "Visual screen walkthroughs & pins" },
+  { id: "insights", label: "Insights", desc: "Velocity & climb telemetry" },
+  { id: "reports", label: "Reports", desc: "Evidence reports & HTML export" },
+];
+
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 function unwrapToolResult<T>(result: {
@@ -110,6 +118,98 @@ const DEFAULT_SETTINGS: ProjectSettingsDto = {
   designKit: null,
 };
 
+/** Native <dialog> modal wrapper with showModal(), light dismiss fallback, and native Esc/top-layer handling. */
+function NativeModal({
+  open,
+  title,
+  onClose,
+  children,
+  footer,
+}: {
+  open: boolean;
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+  footer?: ReactNode;
+}) {
+  const ref = useRef<HTMLDialogElement | null>(null);
+  const titleId = useId();
+  const pressedOutsideRef = useRef(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (open && !el.open) {
+      try {
+        el.showModal();
+      } catch {
+        el.setAttribute("open", "");
+      }
+    } else if (!open && el.open) {
+      el.close();
+    }
+  }, [open]);
+
+  if (!open) return null;
+
+  const isOutside = (e: React.PointerEvent<HTMLDialogElement>) => {
+    const el = ref.current;
+    if (!el) return false;
+    const r = el.getBoundingClientRect();
+    return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+  };
+
+  return (
+    <dialog
+      ref={ref}
+      className="hill-dialog"
+      aria-labelledby={titleId}
+      {...({ closedby: "any" } as Record<string, string>)}
+      onCancel={(e) => {
+        e.preventDefault();
+        onClose();
+      }}
+      onClose={() => {
+        if (ref.current) ref.current.returnValue = "";
+      }}
+      onPointerDown={(e) => {
+        pressedOutsideRef.current = isOutside(e);
+      }}
+      onPointerUp={(e) => {
+        if (pressedOutsideRef.current && isOutside(e)) onClose();
+        pressedOutsideRef.current = false;
+      }}
+    >
+      <div className="hill-dialog-head">
+        <h1 id={titleId}>{title}</h1>
+        <button type="button" className="hill-icon-trigger" onClick={onClose} aria-label="Close dialog">
+          <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+            <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+          </svg>
+        </button>
+      </div>
+      <div className="hill-dialog-body">{children}</div>
+      {footer ? <div className="hill-dialog-foot">{footer}</div> : null}
+    </dialog>
+  );
+}
+
+/** Position a popover next to its trigger when CSS Anchor Positioning is not supported. */
+function positionPopoverFallback(trigger: HTMLElement | null, popover: HTMLElement | null, alignEnd: boolean): void {
+  if (!trigger || !popover) return;
+  if (typeof CSS !== "undefined" && CSS.supports?.("position-area", "block-end")) return;
+  const rect = trigger.getBoundingClientRect();
+  const popRect = popover.getBoundingClientRect();
+  const top = Math.min(window.innerHeight - popRect.height - 8, rect.bottom + 6);
+  const left = alignEnd
+    ? Math.max(8, rect.right - popRect.width)
+    : Math.min(window.innerWidth - popRect.width - 8, rect.left);
+  popover.style.position = "fixed";
+  popover.style.inset = "auto";
+  popover.style.top = `${Math.max(8, top)}px`;
+  popover.style.left = `${Math.max(8, left)}px`;
+}
+
 function HillClimbApp() {
   const appRef = useRef<App | null>(null);
   const [connected, setConnected] = useState(false);
@@ -134,6 +234,11 @@ function HillClimbApp() {
   const [settings, setSettings] = useState<ProjectSettingsDto>(DEFAULT_SETTINGS);
   const [hooks, setHooks] = useState<HookRecordDto[]>([]);
 
+  const moreBtnRef = useRef<HTMLButtonElement | null>(null);
+  const morePopRef = useRef<HTMLDivElement | null>(null);
+  const actionsBtnRef = useRef<HTMLButtonElement | null>(null);
+  const actionsPopRef = useRef<HTMLDivElement | null>(null);
+
   const [editor, setEditor] = useState<{
     outcome: Outcome;
     existing: Rig | null;
@@ -156,13 +261,13 @@ function HillClimbApp() {
 
   const [lintReport, setLintReport] = useState<LintReport | null>(null);
 
-  // Cmd+K Search Palette state
+  // Cmd+K Command & Search Palette
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchHits, setSearchHits] = useState<SearchHitDto[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
 
-  // Import & Blueprints Modal state
+  // Import & Blueprints Modal
   const [importOpen, setImportOpen] = useState(false);
   const [importTab, setImportTab] = useState<"blueprints" | "markdown">("blueprints");
   const [blueprints, setBlueprints] = useState<BlueprintSummaryDto[]>([]);
@@ -173,18 +278,37 @@ function HillClimbApp() {
   const [importAsProposals, setImportAsProposals] = useState(false);
   const [importPreview, setImportPreview] = useState<{ actionCount: number; lint: LintReport } | null>(null);
 
-  // Settings & Hooks Modal state
+  // Settings & Hooks Modal
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [designKitDraft, setDesignKitDraft] = useState("");
   const [hookEvent, setHookEvent] = useState<HookRecordDto["event"]>("outcome.broken");
   const [hookType, setHookType] = useState<HookRecordDto["targetType"]>("notify");
   const [hookTarget, setHookTarget] = useState("");
 
+  const closePopovers = () => {
+    try {
+      morePopRef.current?.hidePopover?.();
+      actionsPopRef.current?.hidePopover?.();
+    } catch {
+      // ignore if closed or unsupported
+    }
+  };
+
   const callTool = useCallback(async <T,>(name: string, args: Record<string, unknown> = {}): Promise<T> => {
     const client = appRef.current;
     if (!client) throw new Error("Not connected to MCP host yet.");
-    const res = await client.callServerTool({ name, arguments: args });
-    return unwrapToolResult<T>(res);
+    try {
+      const res = await client.callServerTool({ name, arguments: args });
+      return unwrapToolResult<T>(res);
+    } catch (e) {
+      const msg = errMsg(e);
+      if (/tool\s+"app_[^"]+"\s+not\s+found/i.test(msg)) {
+        throw new Error(
+          `Hill Climb was updated on disk, but Antigravity is still running the older MCP server process (missing "${name}"). Reload the "hillclimb" MCP server in Customizations → Installed → MCP Servers to pick up the new tools.`,
+        );
+      }
+      throw e;
+    }
   }, []);
 
   const loadProjects = useCallback(async () => {
@@ -234,7 +358,7 @@ function HillClimbApp() {
         const res = await callTool<RepoClimbsPayload>("app_repo_climbs", { projectId: pid, force });
         setRepoClimbs(res);
       } catch {
-        // non-fatal during quiet poll
+        // quiet poll
       }
     },
     [callTool],
@@ -246,8 +370,6 @@ function HillClimbApp() {
       setClimbsLoading(true);
       try {
         await loadTree(pid, track, true);
-      } catch {
-        // non-fatal
       } finally {
         setClimbsLoading(false);
       }
@@ -271,11 +393,11 @@ function HillClimbApp() {
         setInboxCount(res.inboxCount);
         setNotice(
           enabled
-            ? "Auto-track enabled: current climbs are synced into Outcomes automatically."
-            : "Auto-track paused for new climbs. Existing outcomes remain untouched.",
+            ? "Auto-track enabled: active climbs sync into Goals automatically."
+            : "Auto-track paused for new climbs.",
         );
       } catch (e) {
-        setNotice(`Could not update auto-track setting: ${errMsg(e)}`);
+        setNotice(`Could not update auto-track: ${errMsg(e)}`);
       }
     },
     [project, track, callTool],
@@ -295,7 +417,7 @@ function HillClimbApp() {
         setTree(res.tree);
         setRepoClimbs(res.repoClimbs);
         setInboxCount(res.inboxCount);
-        setNotice(`Tracked climb in Outcomes as ${res.outcomeKey}.`);
+        setNotice(`Tracked climb as ${res.outcomeKey}.`);
       } catch (e) {
         setNotice(`Could not track climb: ${errMsg(e)}`);
       }
@@ -358,7 +480,7 @@ function HillClimbApp() {
       active: boolean;
     }) => {
       await syncViewsScopes("save_scope", scope);
-      setNotice(scope.active ? `Active focus scope set to "${scope.name}".` : `Updated focus scope "${scope.name}".`);
+      setNotice(scope.active ? `Focus set to "${scope.name}".` : `Updated focus "${scope.name}".`);
     },
     [syncViewsScopes],
   );
@@ -366,7 +488,7 @@ function HillClimbApp() {
   const handleDeleteScope = useCallback(
     async (id: string) => {
       await syncViewsScopes("delete_scope", { id });
-      setNotice("Deleted focus scope.");
+      setNotice("Removed focus scope.");
     },
     [syncViewsScopes],
   );
@@ -401,7 +523,7 @@ function HillClimbApp() {
     [project, callTool],
   );
 
-  // Connect once using the MCP Apps SDK, registering handlers BEFORE connect().
+  // Connect once using the MCP Apps SDK
   useEffect(() => {
     const app = new App({ name: "Hill Climb", version: "0.5.0" }, {});
     appRef.current = app;
@@ -442,7 +564,7 @@ function HillClimbApp() {
           setDesignKitDraft(data.settings.designKit ?? "");
         }
       } catch {
-        // Ignore non-structured results
+        // ignore non-structured results
       }
     };
 
@@ -461,7 +583,6 @@ function HillClimbApp() {
       });
   }, []);
 
-  // Load projects if connected without initial tool result
   useEffect(() => {
     if (!connected) return;
     if (projects.length === 0) {
@@ -469,7 +590,6 @@ function HillClimbApp() {
     }
   }, [connected, projects.length, loadProjects]);
 
-  // Reload tree whenever project/track changes
   useEffect(() => {
     if (!connected || !project) return;
     const init = initialLoadedRef.current;
@@ -481,7 +601,6 @@ function HillClimbApp() {
     void loadTree(project, track);
   }, [connected, project, track, loadTree]);
 
-  // Quiet background poll
   useEffect(() => {
     if (!connected || !project) return;
     if (page === "climbs") {
@@ -492,36 +611,20 @@ function HillClimbApp() {
     return () => clearInterval(timer);
   }, [connected, project, track, page, loadTree, pollRepoClimbs]);
 
-  // Global Cmd+K / Ctrl+K shortcut & Escape-key dismissal
+  // Global Cmd+K / Ctrl+K shortcut
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
+        closePopovers();
         setSearchOpen((open) => !open);
-        return;
-      }
-      if (e.key !== "Escape") return;
-      if (confirmDecision) {
-        const pending = confirmDecision;
-        setConfirmDecision(null);
-        pending.resolve(false);
-      } else if (searchOpen) {
-        setSearchOpen(false);
-      } else if (importOpen) {
-        setImportOpen(false);
-      } else if (settingsOpen) {
-        setSettingsOpen(false);
-      } else if (addProjectOpen) {
-        setAddProjectOpen(false);
-      } else if (lintReport) {
-        setLintReport(null);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [confirmDecision, searchOpen, importOpen, settingsOpen, addProjectOpen, lintReport]);
+  }, []);
 
-  // Live debounced FTS5 search inside Cmd+K palette
+  // Debounced FTS5 search
   useEffect(() => {
     if (!searchOpen || !connected) return;
     const trimmed = searchQuery.trim();
@@ -547,14 +650,16 @@ function HillClimbApp() {
         .finally(() => {
           if (alive) setSearchLoading(false);
         });
-    }, 140);
+    }, 120);
     return () => {
       alive = false;
       window.clearTimeout(timer);
     };
   }, [searchOpen, searchQuery, project, connected, callTool]);
 
-  const openImportModal = async () => {
+  const openImportModal = useCallback(async () => {
+    closePopovers();
+    setSearchOpen(false);
     setImportOpen(true);
     setImportPreview(null);
     if (blueprints.length === 0 && project) {
@@ -566,12 +671,14 @@ function HillClimbApp() {
         setBlueprints(res.blueprints ?? []);
         if (res.blueprints?.[0]) setSelectedBlueprint(res.blueprints[0].id);
       } catch (e) {
-        setNotice(`Could not load blueprints: ${errMsg(e)}`);
+        setNotice(`Could not load templates: ${errMsg(e)}`);
       }
     }
-  };
+  }, [blueprints.length, project, callTool]);
 
-  const openSettingsModal = async () => {
+  const openSettingsModal = useCallback(async () => {
+    closePopovers();
+    setSearchOpen(false);
     setSettingsOpen(true);
     if (project) {
       try {
@@ -580,7 +687,7 @@ function HillClimbApp() {
         setNotice(`Could not load settings: ${errMsg(e)}`);
       }
     }
-  };
+  }, [project, syncViewsScopes]);
 
   const handleSearchJump = (hit: SearchHitDto) => {
     setSearchOpen(false);
@@ -613,9 +720,7 @@ function HillClimbApp() {
         if ("id" in action && (action.op === "approve_change" || action.op === "reject_change")) {
           const change = tree.changes.find((c) => c.id === action.id);
           details = change ?? action;
-          if (change) {
-            previous = tree.outcomes.find((o) => o.key === change.key) ?? null;
-          }
+          if (change) previous = tree.outcomes.find((o) => o.key === change.key) ?? null;
         } else if ("id" in action && (action.op === "accept_flow_change" || action.op === "reject_flow_change")) {
           const proposal = (tree.flowProposals ?? []).find((p) => p.id === action.id);
           details = proposal ?? action;
@@ -651,7 +756,7 @@ function HillClimbApp() {
       let confirmed = false;
       if (isDecision(action)) {
         confirmed = await askConfirmation(action);
-        if (!confirmed) throw new Error("Decision cancelled. The contract is unchanged.");
+        if (!confirmed) throw new Error("Decision cancelled.");
       }
       const res = await callTool<{ ok: true; tree: Snapshot; inboxCount?: number }>("app_act", {
         projectId: project,
@@ -688,11 +793,7 @@ function HillClimbApp() {
     async (key: string, engine: "repo" | "search") => {
       const outcome = tree?.outcomes.find((item) => item.key === key);
       if (!outcome) throw new Error("Refresh the outcome before configuring a verifier.");
-      const res = await callTool<{ rig: Rig | null }>("app_get_rig", {
-        projectId: project,
-        key,
-        engine,
-      });
+      const res = await callTool<{ rig: Rig | null }>("app_get_rig", { projectId: project, key, engine });
       await new Promise<void>((resolve, reject) => {
         setEditor({ outcome, engine, existing: res.rig, resolve, reject });
       });
@@ -702,11 +803,7 @@ function HillClimbApp() {
 
   const dispatch = useCallback(
     async (key: string, engine: "repo" | "search") => {
-      let rigRes = await callTool<{ rig: Rig | null }>("app_get_rig", {
-        projectId: project,
-        key,
-        engine,
-      });
+      let rigRes = await callTool<{ rig: Rig | null }>("app_get_rig", { projectId: project, key, engine });
       if (!rigRes.rig) {
         const outcome = tree?.outcomes.find((item) => item.key === key);
         if (!outcome) throw new Error("Refresh the outcome before configuring a verifier.");
@@ -715,19 +812,11 @@ function HillClimbApp() {
             setEditor({ outcome, engine, existing: null, resolve, reject });
           });
         } catch (err) {
-          if (errMsg(err) === "cancelled") {
-            throw new Error("cancelled");
-          }
+          if (errMsg(err) === "cancelled") throw new Error("cancelled");
           throw err;
         }
-        rigRes = await callTool<{ rig: Rig | null }>("app_get_rig", {
-          projectId: project,
-          key,
-          engine,
-        });
-        if (!rigRes.rig) {
-          throw new Error("Configure the scoring and holdout checks before starting the first climb.");
-        }
+        rigRes = await callTool<{ rig: Rig | null }>("app_get_rig", { projectId: project, key, engine });
+        if (!rigRes.rig) throw new Error("Configure a verifier before starting the climb.");
       }
 
       const client = appRef.current;
@@ -738,7 +827,6 @@ function HillClimbApp() {
         directory: string;
         brief: string;
         needsClientWorkerLaunch: boolean;
-        launchMode: string;
       }>("app_dispatch", {
         projectId: project,
         key,
@@ -757,17 +845,14 @@ function HillClimbApp() {
               _meta: { "com.google.antigravity/message": { target: "new" } },
             } as Parameters<App["sendMessage"]>[0],
           )) as { _meta?: { "com.google.antigravity/message"?: { conversationId?: string } } } | undefined;
-          const convId = msgRes?._meta?.["com.google.antigravity/message"]?.conversationId;
-          workerId = convId ?? `client:${dispatched.runId}`;
+          workerId = msgRes?._meta?.["com.google.antigravity/message"]?.conversationId ?? `client:${dispatched.runId}`;
         } catch {
           workerId = `local:${dispatched.runId}`;
         }
         await callTool("app_attach_worker", { runId: dispatched.runId, conversationId: workerId });
       }
 
-      setNotice(
-        `Run ${dispatched.runId} dispatched for ${key} (${engine})${workerId ? ` · worker ${workerId}` : ""} in ${dispatched.directory}`,
-      );
+      setNotice(`Started climb for ${key} (${engine}).`);
       await loadTree(project, track);
     },
     [project, track, tree, callTool, loadTree],
@@ -775,10 +860,12 @@ function HillClimbApp() {
 
   const handleSync = async () => {
     if (!project) return;
+    closePopovers();
+    setSearchOpen(false);
     setBusy(true);
     try {
       const res = await callTool<{ root: string; files: number }>("app_sync", { projectId: project });
-      setNotice(`Synced ${res.files} files to ${res.root}`);
+      setNotice(`Synced ${res.files} files to .hillclimb/.`);
     } catch (e) {
       setNotice(`Sync failed: ${errMsg(e)}`);
     } finally {
@@ -788,12 +875,14 @@ function HillClimbApp() {
 
   const handleLint = async () => {
     if (!project) return;
+    closePopovers();
+    setSearchOpen(false);
     setBusy(true);
     try {
       const res = await callTool<LintReport>("app_lint", { projectId: project });
       setLintReport(res);
     } catch (e) {
-      setNotice(`Lint failed: ${errMsg(e)}`);
+      setNotice(`Quality check failed: ${errMsg(e)}`);
     } finally {
       setBusy(false);
     }
@@ -801,16 +890,18 @@ function HillClimbApp() {
 
   const handleReconcile = async () => {
     if (!project) return;
+    closePopovers();
+    setSearchOpen(false);
     setBusy(true);
     try {
       const res = await callTool<{ scanned: number; applied: number; refused: number; closed: number }>(
         "app_reconcile",
         { projectId: project },
       );
-      setNotice(`Reconciled ${res.scanned} run(s): ${res.applied} applied, ${res.refused} refused, ${res.closed} closed.`);
+      setNotice(`Checked ${res.scanned} run(s): ${res.applied} verified, ${res.closed} finished.`);
       await loadTree(project, track);
     } catch (e) {
-      setNotice(`Reconcile failed: ${errMsg(e)}`);
+      setNotice(`Check failed: ${errMsg(e)}`);
     } finally {
       setBusy(false);
     }
@@ -830,9 +921,9 @@ function HillClimbApp() {
       setNewProjName("");
       setNewProjDir("");
       setAddProjectOpen(false);
-      setNotice(`Registered project "${res.project.name}" (${res.project.directory ?? "no directory"})`);
+      setNotice(`Linked repository "${res.project.name}".`);
     } catch (err) {
-      setNotice(`Could not register project: ${errMsg(err)}`);
+      setNotice(`Could not link repository: ${errMsg(err)}`);
     } finally {
       setBusy(false);
     }
@@ -859,7 +950,9 @@ function HillClimbApp() {
         if (typeof res.inboxCount === "number") setInboxCount(res.inboxCount);
         setImportOpen(false);
         setNotice(
-          `Imported ${res.applied} action(s)${importAsProposals ? " as pending proposals in Inbox" : " into tree"}.`,
+          importAsProposals
+            ? `Added ${res.applied} draft item(s) to Decisions for review.`
+            : `Imported ${res.applied} item(s) into Goals.`,
         );
       }
     } catch (e) {
@@ -869,10 +962,12 @@ function HillClimbApp() {
     }
   };
 
+  const activeSecondary = SECONDARY_PAGES.find((p) => p.id === page) ?? null;
+
   if (connectError) {
     return (
-      <main className="hill-shell">
-        <h1>Hill Climb</h1>
+      <main className="hill-shell" style={{ padding: 20 }}>
+        <h1 style={{ fontSize: 16, margin: "0 0 8px" }}>Hill Climb</h1>
         <p role="alert">Could not connect to Antigravity MCP Apps host: {connectError}</p>
       </main>
     );
@@ -880,730 +975,799 @@ function HillClimbApp() {
 
   return (
     <main className="hill-shell">
-      <header>
-        <h1>Hill Climb</h1>
-        <div className="hill-header-controls">
-          <label>
-            Project{" "}
-            <select
-              value={project}
-              onChange={(e) => {
-                setProject(e.target.value);
-                setSelected(null);
-              }}
-            >
-              {projects.length === 0 ? <option value="default">default</option> : null}
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                  {p.directory ? ` (${p.directory.split(/[/\\]/).slice(-1)[0]})` : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="hill-header-actions">
-            <button
-              type="button"
-              className="hill-action-btn"
-              title="Search everything across outcomes, criteria, plans, evidence, flows, climbs & reports (Cmd+K)"
-              onClick={() => setSearchOpen(true)}
-            >
-              Search ⌘K
-            </button>
-            <button
-              type="button"
-              className="hill-action-btn"
-              title="Start from a contract blueprint or import Markdown stories"
-              disabled={busy || !project}
-              onClick={() => void openImportModal()}
-            >
-              Import
-            </button>
-            <button
-              type="button"
-              className="hill-action-btn"
-              title="Link a local git repository to Hill Climb"
-              onClick={() => setAddProjectOpen(true)}
-            >
-              + Project
-            </button>
-            <button
-              type="button"
-              className="hill-action-btn"
-              title="Write the .hillclimb/ markdown mirror into this repository"
-              disabled={busy || !project}
-              onClick={() => void handleSync()}
-            >
-              Sync
-            </button>
-            <button
-              type="button"
-              className="hill-action-btn"
-              title="Lint contract tree against all 22 quality rules"
-              disabled={busy || !project}
-              onClick={() => void handleLint()}
-            >
-              Lint
-            </button>
-            <button
-              type="button"
-              className="hill-action-btn"
-              title="Poll dispatched verifier runs and ingest completed receipts"
-              disabled={busy || !project}
-              onClick={() => void handleReconcile()}
-            >
-              Reconcile
-            </button>
-            <button
-              type="button"
-              className="hill-action-btn"
-              title="Project policy, auto-sync, wake-on-answer, and automation hooks"
-              disabled={!project}
-              onClick={() => void openSettingsModal()}
-            >
-              Settings
-            </button>
+      <header className="hill-topbar">
+        <div className="hill-topbar-left">
+          <h1 className="hill-brand">
+            <span className="hill-brand-mark" aria-hidden="true">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d="M1.5 9.5L4.8 4.5L7.4 7L10.5 2.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+            Hill Climb
+          </h1>
+          <span className="hill-sep" aria-hidden="true">/</span>
+          <select
+            aria-label="Project"
+            className="hill-project-select"
+            value={project}
+            onChange={(e) => {
+              if (e.target.value === "__add__") {
+                setAddProjectOpen(true);
+                return;
+              }
+              setProject(e.target.value);
+              setSelected(null);
+            }}
+          >
+            {projects.length === 0 ? <option value="default">default</option> : null}
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+            <option value="__add__">+ Link repository…</option>
+          </select>
+        </div>
+
+        <div className="hill-topbar-right">
+          <button
+            type="button"
+            className="hill-cmd-trigger"
+            title="Search or run a command (⌘K)"
+            onClick={() => {
+              closePopovers();
+              setSearchOpen(true);
+            }}
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <circle cx="7" cy="7" r="4.8" stroke="currentColor" strokeWidth="1.5" />
+              <path d="M10.8 10.8L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+            <span className="hill-cmd-text">Search</span>
+            <kbd className="hill-kbd">⌘K</kbd>
+          </button>
+
+          <button
+            ref={actionsBtnRef}
+            type="button"
+            className="hill-icon-trigger hill-anchor-actions"
+            aria-label="Project actions and settings"
+            aria-haspopup="menu"
+            popoverTarget="hc-actions-popover"
+            onClick={() => {
+              requestAnimationFrame(() => positionPopoverFallback(actionsBtnRef.current, actionsPopRef.current, true));
+            }}
+          >
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+              <circle cx="3.5" cy="8" r="1.3" />
+              <circle cx="8" cy="8" r="1.3" />
+              <circle cx="12.5" cy="8" r="1.3" />
+            </svg>
+          </button>
+          <div ref={actionsPopRef} id="hc-actions-popover" className="hill-popover" {...({ popover: "auto" } as Record<string, string>)}>
+            <div className="hill-menu-list" role="menu" aria-label="Project actions">
+              <button type="button" className="hill-menu-item" role="menuitem" disabled={!project} onClick={() => void openImportModal()}>
+                <span>
+                  Import template or Markdown…
+                  <span className="hill-menu-desc">Seed goals from 5 blueprints or notes</span>
+                </span>
+              </button>
+              <button type="button" className="hill-menu-item" role="menuitem" disabled={busy || !project} onClick={() => void handleLint()}>
+                <span>
+                  Check contract quality
+                  <span className="hill-menu-desc">Run the 22-rule writing linter</span>
+                </span>
+              </button>
+              <button type="button" className="hill-menu-item" role="menuitem" disabled={busy || !project} onClick={() => void handleSync()}>
+                <span>
+                  Sync .hillclimb/ folder
+                  <span className="hill-menu-desc">Write readable Markdown mirror</span>
+                </span>
+              </button>
+              <button type="button" className="hill-menu-item" role="menuitem" disabled={busy || !project} onClick={() => void handleReconcile()}>
+                <span>
+                  Check for finished runs
+                  <span className="hill-menu-desc">Collect receipts from active workers</span>
+                </span>
+              </button>
+              <hr className="hill-menu-sep" />
+              <button
+                type="button"
+                className="hill-menu-item"
+                role="menuitem"
+                onClick={() => {
+                  closePopovers();
+                  setAddProjectOpen(true);
+                }}
+              >
+                Link another repository…
+              </button>
+              <button type="button" className="hill-menu-item" role="menuitem" disabled={!project} onClick={() => void openSettingsModal()}>
+                Settings &amp; hooks…
+              </button>
+            </div>
           </div>
         </div>
       </header>
 
-      <nav aria-label="Hill Climb">
-        {PAGES.map((p) => (
+      <nav className="hill-nav" aria-label="Primary navigation">
+        <div className="hill-nav-items">
           <button
-            key={p}
             type="button"
-            aria-current={page === p ? "page" : undefined}
-            onClick={() => setPage(p)}
+            className="hill-nav-btn"
+            aria-current={page === "tree" ? "page" : undefined}
+            onClick={() => setPage("tree")}
           >
-            {p === "tree" ? "Outcomes" : p.charAt(0).toUpperCase() + p.slice(1)}
-            {p === "climbs" && (repoClimbs?.currentCount ?? 0) > 0 ? (
+            Goals
+          </button>
+          <button
+            type="button"
+            className="hill-nav-btn"
+            aria-current={page === "climbs" ? "page" : undefined}
+            onClick={() => setPage("climbs")}
+          >
+            Climbs
+            {(repoClimbs?.currentCount ?? 0) > 0 ? (
               <span className="hill-nav-badge hill-nav-badge-climbs">{repoClimbs!.currentCount}</span>
             ) : null}
-            {p === "inbox" && inboxCount > 0 ? <span className="hill-nav-badge">{inboxCount}</span> : null}
           </button>
-        ))}
-      </nav>
-
-      {notice ? (
-        <div className="hill-notice-bar" role="status">
-          <span>{notice}</span>
-          <button type="button" className="hill-action-btn" onClick={() => setNotice("")}>
-            Dismiss
+          <button
+            type="button"
+            className="hill-nav-btn"
+            aria-current={page === "inbox" ? "page" : undefined}
+            onClick={() => setPage("inbox")}
+          >
+            Decisions
+            {inboxCount > 0 ? <span className="hill-nav-badge">{inboxCount}</span> : null}
           </button>
-        </div>
-      ) : null}
 
-      {treeError ? (
-        <p role="alert">
-          {treeError}{" "}
-          <button type="button" className="hill-action-btn" onClick={() => void loadTree(project, track)}>
-            Retry
+          <button
+            ref={moreBtnRef}
+            type="button"
+            className={`hill-nav-btn hill-anchor-more${activeSecondary ? " is-current" : ""}`}
+            aria-haspopup="menu"
+            popoverTarget="hc-more-views"
+            onClick={() => {
+              requestAnimationFrame(() => positionPopoverFallback(moreBtnRef.current, morePopRef.current, false));
+            }}
+          >
+            {activeSecondary ? activeSecondary.label : "More"}
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+              <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
           </button>
-        </p>
-      ) : !tree ? (
-        <p role="status">Loading outcomes…</p>
-      ) : (
-        <div className={"hill-workspace" + (selected ? " hill-inspecting" : "")}>
-          {editor ? (
-            <RigEditor
-              engine={editor.engine}
-              existing={editor.existing}
-              outcome={editor.outcome}
-              onClose={() => {
-                const pending = editor;
-                setEditor(null);
-                pending.reject(new Error("cancelled"));
-              }}
-              onSave={async (rig) => {
-                const pending = editor;
-                await callTool("app_save_rig", {
-                  projectId: project,
-                  key: pending.outcome.key,
-                  version: pending.outcome.version,
-                  rig,
-                });
-                setEditor(null);
-                pending.resolve();
-                setNotice("Verifier saved. Dispatch when ready.");
-              }}
-            />
-          ) : null}
-
-          {tree.tracks.length > 1 ? (
-            <label className="hill-track">
-              Track{" "}
-              <select value={track} onChange={(e) => setTrack(e.target.value)}>
-                {tree.tracks.map((t) => (
-                  <option key={t.name} value={t.name}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
-
-          {page === "tree" && tree.outcomes.length === 0 && (repoClimbs?.climbs.length ?? 0) > 0 ? (
-            <div className="hill-notice-bar" role="status">
-              <span>
-                {repoClimbs!.currentCount > 0 ? (
-                  <>
-                    <strong>{repoClimbs!.currentCount}</strong> active/current climb
-                    {repoClimbs!.currentCount === 1 ? "" : "s"} in this project
-                    {repoClimbs!.archivedCount > 0 ? ` (+ ${repoClimbs!.archivedCount} archived)` : ""}.
-                  </>
-                ) : (
-                  <>
-                    <strong>{repoClimbs!.climbs.length}</strong> historical climb
-                    {repoClimbs!.climbs.length === 1 ? "" : "s"} found in linked worktrees.
-                  </>
-                )}
-              </span>
-              <button type="button" className="hill-action-btn" onClick={() => setPage("climbs")}>
-                Open Climbs →
-              </button>
-            </div>
-          ) : null}
-
-          {page === "tree" ? (
-            <TreeView
-              key={project}
-              data={tree}
-              track={track}
-              selected={selected}
-              select={setSelected}
-              act={act}
-              dispatch={dispatch}
-              configure={configure}
-              live={live}
-              views={views}
-              scopes={scopes}
-              onSaveView={handleSaveView}
-              onDeleteView={handleDeleteView}
-              onSaveScope={handleSaveScope}
-              onDeleteScope={handleDeleteScope}
-              onOpenFlow={handleOpenFlow}
-              onOpenInbox={() => setPage("inbox")}
-            />
-          ) : page === "climbs" ? (
-            <RepoClimbsView
-              key={project}
-              payload={repoClimbs}
-              loading={climbsLoading}
-              onRefresh={() => void loadRepoClimbs(project)}
-              onToggleAutoTrack={handleToggleAutoTrack}
-              onTrackClimb={handleTrackClimb}
-              onOpenOutcome={handleOpenOutcomeFromClimb}
-            />
-          ) : page === "insights" ? (
-            <InsightsView
-              projectId={project}
-              track={track}
-              loadInsights={loadInsights}
-              onSelectOutcome={handleOpenOutcomeFromClimb}
-              onOpenClimbs={() => setPage("climbs")}
-            />
-          ) : page === "reports" ? (
-            <ReportsView
-              projectId={project}
-              track={track}
-              releases={tree.releases}
-              initialArtifactId={selectedArtifact}
-              callArtifacts={callArtifacts}
-              onSelectOutcome={handleOpenOutcomeFromClimb}
-              onNotice={setNotice}
-            />
-          ) : (
-            <Portfolio
-              page={page}
-              data={tree}
-              act={act}
-              select={setSelected}
-              chooseTrack={setTrack}
-              track={track}
-              preview={preview}
-              initialFlow={selectedFlow}
-              onFocusScopeFromRelease={handleFocusScopeFromRelease}
-            />
-          )}
-
-          {selected ? (
-            <OutcomeDrawer
-              data={tree}
-              track={track}
-              selected={selected}
-              select={setSelected}
-              act={act}
-              dispatch={dispatch}
-              configure={configure}
-              live={live}
-              onOpenFlow={handleOpenFlow}
-            />
-          ) : null}
-        </div>
-      )}
-
-      {searchOpen ? (
-        <div
-          className="hill-modal-backdrop"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Search everything"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setSearchOpen(false);
-          }}
-        >
-          <div className="hill-modal hill-search-modal">
-            <h2>Search Everything (⌘K)</h2>
-            <input
-              autoFocus
-              className="pf-input"
-              type="search"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search goals, outcomes, criteria, plans, evidence, flows, climbs, reports…"
-              aria-label="Global search query"
-            />
-            <div className="hill-search-results">
-              {searchLoading ? (
-                <p className="hc-hint">Searching…</p>
-              ) : searchQuery.trim() === "" ? (
-                <p className="hc-hint">Type a keyword to query SQLite FTS5 across the entire workspace.</p>
-              ) : searchHits.length === 0 ? (
-                <p className="hc-hint">No matches for “{searchQuery}”.</p>
-              ) : (
-                searchHits.map((hit, idx) => (
-                  <button
-                    key={`${hit.project}:${hit.entityType}:${hit.entityId}:${idx}`}
-                    type="button"
-                    className="hill-search-hit"
-                    onClick={() => handleSearchJump(hit)}
-                  >
-                    <span className="hill-search-hit-top">
-                      <span className="pf-pill">{hit.entityType}</span>
-                      <strong>{hit.title}</strong>
-                      <code>{hit.entityId}</code>
-                    </span>
-                    <span className="hc-hint">{hit.snippet}</span>
-                  </button>
-                ))
-              )}
-            </div>
-            <div className="hill-modal-footer">
-              <button type="button" className="hc-btn" onClick={() => setSearchOpen(false)}>
-                Close
-              </button>
+          <div ref={morePopRef} id="hc-more-views" className="hill-popover hill-popover-start" {...({ popover: "auto" } as Record<string, string>)}>
+            <div className="hill-menu-list" role="menu" aria-label="More views">
+              {SECONDARY_PAGES.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="menuitem"
+                  className={`hill-menu-item${page === item.id ? " is-active" : ""}`}
+                  onClick={() => {
+                    closePopovers();
+                    setPage(item.id);
+                  }}
+                >
+                  <span>
+                    {item.label}
+                    <span className="hill-menu-desc">{item.desc}</span>
+                  </span>
+                </button>
+              ))}
             </div>
           </div>
         </div>
-      ) : null}
 
-      {importOpen ? (
-        <div
-          className="hill-modal-backdrop"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Import blueprints or Markdown"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setImportOpen(false);
-          }}
-        >
-          <div className="hill-modal">
-            <h2>Templates &amp; Markdown Import</h2>
-            <p className="hc-hint">
-              Seed your contract tree from a built-in blueprint or convert Markdown stories/checklists with 22-rule lint preview.
-            </p>
-            <div className="cl-seg" style={{ margin: "10px 0" }}>
-              <button
-                type="button"
-                className={importTab === "blueprints" ? "is-active" : ""}
-                onClick={() => {
-                  setImportTab("blueprints");
-                  setImportPreview(null);
+        {tree && tree.tracks.length > 1 ? (
+          <label className="hill-track-pill">
+            <span>Track</span>
+            <select value={track} onChange={(e) => setTrack(e.target.value)}>
+              {tree.tracks.map((t) => (
+                <option key={t.name} value={t.name}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+      </nav>
+
+      <div className={"hill-workspace" + (selected ? " hill-inspecting" : "")}>
+        {notice ? (
+          <div className="hill-notice-bar" role="status">
+            <span>{notice}</span>
+            <button type="button" className="hill-action-btn" onClick={() => setNotice("")}>
+              Dismiss
+            </button>
+          </div>
+        ) : null}
+
+        {treeError ? (
+          <div className="hill-notice-bar" role="alert">
+            <span>Could not load project: {treeError}</span>
+            <button type="button" className="hill-action-btn" onClick={() => void loadTree(project, track)}>
+              Retry
+            </button>
+          </div>
+        ) : !tree ? (
+          <p className="hc-hint" role="status">Loading project…</p>
+        ) : (
+          <>
+            {editor ? (
+              <RigEditor
+                engine={editor.engine}
+                existing={editor.existing}
+                outcome={editor.outcome}
+                onClose={() => {
+                  const pending = editor;
+                  setEditor(null);
+                  pending.reject(new Error("cancelled"));
                 }}
-              >
-                Blueprints ({blueprints.length})
-              </button>
-              <button
-                type="button"
-                className={importTab === "markdown" ? "is-active" : ""}
-                onClick={() => {
-                  setImportTab("markdown");
-                  setImportPreview(null);
+                onSave={async (rig) => {
+                  const pending = editor;
+                  await callTool("app_save_rig", {
+                    projectId: project,
+                    key: pending.outcome.key,
+                    version: pending.outcome.version,
+                    rig,
+                  });
+                  setEditor(null);
+                  pending.resolve();
+                  setNotice("Verifier saved.");
                 }}
-              >
-                Markdown / Stories
-              </button>
-            </div>
-
-            {importTab === "blueprints" ? (
-              <div className="hill-lint-list">
-                {blueprints.map((bp) => (
-                  <label key={bp.id} className="hill-lint-item" style={{ cursor: "pointer", display: "block" }}>
-                    <input
-                      type="radio"
-                      name="hc-blueprint"
-                      checked={selectedBlueprint === bp.id}
-                      onChange={() => {
-                        setSelectedBlueprint(bp.id);
-                        setImportPreview(null);
-                      }}
-                    />{" "}
-                    <strong>{bp.name}</strong> ({bp.goalCount} goal, {bp.outcomeCount} outcomes)
-                    <div className="hc-hint">{bp.description}</div>
-                  </label>
-                ))}
-              </div>
-            ) : (
-              <div className="hc-field">
-                <label htmlFor="hc-import-md">Markdown headings &amp; acceptance bullets</label>
-                <textarea
-                  id="hc-import-md"
-                  className="pf-textarea"
-                  rows={8}
-                  value={importMarkdown}
-                  onChange={(e) => {
-                    setImportMarkdown(e.target.value);
-                    setImportPreview(null);
-                  }}
-                />
-              </div>
-            )}
-
-            <label className="hc-toggle" style={{ marginTop: 10 }}>
-              <input
-                type="checkbox"
-                checked={importAsProposals}
-                onChange={(e) => setImportAsProposals(e.target.checked)}
               />
-              <span>Import outcomes as pending proposals in Inbox (require human approval)</span>
-            </label>
+            ) : null}
 
-            {importPreview ? (
-              <div className="hill-lint-item" style={{ marginTop: 10 }}>
-                <strong>Preview:</strong> {importPreview.actionCount} action(s) · 22-rule lint:{" "}
-                {importPreview.lint.passed
-                  ? "Passed"
-                  : `${importPreview.lint.errorCount} error(s), ${importPreview.lint.warningCount} warning(s)`}
+            {page === "tree" && tree.outcomes.length === 0 && (repoClimbs?.climbs.length ?? 0) > 0 ? (
+              <div className="hill-notice-bar" role="status">
+                <span>
+                  {repoClimbs!.currentCount > 0 ? (
+                    <>
+                      <strong>{repoClimbs!.currentCount}</strong> active climb
+                      {repoClimbs!.currentCount === 1 ? "" : "s"} detected in this repository.
+                    </>
+                  ) : (
+                    <>
+                      <strong>{repoClimbs!.climbs.length}</strong> saved climb
+                      {repoClimbs!.climbs.length === 1 ? "" : "s"} found in linked worktrees.
+                    </>
+                  )}
+                </span>
+                <button type="button" className="hill-action-btn" onClick={() => setPage("climbs")}>
+                  View Climbs →
+                </button>
               </div>
             ) : null}
 
-            <div className="hill-modal-footer">
-              <button type="button" className="hc-btn" onClick={() => setImportOpen(false)}>
-                Cancel
+            {page === "tree" ? (
+              <TreeView
+                key={project}
+                data={tree}
+                track={track}
+                selected={selected}
+                select={setSelected}
+                act={act}
+                dispatch={dispatch}
+                configure={configure}
+                live={live}
+                views={views}
+                scopes={scopes}
+                onSaveView={handleSaveView}
+                onDeleteView={handleDeleteView}
+                onSaveScope={handleSaveScope}
+                onDeleteScope={handleDeleteScope}
+                onOpenFlow={handleOpenFlow}
+                onOpenInbox={() => setPage("inbox")}
+                onOpenImport={() => void openImportModal()}
+              />
+            ) : page === "climbs" ? (
+              <RepoClimbsView
+                key={project}
+                payload={repoClimbs}
+                loading={climbsLoading}
+                onRefresh={() => void loadRepoClimbs(project)}
+                onToggleAutoTrack={handleToggleAutoTrack}
+                onTrackClimb={handleTrackClimb}
+                onOpenOutcome={handleOpenOutcomeFromClimb}
+              />
+            ) : page === "insights" ? (
+              <InsightsView
+                projectId={project}
+                track={track}
+                loadInsights={loadInsights}
+                onSelectOutcome={handleOpenOutcomeFromClimb}
+                onOpenClimbs={() => setPage("climbs")}
+              />
+            ) : page === "reports" ? (
+              <ReportsView
+                projectId={project}
+                track={track}
+                releases={tree.releases}
+                initialArtifactId={selectedArtifact}
+                callArtifacts={callArtifacts}
+                onSelectOutcome={handleOpenOutcomeFromClimb}
+                onNotice={setNotice}
+              />
+            ) : (
+              <Portfolio
+                page={page}
+                data={tree}
+                act={act}
+                select={setSelected}
+                chooseTrack={setTrack}
+                track={track}
+                preview={preview}
+                initialFlow={selectedFlow}
+                onFocusScopeFromRelease={handleFocusScopeFromRelease}
+              />
+            )}
+
+            {selected ? (
+              <OutcomeDrawer
+                data={tree}
+                track={track}
+                selected={selected}
+                select={setSelected}
+                act={act}
+                dispatch={dispatch}
+                configure={configure}
+                live={live}
+                onOpenFlow={handleOpenFlow}
+              />
+            ) : null}
+          </>
+        )}
+      </div>
+
+      <NativeModal
+        open={searchOpen}
+        title="Search & quick actions"
+        onClose={() => setSearchOpen(false)}
+      >
+        <input
+          autoFocus
+          className="pf-input"
+          type="search"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              e.preventDefault();
+              setSearchOpen(false);
+            }
+          }}
+          placeholder="Search goals, outcomes, climbs, flows, reports…"
+          aria-label="Global search"
+        />
+        {searchQuery.trim() === "" ? (
+          <div className="hill-menu-list">
+            <p className="hc-hint" style={{ margin: "2px 4px 6px" }}>Quick jumps &amp; actions</p>
+            {SECONDARY_PAGES.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className="hill-menu-item"
+                onClick={() => {
+                  setSearchOpen(false);
+                  setPage(item.id);
+                }}
+              >
+                <span>
+                  Open {item.label}
+                  <span className="hill-menu-desc">{item.desc}</span>
+                </span>
               </button>
+            ))}
+            <hr className="hill-menu-sep" />
+            <button type="button" className="hill-menu-item" onClick={() => void openImportModal()}>
+              Import from template or Markdown…
+            </button>
+            <button type="button" className="hill-menu-item" onClick={() => void handleLint()}>
+              Check contract quality (22 rules)
+            </button>
+            <button type="button" className="hill-menu-item" onClick={() => void handleSync()}>
+              Sync .hillclimb/ folder
+            </button>
+            <button type="button" className="hill-menu-item" onClick={() => void openSettingsModal()}>
+              Project settings &amp; hooks…
+            </button>
+          </div>
+        ) : (
+          <div className="hill-search-results">
+            {searchLoading ? (
+              <p className="hc-hint">Searching…</p>
+            ) : searchHits.length === 0 ? (
+              <p className="hc-hint">No matches for “{searchQuery}”.</p>
+            ) : (
+              searchHits.map((hit, idx) => (
+                <button
+                  key={`${hit.project}:${hit.entityType}:${hit.entityId}:${idx}`}
+                  type="button"
+                  className="hill-search-hit"
+                  onClick={() => handleSearchJump(hit)}
+                >
+                  <span className="hill-search-hit-top">
+                    <span className="pf-pill">{hit.entityType}</span>
+                    <strong>{hit.title}</strong>
+                    <code>{hit.entityId}</code>
+                  </span>
+                  <span className="hc-hint">{hit.snippet}</span>
+                </button>
+              ))
+            )}
+          </div>
+        )}
+      </NativeModal>
+
+      <NativeModal
+        open={importOpen}
+        title="Start from a template or Markdown"
+        onClose={() => setImportOpen(false)}
+        footer={
+          <>
+            <button type="button" className="hc-btn" onClick={() => setImportOpen(false)}>
+              Cancel
+            </button>
+            <button type="button" className="hc-btn" disabled={busy} onClick={() => void handleImportRun("preview")}>
+              Preview
+            </button>
+            <button
+              type="button"
+              className="hc-btn hc-btn-primary"
+              disabled={busy || (importTab === "blueprints" && !selectedBlueprint)}
+              onClick={() => void handleImportRun("apply")}
+            >
+              Add to Goals
+            </button>
+          </>
+        }
+      >
+        <div className="cl-seg">
+          <button
+            type="button"
+            className={importTab === "blueprints" ? "is-active" : ""}
+            onClick={() => {
+              setImportTab("blueprints");
+              setImportPreview(null);
+            }}
+          >
+            Templates ({blueprints.length})
+          </button>
+          <button
+            type="button"
+            className={importTab === "markdown" ? "is-active" : ""}
+            onClick={() => {
+              setImportTab("markdown");
+              setImportPreview(null);
+            }}
+          >
+            Paste Markdown
+          </button>
+        </div>
+
+        {importTab === "blueprints" ? (
+          <div className="hill-lint-list">
+            {blueprints.map((bp) => (
+              <label key={bp.id} className="hill-lint-item" style={{ cursor: "pointer", display: "block" }}>
+                <input
+                  type="radio"
+                  name="hc-blueprint"
+                  checked={selectedBlueprint === bp.id}
+                  onChange={() => {
+                    setSelectedBlueprint(bp.id);
+                    setImportPreview(null);
+                  }}
+                />{" "}
+                <strong>{bp.name}</strong> · {bp.outcomeCount} outcomes
+                <div className="hc-hint">{bp.description}</div>
+              </label>
+            ))}
+          </div>
+        ) : (
+          <div className="hc-field">
+            <label htmlFor="hc-import-md">Paste headings and acceptance bullets</label>
+            <textarea
+              id="hc-import-md"
+              className="pf-textarea"
+              rows={8}
+              value={importMarkdown}
+              onChange={(e) => {
+                setImportMarkdown(e.target.value);
+                setImportPreview(null);
+              }}
+            />
+          </div>
+        )}
+
+        <label className="hc-toggle">
+          <input
+            type="checkbox"
+            checked={importAsProposals}
+            onChange={(e) => setImportAsProposals(e.target.checked)}
+          />
+          <span>Queue as drafts in Decisions for review first</span>
+        </label>
+
+        {importPreview ? (
+          <div className="hill-lint-item">
+            <strong>Preview:</strong> {importPreview.actionCount} item(s) · Quality check:{" "}
+            {importPreview.lint.passed
+              ? "Passed"
+              : `${importPreview.lint.errorCount} error(s), ${importPreview.lint.warningCount} warning(s)`}
+          </div>
+        ) : null}
+      </NativeModal>
+
+      <NativeModal
+        open={settingsOpen}
+        title="Project settings & automation"
+        onClose={() => setSettingsOpen(false)}
+        footer={
+          <button type="button" className="hc-btn hc-btn-primary" onClick={() => setSettingsOpen(false)}>
+            Done
+          </button>
+        }
+      >
+        <div className="hill-lint-list">
+          <label className="hill-lint-item" style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+            <input
+              type="checkbox"
+              checked={settings.autoSyncMirror}
+              onChange={(e) =>
+                void syncViewsScopes("set_setting", { key: "autoSyncMirror", value: String(e.target.checked) })
+              }
+            />
+            <span>
+              <strong>Keep .hillclimb/ mirror synced automatically</strong>
+              <span className="hill-menu-desc">Writes readable Markdown files whenever goals or evidence change.</span>
+            </span>
+          </label>
+          <label className="hill-lint-item" style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+            <input
+              type="checkbox"
+              checked={settings.wakeOnAnswer}
+              onChange={(e) =>
+                void syncViewsScopes("set_setting", { key: "wakeOnAnswer", value: String(e.target.checked) })
+              }
+            />
+            <span>
+              <strong>Notify waiting agent when I answer or approve</strong>
+              <span className="hill-menu-desc">Resumes the agent thread once a Decision is resolved.</span>
+            </span>
+          </label>
+          <label className="hill-lint-item" style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+            <input
+              type="checkbox"
+              checked={settings.requireApprovalForNewOutcomes}
+              onChange={(e) =>
+                void syncViewsScopes("set_setting", {
+                  key: "requireApprovalForNewOutcomes",
+                  value: String(e.target.checked),
+                })
+              }
+            />
+            <span>
+              <strong>Require my approval before agents add new outcomes</strong>
+              <span className="hill-menu-desc">Routes new agent outcomes to Decisions instead of adding directly.</span>
+            </span>
+          </label>
+          <div className="hill-lint-item">
+            <label htmlFor="hc-set-kit" className="pf-label">
+              Default design kit (Flows)
+            </label>
+            <div className="pf-row" style={{ marginTop: 4 }}>
+              <input
+                id="hc-set-kit"
+                className="pf-input"
+                value={designKitDraft}
+                onChange={(e) => setDesignKitDraft(e.target.value)}
+                placeholder="e.g. Clean SaaS, shadcn/ui"
+              />
               <button
                 type="button"
                 className="hc-btn"
-                disabled={busy}
-                onClick={() => void handleImportRun("preview")}
+                onClick={() => void syncViewsScopes("set_setting", { key: "designKit", value: designKitDraft.trim() })}
               >
-                Preview &amp; Lint
-              </button>
-              <button
-                type="button"
-                className="hc-btn hc-btn-primary"
-                disabled={busy || (importTab === "blueprints" && !selectedBlueprint)}
-                onClick={() => void handleImportRun("apply")}
-              >
-                Import into tree
+                Save
               </button>
             </div>
           </div>
         </div>
-      ) : null}
 
-      {settingsOpen ? (
-        <div
-          className="hill-modal-backdrop"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Project settings and automation hooks"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setSettingsOpen(false);
-          }}
-        >
-          <div className="hill-modal">
-            <h2>Project Settings &amp; Automation</h2>
-            <div className="hill-lint-list">
-              <label className="hill-lint-item" style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <input
-                  type="checkbox"
-                  checked={settings.autoSyncMirror}
-                  onChange={(e) =>
-                    void syncViewsScopes("set_setting", {
-                      key: "autoSyncMirror",
-                      value: String(e.target.checked),
-                    })
-                  }
-                />
-                <span>
-                  <strong>Auto-sync .hillclimb/ mirror</strong> — keep Markdown mirror updated on every tree write.
-                </span>
-              </label>
-              <label className="hill-lint-item" style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <input
-                  type="checkbox"
-                  checked={settings.wakeOnAnswer}
-                  onChange={(e) =>
-                    void syncViewsScopes("set_setting", {
-                      key: "wakeOnAnswer",
-                      value: String(e.target.checked),
-                    })
-                  }
-                />
-                <span>
-                  <strong>Wake agent on answer / approval</strong> — resume waiting Antigravity conversation when Inbox items are resolved.
-                </span>
-              </label>
-              <label className="hill-lint-item" style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <input
-                  type="checkbox"
-                  checked={settings.requireApprovalForNewOutcomes}
-                  onChange={(e) =>
-                    void syncViewsScopes("set_setting", {
-                      key: "requireApprovalForNewOutcomes",
-                      value: String(e.target.checked),
-                    })
-                  }
-                />
-                <span>
-                  <strong>Require approval for new agent outcomes</strong> — route MCP <code>create_outcome</code> into Inbox as proposed outcomes.
-                </span>
-              </label>
-              <div className="hill-lint-item">
-                <label htmlFor="hc-set-kit" className="pf-label">
-                  Default Flows Design Kit
-                </label>
-                <div className="pf-row" style={{ marginTop: 4 }}>
-                  <input
-                    id="hc-set-kit"
-                    className="pf-input"
-                    value={designKitDraft}
-                    onChange={(e) => setDesignKitDraft(e.target.value)}
-                    placeholder="e.g. Clean SaaS, shadcn/ui, Apple HIG"
-                  />
-                  <button
-                    type="button"
-                    className="hc-btn"
-                    onClick={() =>
-                      void syncViewsScopes("set_setting", { key: "designKit", value: designKitDraft.trim() })
-                    }
-                  >
-                    Save
-                  </button>
+        <details className="pf-disclosure">
+          <summary>Event hooks ({hooks.length})</summary>
+          <p className="hc-hint" style={{ marginBottom: 8 }}>
+            Trigger macOS notifications, shell commands, or HMAC webhooks on key events.
+          </p>
+          <div className="hill-lint-list">
+            {hooks.map((h) => (
+              <div key={h.id} className="hill-lint-item" style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+                <div>
+                  <strong>{h.event}</strong> · <span className="pf-pill">{h.targetType}</span> <code>{h.target}</code>
                 </div>
+                <button type="button" className="hc-btn" onClick={() => void syncViewsScopes("delete_hook", { id: h.id })}>
+                  Remove
+                </button>
               </div>
-            </div>
+            ))}
+          </div>
+          <form
+            className="pf-row"
+            style={{ marginTop: 8 }}
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!hookTarget.trim()) return;
+              void syncViewsScopes("save_hook", {
+                event: hookEvent,
+                targetType: hookType,
+                target: hookTarget.trim(),
+                enabled: true,
+              }).then(() => setHookTarget(""));
+            }}
+          >
+            <select
+              aria-label="Hook event"
+              className="pf-select"
+              style={{ width: "auto" }}
+              value={hookEvent}
+              onChange={(e) => setHookEvent(e.target.value as HookRecordDto["event"])}
+            >
+              <option value="outcome.broken">outcome.broken</option>
+              <option value="outcome.verified">outcome.verified</option>
+              <option value="question.answered">question.answered</option>
+              <option value="change.approved">change.approved</option>
+              <option value="flow.accepted">flow.accepted</option>
+              <option value="*">* (all)</option>
+            </select>
+            <select
+              aria-label="Hook target type"
+              className="pf-select"
+              style={{ width: "auto" }}
+              value={hookType}
+              onChange={(e) => setHookType(e.target.value as HookRecordDto["targetType"])}
+            >
+              <option value="notify">Desktop notify</option>
+              <option value="shell">Shell</option>
+              <option value="webhook">Webhook</option>
+            </select>
+            <input
+              className="pf-input"
+              value={hookTarget}
+              onChange={(e) => setHookTarget(e.target.value)}
+              placeholder={hookType === "notify" ? "Notification title" : hookType === "webhook" ? "https://..." : "./script.sh"}
+            />
+            <button type="submit" className="hc-btn hc-btn-primary">
+              Add
+            </button>
+          </form>
+        </details>
+      </NativeModal>
 
-            <h3 style={{ fontSize: "0.95rem", margin: "14px 0 6px" }}>Event Hooks ({hooks.length})</h3>
-            <p className="hc-hint">
-              Fire local macOS notifications, shell commands, or HMAC-signed webhooks when outcomes verify, break, or get approved.
-            </p>
-            <div className="hill-lint-list">
-              {hooks.map((h) => (
-                <div key={h.id} className="hill-lint-item" style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
-                  <div>
-                    <strong>{h.event}</strong> · <span className="pf-pill">{h.targetType}</span> <code>{h.target}</code>
-                  </div>
-                  <button
-                    type="button"
-                    className="hc-btn"
-                    onClick={() => void syncViewsScopes("delete_hook", { id: h.id })}
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
-            </div>
-            <form
-              className="pf-row"
-              style={{ marginTop: 8 }}
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (!hookTarget.trim()) return;
-                void syncViewsScopes("save_hook", {
-                  event: hookEvent,
-                  targetType: hookType,
-                  target: hookTarget.trim(),
-                  enabled: true,
-                }).then(() => setHookTarget(""));
+      <NativeModal
+        open={confirmDecision !== null}
+        title={confirmDecision ? `Confirm ${confirmDecision.action.op.replaceAll("_", " ")}` : "Confirm"}
+        onClose={() => {
+          const pending = confirmDecision;
+          setConfirmDecision(null);
+          pending?.resolve(false);
+        }}
+        footer={
+          <>
+            <button
+              type="button"
+              className="hc-btn"
+              autoFocus
+              onClick={() => {
+                const pending = confirmDecision;
+                setConfirmDecision(null);
+                pending?.resolve(false);
               }}
             >
-              <select
-                aria-label="Hook event"
-                className="pf-select"
-                style={{ width: "auto" }}
-                value={hookEvent}
-                onChange={(e) => setHookEvent(e.target.value as HookRecordDto["event"])}
-              >
-                <option value="outcome.broken">outcome.broken</option>
-                <option value="outcome.verified">outcome.verified</option>
-                <option value="question.answered">question.answered</option>
-                <option value="change.approved">change.approved</option>
-                <option value="flow.accepted">flow.accepted</option>
-                <option value="*">* (all events)</option>
-              </select>
-              <select
-                aria-label="Hook target type"
-                className="pf-select"
-                style={{ width: "auto" }}
-                value={hookType}
-                onChange={(e) => setHookType(e.target.value as HookRecordDto["targetType"])}
-              >
-                <option value="notify">Desktop notify</option>
-                <option value="shell">Shell command</option>
-                <option value="webhook">Webhook URL</option>
-              </select>
-              <input
-                className="pf-input"
-                value={hookTarget}
-                onChange={(e) => setHookTarget(e.target.value)}
-                placeholder={
-                  hookType === "notify"
-                    ? "Title prefix (e.g. Hill Climb Alert)"
-                    : hookType === "webhook"
-                      ? "https://hooks.example.com/..."
-                      : "./scripts/on-event.sh"
-                }
-              />
-              <button type="submit" className="hc-btn hc-btn-primary">
-                Add hook
-              </button>
-            </form>
-
-            <div className="hill-modal-footer">
-              <button type="button" className="hc-btn hc-btn-primary" onClick={() => setSettingsOpen(false)}>
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {confirmDecision ? (
-        <div className="hill-modal-backdrop" role="dialog" aria-modal="true" aria-label="Confirm contract decision">
-          <div className="hill-modal">
-            <h2>Confirm {confirmDecision.action.op.replaceAll("_", " ")}</h2>
-            <p className="hc-hint">Humans own the contract. Review the exact payload before confirming.</p>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="hc-btn hc-btn-primary"
+              onClick={() => {
+                const pending = confirmDecision;
+                setConfirmDecision(null);
+                pending?.resolve(true);
+              }}
+            >
+              Confirm
+            </button>
+          </>
+        }
+      >
+        {confirmDecision ? (
+          <>
+            <p className="hc-hint">Review the change below before applying it to your project.</p>
             {confirmDecision.previous ? (
               <details>
-                <summary>Current approved state</summary>
+                <summary>Current approved version</summary>
                 <pre>{JSON.stringify(confirmDecision.previous, null, 2)}</pre>
               </details>
             ) : null}
             <pre>{JSON.stringify(confirmDecision.details, null, 2)}</pre>
-            <div className="hill-modal-footer">
-              <button
-                type="button"
-                className="hc-btn"
-                autoFocus
-                onClick={() => {
-                  const pending = confirmDecision;
-                  setConfirmDecision(null);
-                  pending.resolve(false);
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="hc-btn hc-btn-primary"
-                onClick={() => {
-                  const pending = confirmDecision;
-                  setConfirmDecision(null);
-                  pending.resolve(true);
-                }}
-              >
-                Confirm decision
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+          </>
+        ) : null}
+      </NativeModal>
 
-      {addProjectOpen ? (
-        <div
-          className="hill-modal-backdrop"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Register project"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setAddProjectOpen(false);
-          }}
-        >
-          <form className="hill-modal" onSubmit={(e) => void handleRegisterProject(e)}>
-            <h2>Register Hill Climb project</h2>
-            <p className="hc-hint">Link a local git repository so Hill Climb can sync `.hillclimb/`, run verifiers, and dispatch climbs.</p>
-            <div className="hc-field" style={{ marginTop: 10 }}>
-              <label htmlFor="hc-new-proj-name">Project name</label>
-              <input
-                id="hc-new-proj-name"
-                autoFocus
-                value={newProjName}
-                onChange={(e) => setNewProjName(e.target.value)}
-                placeholder="e.g. my-app"
-              />
-            </div>
-            <div className="hc-field" style={{ marginTop: 10 }}>
-              <label htmlFor="hc-new-proj-dir">Repository path</label>
-              <input
-                id="hc-new-proj-dir"
-                value={newProjDir}
-                onChange={(e) => setNewProjDir(e.target.value)}
-                placeholder="/path/to/my-repo"
-              />
-            </div>
-            <div className="hill-modal-footer">
-              <button type="button" className="hc-btn" onClick={() => setAddProjectOpen(false)}>
-                Cancel
-              </button>
-              <button type="submit" className="hc-btn hc-btn-primary" disabled={busy}>
-                Save project
-              </button>
-            </div>
-          </form>
-        </div>
-      ) : null}
-
-      {lintReport ? (
-        <div
-          className="hill-modal-backdrop"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Contract lint report"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setLintReport(null);
-          }}
-        >
-          <div className="hill-modal">
-            <h2>
-              Contract Lint — {lintReport.passed ? "Passed" : `${lintReport.errorCount} error(s)`} ·{" "}
-              {lintReport.warningCount} warning(s)
-            </h2>
-            {lintReport.findings.length === 0 ? (
-              <p>All 22 rubric rules passed with no findings.</p>
-            ) : (
-              <div className="hill-lint-list">
-                {lintReport.findings.map((f) => (
-                  <div key={f.id} className="hill-lint-item">
-                    <strong>
-                      [{f.severity}] {f.checkCode} ({f.itemKey})
-                    </strong>{" "}
-                    — {f.checkTitle}
-                    <div>{f.issue}</div>
-                    {f.proposed ? <div className="hc-hint">Proposed: {f.proposed}</div> : null}
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className="hill-modal-footer">
-              <button type="button" className="hc-btn hc-btn-primary" autoFocus onClick={() => setLintReport(null)}>
-                Close
-              </button>
-            </div>
+      <NativeModal
+        open={addProjectOpen}
+        title="Link a local repository"
+        onClose={() => setAddProjectOpen(false)}
+        footer={
+          <>
+            <button type="button" className="hc-btn" onClick={() => setAddProjectOpen(false)}>
+              Cancel
+            </button>
+            <button type="submit" form="hc-add-project-form" className="hc-btn hc-btn-primary" disabled={busy}>
+              Link repository
+            </button>
+          </>
+        }
+      >
+        <form id="hc-add-project-form" onSubmit={(e) => void handleRegisterProject(e)} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <p className="hc-hint">Link a git checkout so Hill Climb can track climbs, sync `.hillclimb/`, and run verifiers.</p>
+          <div className="hc-field">
+            <label htmlFor="hc-new-proj-name">Display name</label>
+            <input
+              id="hc-new-proj-name"
+              autoFocus
+              value={newProjName}
+              onChange={(e) => setNewProjName(e.target.value)}
+              placeholder="e.g. Checkout App"
+            />
           </div>
-        </div>
-      ) : null}
+          <div className="hc-field">
+            <label htmlFor="hc-new-proj-dir">Repository path</label>
+            <input
+              id="hc-new-proj-dir"
+              value={newProjDir}
+              onChange={(e) => setNewProjDir(e.target.value)}
+              placeholder="/path/to/my-repo"
+            />
+          </div>
+        </form>
+      </NativeModal>
+
+      <NativeModal
+        open={lintReport !== null}
+        title={
+          lintReport
+            ? lintReport.passed
+              ? "Contract quality — All clear"
+              : `Contract quality — ${lintReport.errorCount} error(s), ${lintReport.warningCount} warning(s)`
+            : "Contract quality"
+        }
+        onClose={() => setLintReport(null)}
+        footer={
+          <button type="button" className="hc-btn hc-btn-primary" autoFocus onClick={() => setLintReport(null)}>
+            Close
+          </button>
+        }
+      >
+        {lintReport ? (
+          lintReport.findings.length === 0 ? (
+            <p>All 22 rubric rules passed with zero findings.</p>
+          ) : (
+            <div className="hill-lint-list">
+              {lintReport.findings.map((f) => (
+                <div key={f.id} className="hill-lint-item">
+                  <strong>
+                    [{f.severity}] {f.checkCode} ({f.itemKey})
+                  </strong>{" "}
+                  — {f.checkTitle}
+                  <div>{f.issue}</div>
+                  {f.proposed ? <div className="hc-hint">Suggestion: {f.proposed}</div> : null}
+                </div>
+              ))}
+            </div>
+          )
+        ) : null}
+      </NativeModal>
     </main>
   );
 }

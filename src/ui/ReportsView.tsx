@@ -227,9 +227,9 @@ export function ReportsView(props: ReportsViewProps): JSX.Element {
     <section className="pf hc-reports" aria-label="Reports and Artifacts">
       <header className="pf-head">
         <div>
-          <h2 className="pf-title">Reports &amp; Artifacts</h2>
+          <h2 className="pf-title">Reports</h2>
           <p className="pf-sub">
-            Evidence-backed Markdown reports with citations, revision history, locks, and shareable HTML snapshots.
+            Generate, edit, and export evidence-backed Markdown and HTML updates.
           </p>
         </div>
         <div className="pf-actions">
@@ -271,7 +271,7 @@ export function ReportsView(props: ReportsViewProps): JSX.Element {
       <div className="pf-card hc-report-gen">
         <div className="pf-row">
           <label className="pf-label" htmlFor="hc-rep-tpl">
-            Generate from live tree
+            Template
           </label>
           <select
             id="hc-rep-tpl"
@@ -312,7 +312,7 @@ export function ReportsView(props: ReportsViewProps): JSX.Element {
             </select>
           ) : null}
           <button type="button" className="pf-btn pf-btn-primary" disabled={busy !== null} onClick={() => void handleGenerate()}>
-            {busy === "generate" ? "Generating…" : "Generate"}
+            {busy === "generate" ? "Generating…" : "Generate report"}
           </button>
         </div>
       </div>
@@ -348,7 +348,7 @@ export function ReportsView(props: ReportsViewProps): JSX.Element {
       <div className="pf-flows">
         <aside className="pf-flow-list" aria-label="Saved reports">
           <div className="pf-row pf-between">
-            <h3 className="pf-section-title">Artifacts ({filtered.length})</h3>
+            <h3 className="pf-section-title">Saved reports ({filtered.length})</h3>
             {folders.length > 1 ? (
               <select
                 aria-label="Filter folder"

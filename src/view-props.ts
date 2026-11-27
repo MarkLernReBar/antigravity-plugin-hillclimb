@@ -216,4 +216,5 @@ export interface ViewProps {
   onDeleteScope?: (id: string) => Promise<void>
   onOpenFlow?: (flowName: string) => void
   onOpenInbox?: () => void
+  onOpenImport?: () => void
 }

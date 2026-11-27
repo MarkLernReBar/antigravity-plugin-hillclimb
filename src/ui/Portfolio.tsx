@@ -1016,30 +1016,25 @@ function Inbox({
     <>
       {changes.length === 0 && open.length === 0 && pendingFlowProposals.length === 0 ? (
         <Empty
-          title="Nothing is waiting on you."
-          body="Agent-proposed contract edits, flow updates, and open questions land here for approval or answers. They appear the moment an agent acts."
+          title="Nothing needs your decision right now."
+          body="Proposed contract edits, visual flow updates, and agent questions appear here for your approval."
         >
           {data.next[0] !== undefined && (
             <button type="button" className="pf-btn" onClick={() => select(data.next[0] ?? null)}>
-              Open next ranked outcome: {data.next[0]}
+              Inspect next outcome: {data.next[0]}
             </button>
           )}
         </Empty>
       ) : (
         <>
           <p className="pf-muted pf-small">
-            Shortcuts: press <code>1</code>–<code>9</code> to answer top multiple-choice question · <code>a</code> approve /{" "}
-            <code>r</code> reject top contract change.
+            Shortcuts: <code>1</code>–<code>9</code> answer top question · <code>a</code> approve · <code>r</code> reject
           </p>
           {changes.length > 0 && (
             <section className="pf-section" aria-labelledby="pf-changes-title">
               <h3 className="pf-section-title" id="pf-changes-title">
-                Contract changes <span className="pf-count">{changes.length}</span>
+                Proposed edits <span className="pf-count">{changes.length}</span>
               </h3>
-              <p className="pf-muted pf-small">
-                Approve applies the proposed contract to the outcome; reject keeps the current version. The server checks the base
-                version at the moment of approval.
-              </p>
               <div className="pf-stack">
                 {changes.map((change) => (
                   <ChangeCard
@@ -1234,21 +1229,10 @@ function Roadmap({
 
   return (
     <>
-      <div className="pf-section-head">
-        <div>
-          <h3 className="pf-section-title">Release readiness</h3>
-          <p className="pf-muted pf-small">
-            Ready means verified at the current contract version in track <strong>{track}</strong>. Only verified keys count as
-            ready; the server owns what a release may contain.
-          </p>
-        </div>
-        <TrackChips data={data} track={track} chooseTrack={chooseTrack} />
-      </div>
-
       {releases.length === 0 ? (
         <Empty
           title="No releases yet."
-          body="Pick the outcomes that belong in a release below, name the scenario, and create the first release. Readiness updates as evidence lands."
+          body="Select outcomes below to plan your first release or promote verified work to a new track."
         />
       ) : (
         <>
@@ -1457,369 +1441,361 @@ function Roadmap({
         </>
       )}
 
-      <section className="pf-section" aria-labelledby="pf-pick-title">
-        <div className="pf-section-head">
-          <div>
-            <h3 className="pf-section-title" id="pf-pick-title">
-              Selected keys <span className="pf-count">{picked.length}</span>
-            </h3>
-            <p className="pf-muted pf-small">Selection drives both track promotion and the new release.</p>
+      <details className="pf-disclosure pf-editor" open={releases.length === 0}>
+        <summary>
+          + New release or promote track{picked.length > 0 ? ` (${picked.length} selected)` : ""}
+        </summary>
+        <section className="pf-section" aria-labelledby="pf-pick-title">
+          <div className="pf-section-head">
+            <div>
+              <h3 className="pf-section-title" id="pf-pick-title">
+                Pick outcomes <span className="pf-count">{picked.length}</span>
+              </h3>
+              <p className="pf-muted pf-small">Choose outcomes for a new release or track promotion.</p>
+            </div>
+            <div className="pf-actions">
+              <button type="button" className="pf-btn pf-btn-ghost" onClick={addAllReady} disabled={ranked.length === 0}>
+                Add ready
+              </button>
+              <button type="button" className="pf-btn pf-btn-ghost" onClick={selectAll} disabled={ranked.length === 0}>
+                Select all
+              </button>
+              <button type="button" className="pf-btn pf-btn-ghost" onClick={() => setPicked([])} disabled={picked.length === 0}>
+                Clear
+              </button>
+            </div>
           </div>
-          <div className="pf-actions">
-            <button type="button" className="pf-btn pf-btn-ghost" onClick={addAllReady} disabled={ranked.length === 0}>
-              Add all ready
-            </button>
-            <button type="button" className="pf-btn pf-btn-ghost" onClick={selectAll} disabled={ranked.length === 0}>
-              Select all
-            </button>
-            <button type="button" className="pf-btn pf-btn-ghost" onClick={() => setPicked([])} disabled={picked.length === 0}>
-              Clear
-            </button>
-          </div>
-        </div>
 
-        {ranked.length === 0 ? (
-          <Empty
-            title="Nothing ranked in this track."
-            body="A charter, goal and outcome come first. Once outcomes exist they appear here in rank order, with their verification signal."
-          />
-        ) : (
-          <ul className="pf-keys">
-            {ranked.map((row, idx) => {
-              const outcome = outcomes.get(row.key);
-              const info = signalInfo(row.signal);
-              return (
-                <li key={row.key} className={`pf-key${selected.has(row.key) ? " is-selected" : ""}`}>
-                  <label className="pf-key-label">
-                    <input type="checkbox" checked={selected.has(row.key)} onChange={() => toggle(row.key)} />
-                    <span className="pf-key-body">
-                      <span className="pf-key-title">{outcome?.title ?? row.key}</span>
-                      <span className="pf-muted pf-small pf-key-meta">
-                        #{idx + 1} · <code>{row.key}</code>
-                        {row.blockedBy.length > 0 ? ` · blocked by ${row.blockedBy.join(", ")}` : ""}
+          {ranked.length === 0 ? (
+            <Empty
+              title="No outcomes in this track yet."
+              body="Add goals and outcomes in the Goals view first."
+            />
+          ) : (
+            <ul className="pf-keys">
+              {ranked.map((row, idx) => {
+                const outcome = outcomes.get(row.key);
+                const info = signalInfo(row.signal);
+                return (
+                  <li key={row.key} className={`pf-key${selected.has(row.key) ? " is-selected" : ""}`}>
+                    <label className="pf-key-label">
+                      <input type="checkbox" checked={selected.has(row.key)} onChange={() => toggle(row.key)} />
+                      <span className="pf-key-body">
+                        <span className="pf-key-title">{outcome?.title ?? row.key}</span>
+                        <span className="pf-muted pf-small pf-key-meta">
+                          #{idx + 1} · <code>{row.key}</code>
+                          {row.blockedBy.length > 0 ? ` · blocked by ${row.blockedBy.join(", ")}` : ""}
+                        </span>
                       </span>
-                    </span>
-                  </label>
-                  <SignalBadge signal={row.signal} />
-                  {!info.ready ? <span className="pf-muted pf-small pf-key-note">{info.note}</span> : null}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
+                    </label>
+                    <SignalBadge signal={row.signal} />
+                    {!info.ready ? <span className="pf-muted pf-small pf-key-note">{info.note}</span> : null}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
 
-      <div className="pf-cols">
-        <section className="pf-card" aria-labelledby="pf-promote-title">
-          <h3 className="pf-card-title" id="pf-promote-title">
-            Promote a track
-          </h3>
-          <p className="pf-muted pf-small">
-            Preview what the cutover would do per key, then promote the selection into that track. The server re-checks every key
-            and records evidence only where the current version is verified.
-          </p>
-          <div className="pf-field">
-            <label className="pf-label" htmlFor="pf-track-name">
-              New track name
-            </label>
-            <input
-              id="pf-track-name"
-              className="pf-input"
-              value={newTrack}
-              placeholder="release-2026-11"
-              onChange={(event) => setNewTrack(event.target.value)}
-            />
-            {newTrack.trim() !== "" && !KEY_PATTERN.test(newTrack.trim()) && (
-              <p className="pf-hint">Letters, digits, dash and underscore; must start with a letter or digit.</p>
+        <div className="pf-cols">
+          <section className="pf-card" aria-labelledby="pf-release-create-title">
+            <h3 className="pf-card-title" id="pf-release-create-title">
+              Create release
+            </h3>
+            <p className="pf-muted pf-small">{picked.length} outcome{picked.length === 1 ? "" : "s"} selected.</p>
+            <div className="pf-field">
+              <label className="pf-label" htmlFor="pf-release-name">
+                Name
+              </label>
+              <input
+                id="pf-release-name"
+                className="pf-input"
+                value={releaseName}
+                placeholder="November cut"
+                onChange={(event) => setReleaseName(event.target.value)}
+              />
+            </div>
+            <div className="pf-grid">
+              <div className="pf-field">
+                <label className="pf-label" htmlFor="pf-release-date">
+                  Target date
+                </label>
+                <input
+                  id="pf-release-date"
+                  className="pf-input"
+                  type="date"
+                  value={releaseDate}
+                  onChange={(event) => setReleaseDate(event.target.value)}
+                />
+              </div>
+              <div className="pf-field">
+                <label className="pf-label" htmlFor="pf-release-scenario">
+                  Scenario
+                </label>
+                <input
+                  id="pf-release-scenario"
+                  className="pf-input"
+                  value={releaseScenario}
+                  placeholder="baseline"
+                  onChange={(event) => setReleaseScenario(event.target.value)}
+                />
+              </div>
+            </div>
+            {picked.length > 0 && (
+              <div className="pf-selected" aria-label="Selected keys">
+                {picked.map((key) => (
+                  <span className="pf-selected-chip" key={key}>
+                    {outcomes.get(key)?.title ?? key}
+                  </span>
+                ))}
+              </div>
             )}
-          </div>
-          <div className="pf-field">
-            <label className="pf-label" htmlFor="pf-track-description">
-              Description
-            </label>
-            <input
-              id="pf-track-description"
-              className="pf-input"
-              value={description}
-              placeholder="What this track verifies"
-              onChange={(event) => setDescription(event.target.value)}
-            />
-          </div>
-          <div className="pf-actions">
-            <button
-              type="button"
-              className="pf-btn"
-              disabled={busy !== null || picked.length === 0 || !KEY_PATTERN.test(newTrack.trim())}
-              onClick={() => {
-                const name = newTrack.trim();
-                void run("preview", async () => {
-                  const rows = await preview(name, picked);
-                  setPreviewState({ signature, rows });
-                });
-              }}
-            >
-              {busy === "preview" ? "Previewing…" : "Preview promotion"}
-            </button>
-            <button
-              type="button"
-              className="pf-btn pf-btn-primary"
-              disabled={busy !== null || currentPreview === null || picked.length === 0}
-              title={currentPreview === null ? "Preview the selection first" : "Promote the previewed selection"}
-              onClick={() => {
-                const name = newTrack.trim();
-                void run(
-                  "promote",
-                  async () => {
-                    await act({ op: "promote_track", name, keys: picked });
-                  },
-                  `Promoted ${picked.length} key${picked.length === 1 ? "" : "s"} into ${name}.`,
-                ).then((ok) => {
-                  if (ok) setPreviewState(null);
-                });
-              }}
-            >
-              {busy === "promote" ? "Promoting…" : `Promote ${picked.length} selected`}
-            </button>
-            {description.trim() !== "" && (
+            <div className="pf-actions">
               <button
                 type="button"
-                className="pf-btn pf-btn-ghost"
-                disabled={busy !== null || !KEY_PATTERN.test(newTrack.trim()) || description.trim() === ""}
+                className="pf-btn pf-btn-primary"
+                disabled={
+                  busy !== null ||
+                  picked.length === 0 ||
+                  releaseName.trim() === "" ||
+                  releaseScenario.trim() === "" ||
+                  releaseDate === ""
+                }
+                onClick={() => {
+                  const name = releaseName.trim();
+                  void run(
+                    "create-release",
+                    async () => {
+                      await act({
+                        op: "create_release",
+                        name,
+                        keys: picked,
+                        date: releaseDate,
+                        scenario: releaseScenario.trim(),
+                      });
+                    },
+                    `Release ${name} created.`,
+                  ).then((ok) => {
+                    if (ok) {
+                      setReleaseName("");
+                      setPicked([]);
+                    }
+                  });
+                }}
+              >
+                {busy === "create-release" ? "Creating…" : "Create release"}
+              </button>
+            </div>
+            {picked.length === 0 && <p className="pf-hint">Select at least one outcome above first.</p>}
+          </section>
+
+          <section className="pf-card" aria-labelledby="pf-promote-title">
+            <h3 className="pf-card-title" id="pf-promote-title">
+              Promote to track
+            </h3>
+            <p className="pf-muted pf-small">
+              Preview which selected outcomes are verified, then promote them into a track.
+            </p>
+            <div className="pf-field">
+              <label className="pf-label" htmlFor="pf-track-name">
+                Target track name
+              </label>
+              <input
+                id="pf-track-name"
+                className="pf-input"
+                value={newTrack}
+                placeholder="release-2026-11"
+                onChange={(event) => setNewTrack(event.target.value)}
+              />
+              {newTrack.trim() !== "" && !KEY_PATTERN.test(newTrack.trim()) && (
+                <p className="pf-hint">Letters, digits, dash and underscore; must start with a letter or digit.</p>
+              )}
+            </div>
+            <div className="pf-field">
+              <label className="pf-label" htmlFor="pf-track-description">
+                Description (optional)
+              </label>
+              <input
+                id="pf-track-description"
+                className="pf-input"
+                value={description}
+                placeholder="What this track verifies"
+                onChange={(event) => setDescription(event.target.value)}
+              />
+            </div>
+            <div className="pf-actions">
+              <button
+                type="button"
+                className="pf-btn"
+                disabled={busy !== null || picked.length === 0 || !KEY_PATTERN.test(newTrack.trim())}
+                onClick={() => {
+                  const name = newTrack.trim();
+                  void run("preview", async () => {
+                    const rows = await preview(name, picked);
+                    setPreviewState({ signature, rows });
+                  });
+                }}
+              >
+                {busy === "preview" ? "Previewing…" : "Preview promotion"}
+              </button>
+              <button
+                type="button"
+                className="pf-btn pf-btn-primary"
+                disabled={busy !== null || currentPreview === null || picked.length === 0}
+                title={currentPreview === null ? "Preview the selection first" : "Promote the previewed selection"}
                 onClick={() => {
                   const name = newTrack.trim();
                   void run(
-                    "create-track",
+                    "promote",
                     async () => {
-                      await act({ op: "create_track", name, description: description.trim() });
+                      await act({ op: "promote_track", name, keys: picked });
                     },
-                    `Track ${name} created.`,
-                  );
+                    `Promoted ${picked.length} key${picked.length === 1 ? "" : "s"} into ${name}.`,
+                  ).then((ok) => {
+                    if (ok) setPreviewState(null);
+                  });
                 }}
               >
-                Create empty track
+                {busy === "promote" ? "Promoting…" : `Promote ${picked.length} selected`}
               </button>
-            )}
-          </div>
+              {description.trim() !== "" && (
+                <button
+                  type="button"
+                  className="pf-btn pf-btn-ghost"
+                  disabled={busy !== null || !KEY_PATTERN.test(newTrack.trim()) || description.trim() === ""}
+                  onClick={() => {
+                    const name = newTrack.trim();
+                    void run(
+                      "create-track",
+                      async () => {
+                        await act({ op: "create_track", name, description: description.trim() });
+                      },
+                      `Track ${name} created.`,
+                    );
+                  }}
+                >
+                  Create empty track
+                </button>
+              )}
+            </div>
 
-          {currentPreview !== null && (
-            <div className="pf-preview">
-              <p className="pf-label">Preview for {newTrack.trim()}</p>
+            {currentPreview !== null && (
+              <div className="pf-preview">
+                <p className="pf-label">Preview for {newTrack.trim()}</p>
+                <table className="pf-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Outcome</th>
+                      <th scope="col">Ready</th>
+                      <th scope="col">From</th>
+                      <th scope="col">To</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {currentPreview.map((row) => (
+                      <tr key={row.key}>
+                        <td>
+                          <button type="button" className="pf-link" onClick={() => select(row.key)}>
+                            {row.key}
+                          </button>
+                        </td>
+                        <td>
+                          <span className={`pf-badge pf-tone-${row.ready ? "ready" : "warn"}`}>{row.ready ? "ready" : "not ready"}</span>
+                        </td>
+                        <td className="pf-muted">{row.from}</td>
+                        <td>{row.to}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="pf-muted pf-small">
+                  {currentPreview.filter((row) => row.ready).length} of {currentPreview.length} ready.
+                </p>
+              </div>
+            )}
+          </section>
+        </div>
+      </details>
+
+      {releases.length >= 2 && comparison !== null ? (
+        <details className="pf-disclosure">
+          <summary>Compare two releases</summary>
+          <section className="pf-section" aria-labelledby="pf-compare-title">
+            <div className="pf-section-head">
+              <h3 className="pf-section-title" id="pf-compare-title">
+                Compare scenarios
+              </h3>
+              <div className="pf-row">
+                <label className="pf-sr" htmlFor="pf-compare-a">
+                  First release
+                </label>
+                <select
+                  id="pf-compare-a"
+                  className="pf-select"
+                  value={resolvedAId}
+                  onChange={(event) => setCompareAId(event.target.value)}
+                >
+                  {releases.map(({ release }, index) => (
+                    <option key={releaseIds[index]} value={releaseIds[index]}>
+                      {release.name} · {release.scenario}
+                    </option>
+                  ))}
+                </select>
+                <span className="pf-muted">vs</span>
+                <label className="pf-sr" htmlFor="pf-compare-b">
+                  Second release
+                </label>
+                <select
+                  id="pf-compare-b"
+                  className="pf-select"
+                  value={resolvedBId}
+                  onChange={(event) => setCompareBId(event.target.value)}
+                >
+                  {releases.map(({ release }, index) => (
+                    <option key={releaseIds[index]} value={releaseIds[index]}>
+                      {release.name} · {release.scenario}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="pf-card">
+              <p className="pf-muted pf-small">
+                {releaseA?.name}: {comparison.readyA} ready · {releaseB?.name}: {comparison.readyB} ready · {comparison.shared}{" "}
+                shared, {comparison.onlyB} only in {releaseB?.scenario ?? "B"}, {comparison.onlyA} only in{" "}
+                {releaseA?.scenario ?? "A"}
+              </p>
               <table className="pf-table">
                 <thead>
                   <tr>
                     <th scope="col">Outcome</th>
-                    <th scope="col">Ready</th>
-                    <th scope="col">From</th>
-                    <th scope="col">To</th>
+                    <th scope="col">{releaseA?.scenario ?? "A"}</th>
+                    <th scope="col">{releaseB?.scenario ?? "B"}</th>
+                    <th scope="col">Change</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {currentPreview.map((row) => (
+                  {comparison.rows.map((row) => (
                     <tr key={row.key}>
                       <td>
                         <button type="button" className="pf-link" onClick={() => select(row.key)}>
-                          {row.key}
+                          {row.title}
                         </button>
+                        <span className="pf-muted pf-small"> {row.key}</span>
                       </td>
+                      <td>{row.a === null ? <span className="pf-muted">absent</span> : <SignalBadge signal={row.a.signal} />}</td>
+                      <td>{row.b === null ? <span className="pf-muted">absent</span> : <SignalBadge signal={row.b.signal} />}</td>
                       <td>
-                        <span className={`pf-badge pf-tone-${row.ready ? "ready" : "warn"}`}>{row.ready ? "ready" : "not ready"}</span>
+                        <span className={`pf-change pf-change-${row.change}`}>{row.change}</span>
                       </td>
-                      <td className="pf-muted">{row.from}</td>
-                      <td>{row.to}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              <p className="pf-muted pf-small">
-                {currentPreview.filter((row) => row.ready).length} of {currentPreview.length} ready. Promotion skips keys the
-                server cannot verify at their current version.
-              </p>
-              {data.tracks.some((entry) => entry.name === newTrack.trim()) === false && (
-                <p className="pf-hint">This track does not exist yet; promotion creates it.</p>
-              )}
             </div>
-          )}
-        </section>
-
-        <section className="pf-card" aria-labelledby="pf-release-create-title">
-          <h3 className="pf-card-title" id="pf-release-create-title">
-            Create a release
-          </h3>
-          <p className="pf-muted pf-small">The selected {picked.length} key{picked.length === 1 ? "" : "s"} become the release scope.</p>
-          <div className="pf-field">
-            <label className="pf-label" htmlFor="pf-release-name">
-              Name
-            </label>
-            <input
-              id="pf-release-name"
-              className="pf-input"
-              value={releaseName}
-              placeholder="November cut"
-              onChange={(event) => setReleaseName(event.target.value)}
-            />
-          </div>
-          <div className="pf-grid">
-            <div className="pf-field">
-              <label className="pf-label" htmlFor="pf-release-date">
-                Date
-              </label>
-              <input
-                id="pf-release-date"
-                className="pf-input"
-                type="date"
-                value={releaseDate}
-                onChange={(event) => setReleaseDate(event.target.value)}
-              />
-            </div>
-            <div className="pf-field">
-              <label className="pf-label" htmlFor="pf-release-scenario">
-                Scenario
-              </label>
-              <input
-                id="pf-release-scenario"
-                className="pf-input"
-                value={releaseScenario}
-                placeholder="baseline"
-                onChange={(event) => setReleaseScenario(event.target.value)}
-              />
-            </div>
-          </div>
-          {picked.length > 0 && (
-            <div className="pf-selected" aria-label="Selected keys">
-              {picked.map((key) => (
-                <span className="pf-selected-chip" key={key}>
-                  {outcomes.get(key)?.title ?? key}
-                </span>
-              ))}
-            </div>
-          )}
-          <div className="pf-actions">
-            <button
-              type="button"
-              className="pf-btn pf-btn-primary"
-              disabled={
-                busy !== null ||
-                picked.length === 0 ||
-                releaseName.trim() === "" ||
-                releaseScenario.trim() === "" ||
-                releaseDate === ""
-              }
-              onClick={() => {
-                const name = releaseName.trim();
-                void run(
-                  "create-release",
-                  async () => {
-                    await act({
-                      op: "create_release",
-                      name,
-                      keys: picked,
-                      date: releaseDate,
-                      scenario: releaseScenario.trim(),
-                    });
-                  },
-                  `Release ${name} created.`,
-                ).then((ok) => {
-                  if (ok) {
-                    setReleaseName("");
-                    setPicked([]);
-                  }
-                });
-              }}
-            >
-              {busy === "create-release" ? "Creating…" : "Create release"}
-            </button>
-          </div>
-          {picked.length === 0 && <p className="pf-hint">Select at least one key above first.</p>}
-        </section>
-      </div>
-
-      <section className="pf-section" aria-labelledby="pf-compare-title">
-        <div className="pf-section-head">
-          <div>
-            <h3 className="pf-section-title" id="pf-compare-title">
-              Compare scenarios
-            </h3>
-            <p className="pf-muted pf-small">Two releases, side by side, scored against the current snapshot.</p>
-          </div>
-          {releases.length >= 2 && (
-            <div className="pf-row">
-              <label className="pf-sr" htmlFor="pf-compare-a">
-                First release
-              </label>
-              <select
-                id="pf-compare-a"
-                className="pf-select"
-                value={resolvedAId}
-                onChange={(event) => setCompareAId(event.target.value)}
-              >
-                {releases.map(({ release }, index) => (
-                  <option key={releaseIds[index]} value={releaseIds[index]}>
-                    {release.name} · {release.scenario}
-                  </option>
-                ))}
-              </select>
-              <span className="pf-muted">vs</span>
-              <label className="pf-sr" htmlFor="pf-compare-b">
-                Second release
-              </label>
-              <select
-                id="pf-compare-b"
-                className="pf-select"
-                value={resolvedBId}
-                onChange={(event) => setCompareBId(event.target.value)}
-              >
-                {releases.map(({ release }, index) => (
-                  <option key={releaseIds[index]} value={releaseIds[index]}>
-                    {release.name} · {release.scenario}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-        </div>
-
-        {comparison === null ? (
-          <Empty
-            title="Two releases are needed to compare."
-            body="Create releases with different scenario names — for example a baseline and a candidate — then compare what each one can actually ship."
-          />
-        ) : (
-          <div className="pf-card">
-            <p className="pf-muted pf-small">
-              {releaseA?.name}: {comparison.readyA} ready · {releaseB?.name}: {comparison.readyB} ready · {comparison.shared}{" "}
-              shared, {comparison.onlyB} only in {releaseB?.scenario ?? "B"}, {comparison.onlyA} only in{" "}
-              {releaseA?.scenario ?? "A"}
-            </p>
-            <table className="pf-table">
-              <thead>
-                <tr>
-                  <th scope="col">Outcome</th>
-                  <th scope="col">{releaseA?.scenario ?? "A"}</th>
-                  <th scope="col">{releaseB?.scenario ?? "B"}</th>
-                  <th scope="col">Change</th>
-                </tr>
-              </thead>
-              <tbody>
-                {comparison.rows.map((row) => (
-                  <tr key={row.key}>
-                    <td>
-                      <button type="button" className="pf-link" onClick={() => select(row.key)}>
-                        {row.title}
-                      </button>
-                      <span className="pf-muted pf-small"> {row.key}</span>
-                    </td>
-                    <td>{row.a === null ? <span className="pf-muted">absent</span> : <SignalBadge signal={row.a.signal} />}</td>
-                    <td>{row.b === null ? <span className="pf-muted">absent</span> : <SignalBadge signal={row.b.signal} />}</td>
-                    <td>
-                      <span className={`pf-change pf-change-${row.change}`}>{row.change}</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+          </section>
+        </details>
+      ) : null}
     </>
   );
 }
@@ -2683,13 +2659,11 @@ function Flows({
               </ol>
             )}
 
-            <section className="pf-section" aria-labelledby="pf-pins-title">
-              <h4 className="pf-section-title" id="pf-pins-title">
-                Comments by criterion
-              </h4>
-              {groups.length === 0 ? (
-                <p className="pf-muted pf-small">No pins yet. Use “Annotate / Pin” on a frame.</p>
-              ) : (
+            {groups.length > 0 ? (
+              <section className="pf-section" aria-labelledby="pf-pins-title">
+                <h4 className="pf-section-title" id="pf-pins-title">
+                  Annotations by check
+                </h4>
                 <div className="pf-stack">
                   {groups.map((group) => (
                     <article key={group.criterionId} className="pf-card">
@@ -2725,13 +2699,13 @@ function Flows({
                     </article>
                   ))}
                 </div>
-              )}
-            </section>
+              </section>
+            ) : null}
           </>
         )}
 
         <details className="pf-disclosure pf-editor" open={data.flows.length === 0}>
-          <summary>New flow</summary>
+          <summary>+ New flow</summary>
           <form
             className="pf-stack"
             onSubmit={(event) => {
@@ -2875,15 +2849,21 @@ export function Portfolio({
 }: PortfolioProps): ReactNode {
   const { busy, error, notice, run } = useAction(act);
   const counts = inboxCounts(data);
-  const titles = { inbox: "Inbox", roadmap: "Roadmap", flows: "Flows" } as const;
+  const totalDecisions = counts.changes + counts.flowProposals + counts.questions;
+  const titles = { inbox: "Decisions", roadmap: "Roadmap", flows: "Flows" } as const;
   const subtitles = {
-    inbox: `${counts.changes} pending contract edit${counts.changes === 1 ? "" : "s"} · ${counts.flowProposals} flow proposal${
-      counts.flowProposals === 1 ? "" : "s"
-    } · ${counts.questions} open question${counts.questions === 1 ? "" : "s"}`,
-    roadmap: `${data.releases.length} release${data.releases.length === 1 ? "" : "s"} · ${data.ranked.length} ranked outcome${
-      data.ranked.length === 1 ? "" : "s"
-    }`,
-    flows: `${data.flows.length} flow${data.flows.length === 1 ? "" : "s"} · sandboxed HTML & screenshot previews`,
+    inbox:
+      totalDecisions === 0
+        ? "All caught up"
+        : [
+            counts.changes > 0 ? `${counts.changes} proposed edit${counts.changes === 1 ? "" : "s"}` : null,
+            counts.flowProposals > 0 ? `${counts.flowProposals} flow update${counts.flowProposals === 1 ? "" : "s"}` : null,
+            counts.questions > 0 ? `${counts.questions} open question${counts.questions === 1 ? "" : "s"}` : null,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+    roadmap: `${data.releases.length} release${data.releases.length === 1 ? "" : "s"} · track ${track}`,
+    flows: `${data.flows.length} visual walkthrough${data.flows.length === 1 ? "" : "s"} tied to acceptance checks`,
   } as const;
 
   return (

@@ -838,6 +838,24 @@ function OutlineList(props: OutlineProps): JSX.Element {
     const info = meta.get(key)
     const signal = (recorded ? recorded.get(key) : info?.signal) ?? 'unverified'
     const open = !collapsed.has(key)
+    const statusLabel =
+      info?.availability === 'blocked'
+        ? 'paused'
+        : info?.availability === 'deferred'
+          ? 'deferred'
+          : signal === 'unverified' && info?.next !== null && info?.next !== undefined
+            ? `next #${info.next}`
+            : signal === 'unverified'
+              ? 'open'
+              : signal
+    const badgeClass =
+      info?.availability === 'blocked'
+        ? 'hc-chip hc-chip-warn'
+        : info?.availability === 'deferred'
+          ? 'hc-chip'
+          : signal === 'unverified' && info?.next !== null && info?.next !== undefined
+            ? 'hc-chip hc-chip-next'
+            : `hc-badge hc-signal-${signal}`
     return (
       <div className={`hc-outline-row hc-outline-${kind}${selected === key ? ' is-selected' : ''}`}>
         {hasKids ? (
@@ -860,44 +878,22 @@ function OutlineList(props: OutlineProps): JSX.Element {
           aria-pressed={selected === key}
           aria-label={`${kind} ${key}: ${title}. ${signal}`}
         >
-          <span className="hc-outline-rank" title={info?.sectionNumber ? `Section ${info.sectionNumber}` : undefined}>
-            {info?.sectionNumber ?? (kind === 'outcome' && info?.ordinal !== null && info?.ordinal !== undefined ? `#${info.ordinal}` : '—')}
-          </span>
-          <span className="hc-outline-key">{key}</span>
+          {kind === 'outcome' ? (
+            <span className={`hc-status-dot hc-signal-${signal}`} aria-hidden="true" />
+          ) : null}
           <span className="hc-outline-title">{title}</span>
-          <span className="hc-outline-tags">
-            {info?.next !== null && info?.next !== undefined ? <span className="hc-chip hc-chip-next">next #{info.next}</span> : null}
-            {info?.proposed === true ? <span className="hc-chip">proposed</span> : null}
-            {info?.availability === 'blocked' ? (
-              <span className="hc-chip hc-chip-warn" title={info.availabilityReason ?? 'Manually blocked'}>
-                paused
+          <span className="hc-outline-right">
+            {info?.proposed === true ? <span className="hc-chip hc-chip-warn">draft edit</span> : null}
+            {kind === 'goal' ? (
+              <span className="hc-goal-progress">
+                {info?.goalProgress && info.goalProgress.total > 0
+                  ? `${info.goalProgress.proven}/${info.goalProgress.total} verified`
+                  : 'goal'}
               </span>
-            ) : info?.availability === 'deferred' ? (
-              <span className="hc-chip" title={info.deferredUntil ? `Deferred until ${info.deferredUntil}` : 'Deferred'}>
-                deferred
-              </span>
-            ) : null}
-            {info?.blocked === true ? <span className="hc-chip hc-chip-warn">blocked</span> : null}
-            {info?.tags?.slice(0, 2).map((tag) => (
-              <span key={tag} className="hc-chip hc-tag-chip">
-                #{tag}
-              </span>
-            ))}
-            {info?.claim !== null && info?.claim !== undefined ? (
-              <span className="hc-chip" title={`Claimed by ${info.claim}`}>
-                {info.claim.slice(0, 12)}
-              </span>
-            ) : null}
+            ) : (
+              <span className={badgeClass}>{statusLabel}</span>
+            )}
           </span>
-          {kind === 'goal' ? (
-            <span className="hc-chip hc-goal-progress">
-              {info?.goalProgress && info.goalProgress.total > 0
-                ? `${info.goalProgress.proven}/${info.goalProgress.total} proven`
-                : 'goal'}
-            </span>
-          ) : (
-            <SignalBadge signal={signal} />
-          )}
         </button>
       </div>
     )
@@ -921,7 +917,17 @@ function OutlineList(props: OutlineProps): JSX.Element {
               return (
                 <li key={leaf.key} role="treeitem" aria-selected={selected === leaf.key} aria-level={depth + 2}>
                   {row(leaf.key, leaf.title, 'outcome', false)}
-                  <p className="hc-outline-story">{info?.criteria ?? 0} criteria · {info?.evidence ?? 0} evidence</p>
+                  <div className="hc-outline-sub">
+                    <code>{leaf.key}</code>
+                    <span>
+                      {info?.criteria ?? 0} {info?.criteria === 1 ? 'check' : 'checks'}
+                      {(info?.evidence ?? 0) > 0 ? ` · ${info!.evidence} proof` : ''}
+                    </span>
+                    {info?.blocked === true ? <span>· waiting on dependency</span> : null}
+                    {info?.tags?.slice(0, 3).map((tag) => (
+                      <span key={tag}>#{tag}</span>
+                    ))}
+                  </div>
                 </li>
               )
             })}
@@ -1329,11 +1335,11 @@ function ReplayBar(props: ReplayProps): JSX.Element {
 // ---------------------------------------------------------------------------
 
 export function TreeView(props: ViewProps): JSX.Element {
-  const { data, track, selected, select, act, views = [], scopes = [], onSaveView, onDeleteView, onSaveScope, onDeleteScope, onOpenInbox } = props
-  const [mode, setMode] = useState<ViewMode>(() =>
-    typeof window !== 'undefined' && window.innerWidth < 640 ? 'outline' : 'map',
-  )
-  const autoPickedMode = useRef(false)
+  const { data, track, selected, select, act, views = [], scopes = [], onSaveView, onDeleteView, onSaveScope, onDeleteScope, onOpenInbox, onOpenImport } = props
+  const [mode, setMode] = useState<ViewMode>('outline')
+  const autoPickedMode = useRef(true)
+  const filterPopRef = useRef<HTMLDivElement | null>(null)
+  const filterBtnRef = useRef<HTMLButtonElement | null>(null)
   const [query, setQuery] = useState('')
   const [signals, setSignals] = useState<Set<Signal>>(() => new Set())
   const [blockedOnly, setBlockedOnly] = useState(false)
@@ -1509,9 +1515,9 @@ export function TreeView(props: ViewProps): JSX.Element {
   }, [])
 
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>): void => {
-    if (event.button !== 0) return
+    if (mode !== 'map' || emptyTree || event.button !== 0) return
     const target = event.target as HTMLElement
-    if (target.closest('.hc-node, .hc-outline, .hc-create, .hc-replay-rail') !== null) return
+    if (target.closest('button, a, input, select, textarea, label, .hc-node, .hc-outline, .hc-create, .hc-replay-rail, .hc-empty-onboard') !== null) return
     pan.current = { x: event.clientX, y: event.clientY, tx: view.tx, ty: view.ty }
     event.currentTarget.setPointerCapture(event.pointerId)
   }
@@ -1741,38 +1747,42 @@ export function TreeView(props: ViewProps): JSX.Element {
   }, [replay, replayWindow.events])
 
   const totalOutcomes = data.outcomes.length
+  const activeFilterCount =
+    signals.size +
+    (blockedOnly ? 1 : 0) +
+    (selectedTag !== '' ? 1 : 0) +
+    (availabilityFilter !== 'all' ? 1 : 0) +
+    (!showAll ? 1 : 0) +
+    (activeScope !== null ? 1 : 0)
 
   return (
-    <section className="hc-tree" aria-label="Requirement tree">
+    <section className="hc-tree" aria-label="Goals and outcomes">
       <header className="hc-toolbar">
         <div className="hc-toolbar-row">
-          <div className="hc-title-block">
-            <h2 className="hc-title">Tree</h2>
-            <p className="hc-subtitle">
-              {data.goals.length} {data.goals.length === 1 ? 'goal' : 'goals'} · {totalOutcomes}{' '}
-              {totalOutcomes === 1 ? 'outcome' : 'outcomes'} · track <code>{track}</code>
-              {data.inbox > 0 ? ` · ${data.inbox} in the inbox` : ''}
-            </p>
+          <div style={{ flex: '1 1 200px', minWidth: 0 }}>
+            <CoverageBar coverage={coverage} replaying={recorded !== null} />
           </div>
           <div className="hc-toolbar-actions">
-            <div className="hc-segmented" role="group" aria-label="View">
-              <button
-                type="button"
-                className={mode === 'map' ? 'is-active' : ''}
-                aria-pressed={mode === 'map'}
-                onClick={() => setMode('map')}
-              >
-                Map
-              </button>
-              <button
-                type="button"
-                className={mode === 'outline' ? 'is-active' : ''}
-                aria-pressed={mode === 'outline'}
-                onClick={() => setMode('outline')}
-              >
-                Outline
-              </button>
-            </div>
+            {!emptyTree ? (
+              <div className="cl-seg" role="group" aria-label="Display mode">
+                <button
+                  type="button"
+                  className={mode === 'outline' ? 'is-active' : ''}
+                  aria-pressed={mode === 'outline'}
+                  onClick={() => setMode('outline')}
+                >
+                  List
+                </button>
+                <button
+                  type="button"
+                  className={mode === 'map' ? 'is-active' : ''}
+                  aria-pressed={mode === 'map'}
+                  onClick={() => setMode('map')}
+                >
+                  Map
+                </button>
+              </div>
+            ) : null}
             <button
               type="button"
               className="hc-btn hc-btn-primary"
@@ -1786,216 +1796,298 @@ export function TreeView(props: ViewProps): JSX.Element {
                 setCreating({ kind: data.goals.length === 0 ? 'goal' : 'outcome', goal: goalKey })
               }}
             >
-              New
+              + New
             </button>
           </div>
         </div>
 
-        <div className="hc-toolbar-row hc-filters" role="group" aria-label="Filters">
-          <label className="hc-search">
-            <span className="hc-sr-only">Filter by key or text</span>
-            <input
-              type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Filter by key or text"
-            />
-          </label>
-          <div className="hc-chips" role="group" aria-label="Signal filter">
-            {SIGNALS.map((signal) => (
-              <button
-                key={signal.id}
-                type="button"
-                className={`hc-chip hc-signal-${signal.id}${signals.has(signal.id) ? ' is-active' : ''}`}
-                aria-pressed={signals.has(signal.id)}
-                onClick={() => toggleSignal(signal.id)}
-              >
-                {signal.label}
-              </button>
-            ))}
-            <button
-              type="button"
-              className={`hc-chip${blockedOnly ? ' is-active' : ''}`}
-              aria-pressed={blockedOnly}
-              onClick={() => setBlockedOnly(!blockedOnly)}
-            >
-              Blocked
-            </button>
-          </div>
-          <label className="hc-toggle">
-            <input type="checkbox" checked={showAll} onChange={(event) => setShowAll(event.target.checked)} />
-            <span>Show all outcomes</span>
-          </label>
-          {mode === 'outline' ? (
-            <label className="hc-toggle">
-              <span className="hc-sr-only">Sort outline</span>
-              <select value={sortMode} onChange={(event) => setSortMode(event.target.value as 'rank' | 'key')} aria-label="Sort outline">
-                <option value="rank">By rank</option>
-                <option value="key">By key</option>
-              </select>
+        {!emptyTree ? (
+          <div className="hc-toolbar-row" role="group" aria-label="Search and filter">
+            <label className="hc-search">
+              <span className="hc-sr-only">Filter goals and outcomes</span>
+              <input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Filter goals and outcomes…"
+              />
             </label>
-          ) : null}
-          {replay === null ? (
-            <button type="button" className="hc-btn hc-replay-open" onClick={startReplay} disabled={replayWindow.events.length === 0}>
-              Replay <span className="hc-replay-badge">{windowKey}</span>
-            </button>
-          ) : null}
-        </div>
 
-        <div className="hc-toolbar-row hc-subfilters" role="group" aria-label="Tags, availability, saved views, and focus scopes">
-          <select
-            aria-label="Filter by availability"
-            className="hc-mini-select"
-            value={availabilityFilter}
-            onChange={(e) => setAvailabilityFilter(e.target.value as 'all' | OutcomeAvailability)}
-          >
-            <option value="all">Availability: all</option>
-            <option value="active">Active only</option>
-            <option value="blocked">Manually blocked</option>
-            <option value="deferred">Deferred</option>
-          </select>
-
-          {allTags.length > 0 ? (
-            <select
-              aria-label="Filter by tag"
-              className="hc-mini-select"
-              value={selectedTag}
-              onChange={(e) => setSelectedTag(e.target.value)}
+            <button
+              ref={filterBtnRef}
+              type="button"
+              className="hc-btn hc-filter-trigger hc-anchor-filters"
+              popoverTarget="hc-tree-filters-popover"
+              onClick={() => {
+                const pop = filterPopRef.current
+                const btn = filterBtnRef.current
+                if (!pop || !btn) return
+                if (typeof CSS !== 'undefined' && CSS.supports?.('position-area', 'block-end')) return
+                requestAnimationFrame(() => {
+                  if (!pop.matches(':popover-open')) return
+                  const r = btn.getBoundingClientRect()
+                  const pr = pop.getBoundingClientRect()
+                  pop.style.position = 'fixed'
+                  pop.style.inset = 'auto'
+                  pop.style.top = `${r.bottom + 6}px`
+                  pop.style.left = `${Math.max(8, r.right - pr.width)}px`
+                })
+              }}
             >
-              <option value="">All tags ({allTags.length})</option>
-              {allTags.map((t) => (
-                <option key={t} value={t}>
-                  #{t}
-                </option>
-              ))}
-            </select>
-          ) : null}
+              Filters
+              {activeFilterCount > 0 ? <span className="hc-filter-count">{activeFilterCount}</span> : null}
+            </button>
 
-          {scopes.length > 0 || onSaveScope ? (
-            <div className="hc-inline-group">
-              <select
-                aria-label="Focus scope"
-                className="hc-mini-select"
-                value={activeScope?.id ?? ''}
-                onChange={(e) => {
-                  const id = e.target.value
-                  setScopeFilterId(id)
-                  const chosen = scopes.find((s) => s.id === id)
-                  if (chosen && onSaveScope) {
-                    void onSaveScope({ ...chosen, active: true })
-                  } else if (!id && activeScope && onSaveScope) {
-                    void onSaveScope({ ...activeScope, active: false })
-                  }
-                }}
-              >
-                <option value="">Focus scope: none</option>
-                {scopes.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    Scope: {s.name}
-                    {s.active ? ' (active)' : ''}
-                  </option>
-                ))}
-              </select>
-              {activeScope && onDeleteScope ? (
+            <div
+              ref={filterPopRef}
+              id="hc-tree-filters-popover"
+              className="hill-popover hc-filter-popover"
+              {...({ popover: 'auto' } as Record<string, string>)}
+            >
+              <div className="hc-filter-section">
+                <span className="hc-filter-label">Status</span>
+                <div className="hc-chips" role="group" aria-label="Signal filter">
+                  {SIGNALS.map((signal) => (
+                    <button
+                      key={signal.id}
+                      type="button"
+                      className={`hc-chip hc-signal-${signal.id}${signals.has(signal.id) ? ' is-active' : ''}`}
+                      aria-pressed={signals.has(signal.id)}
+                      onClick={() => toggleSignal(signal.id)}
+                    >
+                      {signal.label}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className={`hc-chip${blockedOnly ? ' is-active' : ''}`}
+                    aria-pressed={blockedOnly}
+                    onClick={() => setBlockedOnly(!blockedOnly)}
+                  >
+                    Blocked
+                  </button>
+                </div>
+                <label className="hc-toggle">
+                  <input type="checkbox" checked={!showAll} onChange={(event) => setShowAll(!event.target.checked)} />
+                  <span>Hide already-verified outcomes</span>
+                </label>
+              </div>
+
+              <div className="hc-filter-section">
+                <span className="hc-filter-label">Availability, tags &amp; focus</span>
+                <div className="hc-inline-group">
+                  <select
+                    aria-label="Filter by availability"
+                    className="hc-mini-select"
+                    value={availabilityFilter}
+                    onChange={(e) => setAvailabilityFilter(e.target.value as 'all' | OutcomeAvailability)}
+                  >
+                    <option value="all">Availability: all</option>
+                    <option value="active">Active only</option>
+                    <option value="blocked">Paused / blocked</option>
+                    <option value="deferred">Deferred</option>
+                  </select>
+                  {allTags.length > 0 ? (
+                    <select
+                      aria-label="Filter by tag"
+                      className="hc-mini-select"
+                      value={selectedTag}
+                      onChange={(e) => setSelectedTag(e.target.value)}
+                    >
+                      <option value="">All tags ({allTags.length})</option>
+                      {allTags.map((t) => (
+                        <option key={t} value={t}>
+                          #{t}
+                        </option>
+                      ))}
+                    </select>
+                  ) : null}
+                  {mode === 'outline' ? (
+                    <select
+                      value={sortMode}
+                      className="hc-mini-select"
+                      onChange={(event) => setSortMode(event.target.value as 'rank' | 'key')}
+                      aria-label="Sort list"
+                    >
+                      <option value="rank">Sort: priority</option>
+                      <option value="key">Sort: key</option>
+                    </select>
+                  ) : null}
+                </div>
+                {scopes.length > 0 ? (
+                  <div className="hc-inline-group">
+                    <select
+                      aria-label="Focus scope"
+                      className="hc-mini-select"
+                      value={activeScope?.id ?? ''}
+                      onChange={(e) => {
+                        const id = e.target.value
+                        setScopeFilterId(id)
+                        const chosen = scopes.find((s) => s.id === id)
+                        if (chosen && onSaveScope) void onSaveScope({ ...chosen, active: true })
+                        else if (!id && activeScope && onSaveScope) void onSaveScope({ ...activeScope, active: false })
+                      }}
+                    >
+                      <option value="">Focus scope: all work</option>
+                      {scopes.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          Focus: {s.name}
+                        </option>
+                      ))}
+                    </select>
+                    {activeScope && onDeleteScope ? (
+                      <button
+                        type="button"
+                        className="hc-icon-btn"
+                        aria-label={`Delete scope ${activeScope.name}`}
+                        onClick={() => {
+                          setScopeFilterId('')
+                          void onDeleteScope(activeScope.id)
+                        }}
+                      >
+                        ×
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+
+              {(views.length > 0 || onSaveView) ? (
+                <div className="hc-filter-section">
+                  <span className="hc-filter-label">Saved views</span>
+                  {views.length > 0 ? (
+                    <div className="hc-chips">
+                      {views.map((v) => (
+                        <span key={v.id} className="hc-saved-view-pill">
+                          <button type="button" className="hc-chip" onClick={() => applySavedView(v)}>
+                            {v.name}
+                          </button>
+                          {onDeleteView ? (
+                            <button
+                              type="button"
+                              className="hc-saved-view-del"
+                              aria-label={`Delete saved view ${v.name}`}
+                              onClick={() => void onDeleteView(v.id)}
+                            >
+                              ×
+                            </button>
+                          ) : null}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                  {onSaveView ? (
+                    savingView ? (
+                      <form
+                        className="hc-inline-group"
+                        onSubmit={(e) => {
+                          e.preventDefault()
+                          const trimmed = viewNameDraft.trim()
+                          if (!trimmed) return
+                          void onSaveView(trimmed, {
+                            query: query.trim() || undefined,
+                            signals: signals.size > 0 ? [...signals] : undefined,
+                            tags: selectedTag ? [selectedTag] : undefined,
+                            blockedOnly: blockedOnly || undefined,
+                            availability: availabilityFilter !== 'all' ? [availabilityFilter] : undefined,
+                            scope: activeScope?.id ?? null,
+                            sortMode,
+                          }).then(() => {
+                            setViewNameDraft('')
+                            setSavingView(false)
+                          })
+                        }}
+                      >
+                        <input
+                          className="hc-mini-input"
+                          value={viewNameDraft}
+                          onChange={(e) => setViewNameDraft(e.target.value)}
+                          placeholder="View name…"
+                          aria-label="Saved view name"
+                        />
+                        <button type="submit" className="hc-btn hc-btn-primary">Save</button>
+                        <button type="button" className="hc-btn" onClick={() => setSavingView(false)}>Cancel</button>
+                      </form>
+                    ) : (
+                      <button type="button" className="hc-btn" onClick={() => setSavingView(true)}>
+                        Save current filters
+                      </button>
+                    )
+                  ) : null}
+                </div>
+              ) : null}
+
+              <div className="hc-filter-section">
+                <div className="hc-inline-group" style={{ justifyContent: 'space-between', width: '100%' }}>
+                  {replay === null ? (
+                    <button
+                      type="button"
+                      className="hc-btn"
+                      onClick={() => {
+                        startReplay()
+                        try { filterPopRef.current?.hidePopover?.() } catch { /* ignore */ }
+                      }}
+                      disabled={replayWindow.events.length === 0}
+                    >
+                      Replay history ({windowKey})
+                    </button>
+                  ) : (
+                    <button type="button" className="hc-btn" onClick={() => setReplay(null)}>
+                      Close replay
+                    </button>
+                  )}
+                  {activeFilterCount > 0 ? (
+                    <button
+                      type="button"
+                      className="hc-link"
+                      onClick={() => {
+                        setQuery('')
+                        setSignals(new Set())
+                        setBlockedOnly(false)
+                        setSelectedTag('')
+                        setAvailabilityFilter('all')
+                        setScopeFilterId('')
+                        setShowAll(true)
+                      }}
+                    >
+                      Reset all
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+
+            {activeScope ? (
+              <span className="hc-chip is-active">
+                Focus: {activeScope.name}{' '}
                 <button
                   type="button"
-                  className="hc-icon-btn"
-                  title="Delete focus scope"
-                  aria-label={`Delete scope ${activeScope.name}`}
+                  className="hc-saved-view-del"
+                  aria-label="Clear focus scope"
                   onClick={() => {
                     setScopeFilterId('')
-                    void onDeleteScope(activeScope.id)
+                    if (onSaveScope) void onSaveScope({ ...activeScope, active: false })
                   }}
                 >
                   ×
                 </button>
-              ) : null}
-            </div>
-          ) : null}
-
-          {views.length > 0 ? (
-            <div className="hc-chips" role="group" aria-label="Saved views">
-              {views.map((v) => (
-                <span key={v.id} className="hc-saved-view-pill">
-                  <button type="button" className="hc-chip" onClick={() => applySavedView(v)}>
-                    {v.name}
-                  </button>
-                  {onDeleteView ? (
-                    <button
-                      type="button"
-                      className="hc-saved-view-del"
-                      aria-label={`Delete saved view ${v.name}`}
-                      onClick={() => void onDeleteView(v.id)}
-                    >
-                      ×
-                    </button>
-                  ) : null}
-                </span>
-              ))}
-            </div>
-          ) : null}
-
-          {onSaveView ? (
-            savingView ? (
-              <form
-                className="hc-inline-group"
-                onSubmit={(e) => {
-                  e.preventDefault()
-                  const trimmed = viewNameDraft.trim()
-                  if (!trimmed) return
-                  void onSaveView(trimmed, {
-                    query: query.trim() || undefined,
-                    signals: signals.size > 0 ? [...signals] : undefined,
-                    tags: selectedTag ? [selectedTag] : undefined,
-                    blockedOnly: blockedOnly || undefined,
-                    availability: availabilityFilter !== 'all' ? [availabilityFilter] : undefined,
-                    scope: activeScope?.id ?? null,
-                    sortMode,
-                  }).then(() => {
-                    setViewNameDraft('')
-                    setSavingView(false)
-                  })
-                }}
-              >
-                <input
-                  className="hc-mini-input"
-                  value={viewNameDraft}
-                  onChange={(e) => setViewNameDraft(e.target.value)}
-                  placeholder="View name…"
-                  aria-label="Saved view name"
-                  autoFocus
-                />
-                <button type="submit" className="hc-btn hc-btn-primary">
-                  Save
-                </button>
-                <button type="button" className="hc-btn" onClick={() => setSavingView(false)}>
-                  Cancel
-                </button>
-              </form>
-            ) : (
-              <button type="button" className="hc-btn" onClick={() => setSavingView(true)}>
-                Save view
-              </button>
-            )
-          ) : null}
-        </div>
-
-        {pendingCreates.length > 0 ? (
-          <div className="hc-proposed-strip" role="status">
-            <span>
-              <strong>{pendingCreates.length}</strong> proposed new outcome{pendingCreates.length === 1 ? '' : 's'} waiting for
-              approval: {pendingCreates.map((c) => c.key).slice(0, 4).join(', ')}
-              {pendingCreates.length > 4 ? ` +${pendingCreates.length - 4}` : ''}
-            </span>
-            {onOpenInbox ? (
-              <button type="button" className="hc-btn" onClick={onOpenInbox}>
-                Review in Inbox →
-              </button>
+              </span>
             ) : null}
           </div>
         ) : null}
 
-        <CoverageBar coverage={coverage} replaying={recorded !== null} />
+        {pendingCreates.length > 0 ? (
+          <div className="hc-proposed-strip" role="status">
+            <span>
+              <strong>{pendingCreates.length}</strong> draft outcome{pendingCreates.length === 1 ? '' : 's'} waiting for review
+            </span>
+            {onOpenInbox ? (
+              <button type="button" className="hc-btn" onClick={onOpenInbox}>
+                Review in Decisions →
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </header>
 
       {replay !== null ? (
@@ -2031,25 +2123,7 @@ export function TreeView(props: ViewProps): JSX.Element {
         onPointerCancel={onPointerUp}
         onKeyDown={onKeyDown}
       >
-        {emptyTree ? (
-          <div className="hc-empty">
-            <h3>No charter yet</h3>
-            <p>
-              A tree starts with one goal: what the software must do, in the order it must happen. Add an outcome under it and
-              the first thing to prove.
-            </p>
-            <button
-              type="button"
-              className="hc-btn hc-btn-primary"
-              onClick={() => {
-                fitted.current = false
-                setCreating({ kind: 'goal', goal: null })
-              }}
-            >
-              Create the first charter
-            </button>
-          </div>
-        ) : creating !== null ? (
+        {creating !== null ? (
           <div className="hc-create-layer" onClick={(event) => event.stopPropagation()}>
             <CreatePanel
               data={data}
@@ -2063,6 +2137,30 @@ export function TreeView(props: ViewProps): JSX.Element {
                 select(key)
               }}
             />
+          </div>
+        ) : emptyTree ? (
+          <div className="hc-empty-onboard">
+            <h3>Define what “working” means</h3>
+            <p>
+              Add a goal and checkable outcomes so agents know what to prove — or start in seconds with a built-in template.
+            </p>
+            <div className="hc-empty-actions">
+              {onOpenImport ? (
+                <button type="button" className="hc-btn hc-btn-primary" onClick={onOpenImport}>
+                  Start from template
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className={onOpenImport ? 'hc-btn' : 'hc-btn hc-btn-primary'}
+                onClick={() => {
+                  fitted.current = false
+                  setCreating({ kind: 'goal', goal: null })
+                }}
+              >
+                Add first goal
+              </button>
+            </div>
           </div>
         ) : mode === 'map' ? (
           <MapCanvas

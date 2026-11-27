@@ -1087,14 +1087,13 @@ function CommentNode({ comment, replies, act, onError }: CommentThreadProps): JS
 // Drawer
 // ---------------------------------------------------------------------------
 
-type DrawerTab = 'contract' | 'live' | 'evidence' | 'plan' | 'discussion'
+type DrawerTab = 'contract' | 'evidence' | 'live' | 'plan'
 
 const TABS: Array<{ id: DrawerTab; label: string }> = [
-  { id: 'contract', label: 'Contract' },
-  { id: 'live', label: 'Live' },
-  { id: 'evidence', label: 'Evidence' },
-  { id: 'plan', label: 'Plan' },
-  { id: 'discussion', label: 'Discussion' },
+  { id: 'contract', label: 'Overview' },
+  { id: 'evidence', label: 'Proof' },
+  { id: 'live', label: 'Climb' },
+  { id: 'plan', label: 'Plan & Notes' },
 ]
 
 export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
@@ -1404,9 +1403,8 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
               <span className="hc-chip">goal</span>
             )}
             {version !== null ? <span>v{version}</span> : null}
-            {ranked?.sectionNumber ? <span>§{ranked.sectionNumber}</span> : null}
             {ranked !== undefined ? (
-              <span>priority #{data.ranked.findIndex((row) => row.key === selected) + 1}</span>
+              <span>#{data.ranked.findIndex((row) => row.key === selected) + 1}</span>
             ) : null}
             {outcome && (outcome.availability ?? 'active') !== 'active' ? (
               <span className="hc-chip hc-chip-warn">
@@ -1416,10 +1414,10 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
             ) : null}
             {claim !== null ? (
               <span className="hc-claim">
-                claimed by <code>{claim.threadId}</code> until {formatWhen(parseTime(claim.expires))}
+                claimed · <code>{claim.threadId}</code>
               </span>
             ) : null}
-            {pending.length > 0 ? <span className="hc-chip hc-chip-warn">{pending.length} proposed</span> : null}
+            {pending.length > 0 ? <span className="hc-chip hc-chip-warn">{pending.length} pending review</span> : null}
           </p>
         </div>
         <div className="hc-drawer-actions">
@@ -1436,25 +1434,31 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
       ) : null}
 
       <div className="hc-tabs" role="tablist" aria-label="Sections" onKeyDown={onTabKey}>
-        {TABS.map((row) => (
-          <button
-            key={row.id}
-            type="button"
-            role="tab"
-            aria-label={row.label}
-            id={`hc-tab-${row.id}`}
-            aria-selected={tab === row.id}
-            aria-controls={`hc-panel-${row.id}`}
-            tabIndex={tab === row.id ? 0 : -1}
-            className={tab === row.id ? 'hc-tab is-active' : 'hc-tab'}
-            onClick={() => switchTab(row.id)}
-          >
-            {row.label}
-            {row.id === 'evidence' && evidence.length > 0 ? <span className="hc-tab-count">{evidence.length}</span> : null}
-            {row.id === 'plan' && plans.length > 0 ? <span className="hc-tab-count">{plans.length}</span> : null}
-            {row.id === 'discussion' && comments.length > 0 ? <span className="hc-tab-count">{comments.length}</span> : null}
-          </button>
-        ))}
+        {TABS.map((row) => {
+          const badgeCount =
+            row.id === 'evidence'
+              ? evidence.length
+              : row.id === 'plan'
+                ? plans.length + comments.length
+                : 0
+          return (
+            <button
+              key={row.id}
+              type="button"
+              role="tab"
+              aria-label={row.label}
+              id={`hc-tab-${row.id}`}
+              aria-selected={tab === row.id}
+              aria-controls={`hc-panel-${row.id}`}
+              tabIndex={tab === row.id ? 0 : -1}
+              className={tab === row.id ? 'hc-tab is-active' : 'hc-tab'}
+              onClick={() => switchTab(row.id)}
+            >
+              {row.label}
+              {badgeCount > 0 ? <span className="hc-tab-count">{badgeCount}</span> : null}
+            </button>
+          )
+        })}
       </div>
 
       <div className="hc-drawer-body">
@@ -1462,135 +1466,154 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
           <div role="tabpanel" id="hc-panel-contract" aria-labelledby="hc-tab-contract" className="hc-panel">
             {outcome !== undefined && current !== null ? (
               <>
-                <section className="hc-section" aria-label="Contract">
+                <section className="hc-section" aria-label="Acceptance checks">
                   <header className="hc-section-head">
-                    <h3>Contract</h3>
+                    <h3>Acceptance checks</h3>
                     <button type="button" className="hc-btn" onClick={() => setEditing(!editing)} aria-expanded={editing}>
-                      {editing ? 'Cancel edit' : 'Edit'}
+                      {editing ? 'Cancel edit' : 'Propose edit'}
                     </button>
                   </header>
                   <p className="hc-story">{outcome.story}</p>
-                  <ol className="hc-criteria">
+                  <ol className="hc-criteria-clean">
                     {outcome.criteria.map((row) => (
                       <li key={row.id}>
                         <code className="hc-criterion-key">{row.id}</code>
-                        <dl>
-                          <dt>Given</dt>
-                          <dd>{row.given}</dd>
-                          <dt>When</dt>
-                          <dd>{row.when}</dd>
-                          <dt>Then</dt>
-                          <dd>{row.then}</dd>
-                        </dl>
+                        <div className="hc-criteria-line">
+                          <span className="hc-criteria-kw">Given</span>
+                          <span>{row.given}</span>
+                        </div>
+                        <div className="hc-criteria-line">
+                          <span className="hc-criteria-kw">When</span>
+                          <span>{row.when}</span>
+                        </div>
+                        <div className="hc-criteria-line">
+                          <span className="hc-criteria-kw">Then</span>
+                          <span>{row.then}</span>
+                        </div>
                       </li>
                     ))}
                   </ol>
-                  <p className="hc-hint">
-                    rank {outcome.rank} · {outcome.dependsOn.length > 0 ? `depends on ${outcome.dependsOn.join(', ')}` : 'no dependencies'} ·{' '}
-                    {outcome.recheckDays === null ? 'no recheck' : `recheck every ${outcome.recheckDays} days`}
-                  </p>
-
-                  <div className="hc-meta-editor">
-                    <div className="hc-meta-row">
-                      <label htmlFor="hc-avail-select" className="hc-meta-label">
-                        Availability
-                      </label>
-                      <select
-                        id="hc-avail-select"
-                        className="hc-mini-select"
-                        value={availMode}
-                        onChange={(e) => setAvailMode(e.target.value as OutcomeAvailability)}
-                      >
-                        <option value="active">Active (eligible for next)</option>
-                        <option value="blocked">Blocked (paused manually)</option>
-                        <option value="deferred">Deferred (snoozed)</option>
-                      </select>
-                      {availMode !== 'active' ? (
-                        <input
-                          className="hc-mini-input"
-                          value={availReason}
-                          onChange={(e) => setAvailReason(e.target.value)}
-                          placeholder="Reason (optional)"
-                          aria-label="Availability reason"
-                        />
-                      ) : null}
-                      {availMode === 'deferred' ? (
-                        <input
-                          type="date"
-                          className="hc-mini-input"
-                          value={availUntil}
-                          onChange={(e) => setAvailUntil(e.target.value)}
-                          aria-label="Deferred until date"
-                        />
-                      ) : null}
-                      <button
-                        type="button"
-                        className="hc-btn"
-                        onClick={() =>
-                          void run({
-                            op: 'set_outcome_availability',
-                            key: outcome.key,
-                            availability: availMode,
-                            reason: availMode === 'active' ? null : availReason.trim() || null,
-                            deferredUntil: availMode === 'deferred' && availUntil ? `${availUntil}T00:00:00Z` : null,
-                          })
-                        }
-                      >
-                        Apply
-                      </button>
-                    </div>
-
-                    <div className="hc-meta-row">
-                      <span className="hc-meta-label">Tags</span>
-                      <div className="hc-chips">
-                        {(outcome.tags ?? []).map((t) => (
-                          <span key={t} className="hc-chip hc-tag-chip">
-                            #{t}{' '}
-                            <button
-                              type="button"
-                              className="hc-saved-view-del"
-                              aria-label={`Remove tag ${t}`}
-                              onClick={() =>
-                                void run({
-                                  op: 'set_tags',
-                                  key: outcome.key,
-                                  tags: (outcome.tags ?? []).filter((x) => x !== t),
-                                })
-                              }
-                            >
-                              ×
-                            </button>
-                          </span>
-                        ))}
-                        <form
-                          className="hc-inline-group"
-                          onSubmit={(e) => {
-                            e.preventDefault()
-                            const nextTag = tagDraft.trim().toLowerCase().replace(/^#+/, '')
-                            if (!nextTag) return
-                            const merged = [...new Set([...(outcome.tags ?? []), nextTag])]
-                            void run({ op: 'set_tags', key: outcome.key, tags: merged }, () => setTagDraft(''))
-                          }}
-                        >
-                          <input
-                            className="hc-mini-input"
-                            style={{ width: 96 }}
-                            value={tagDraft}
-                            onChange={(e) => setTagDraft(e.target.value)}
-                            placeholder="+ tag"
-                            aria-label="Add tag"
-                          />
-                          <button type="submit" className="hc-btn">
-                            Add
-                          </button>
-                        </form>
-                      </div>
-                    </div>
-                  </div>
 
                   {editing ? (
                     <EditProposal outcome={outcome} act={act} onError={setError} onDone={() => setEditing(false)} />
                   ) : null}
+
+                  <details className="hc-disclosure-box">
+                    <summary>
+                      <span>Status, tags &amp; settings</span>
+                      <span className="hc-hint">
+                        {outcome.availability && outcome.availability !== 'active' ? outcome.availability : 'active'}
+                        {(outcome.tags ?? []).length > 0
+                          ? ` · ${(outcome.tags ?? []).length} tag${(outcome.tags ?? []).length === 1 ? '' : 's'}`
+                          : ''}
+                      </span>
+                    </summary>
+                    <div className="hc-meta-editor">
+                      <p className="hc-hint" style={{ margin: 0 }}>
+                        rank {outcome.rank}
+                        {ranked?.sectionNumber ? ` · §${ranked.sectionNumber}` : ''}
+                        {' · '}
+                        {outcome.dependsOn.length > 0 ? `depends on ${outcome.dependsOn.join(', ')}` : 'no dependencies'}
+                        {' · '}
+                        {outcome.recheckDays === null ? 'no recheck' : `recheck every ${outcome.recheckDays}d`}
+                      </p>
+                      <div className="hc-meta-row">
+                        <label htmlFor="hc-avail-select" className="hc-meta-label">
+                          Status
+                        </label>
+                        <select
+                          id="hc-avail-select"
+                          className="hc-mini-select"
+                          value={availMode}
+                          onChange={(e) => setAvailMode(e.target.value as OutcomeAvailability)}
+                        >
+                          <option value="active">Active (eligible for next)</option>
+                          <option value="blocked">Paused (blocked manually)</option>
+                          <option value="deferred">Deferred (snoozed)</option>
+                        </select>
+                        {availMode !== 'active' ? (
+                          <input
+                            className="hc-mini-input"
+                            value={availReason}
+                            onChange={(e) => setAvailReason(e.target.value)}
+                            placeholder="Reason (optional)"
+                            aria-label="Availability reason"
+                          />
+                        ) : null}
+                        {availMode === 'deferred' ? (
+                          <input
+                            type="date"
+                            className="hc-mini-input"
+                            value={availUntil}
+                            onChange={(e) => setAvailUntil(e.target.value)}
+                            aria-label="Deferred until date"
+                          />
+                        ) : null}
+                        <button
+                          type="button"
+                          className="hc-btn"
+                          onClick={() =>
+                            void run({
+                              op: 'set_outcome_availability',
+                              key: outcome.key,
+                              availability: availMode,
+                              reason: availMode === 'active' ? null : availReason.trim() || null,
+                              deferredUntil: availMode === 'deferred' && availUntil ? `${availUntil}T00:00:00Z` : null,
+                            })
+                          }
+                        >
+                          Apply
+                        </button>
+                      </div>
+
+                      <div className="hc-meta-row">
+                        <span className="hc-meta-label">Tags</span>
+                        <div className="hc-chips">
+                          {(outcome.tags ?? []).map((t) => (
+                            <span key={t} className="hc-chip hc-tag-chip">
+                              #{t}{' '}
+                              <button
+                                type="button"
+                                className="hc-saved-view-del"
+                                aria-label={`Remove tag ${t}`}
+                                onClick={() =>
+                                  void run({
+                                    op: 'set_tags',
+                                    key: outcome.key,
+                                    tags: (outcome.tags ?? []).filter((x) => x !== t),
+                                  })
+                                }
+                              >
+                                ×
+                              </button>
+                            </span>
+                          ))}
+                          <form
+                            className="hc-inline-group"
+                            onSubmit={(e) => {
+                              e.preventDefault()
+                              const nextTag = tagDraft.trim().toLowerCase().replace(/^#+/, '')
+                              if (!nextTag) return
+                              const merged = [...new Set([...(outcome.tags ?? []), nextTag])]
+                              void run({ op: 'set_tags', key: outcome.key, tags: merged }, () => setTagDraft(''))
+                            }}
+                          >
+                            <input
+                              className="hc-mini-input"
+                              style={{ width: 96 }}
+                              value={tagDraft}
+                              onChange={(e) => setTagDraft(e.target.value)}
+                              placeholder="+ tag"
+                              aria-label="Add tag"
+                            />
+                            <button type="submit" className="hc-btn">
+                              Add
+                            </button>
+                          </form>
+                        </div>
+                      </div>
+                    </div>
+                  </details>
                 </section>
 
                 {linkedFlows.length > 0 || linkedFlowProposals.length > 0 ? (
@@ -1599,7 +1622,7 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
                       <h3>Linked Flows</h3>
                       <span className="hc-hint">
                         {linkedFlows.length} flow{linkedFlows.length === 1 ? '' : 's'}
-                        {linkedFlowProposals.length > 0 ? ` · ${linkedFlowProposals.length} pending proposal(s)` : ''}
+                        {linkedFlowProposals.length > 0 ? ` · ${linkedFlowProposals.length} pending` : ''}
                       </span>
                     </header>
                     <ul className="hc-key-list">
@@ -1623,17 +1646,17 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
                   </section>
                 ) : null}
 
-                <section className="hc-section" aria-label="Proposals">
-                  <header className="hc-section-head">
-                    <h3>Proposals</h3>
-                    <span className="hc-hint">{pending.length} pending</span>
-                  </header>
-                  {changes.length === 0 ? (
-                    <p className="hc-empty-note">Nobody has proposed a change.</p>
-                  ) : (
-                    changes.map((change) => <ChangeCard key={change.id} change={change} current={current} act={act} onError={setError} />)
-                  )}
-                </section>
+                {changes.length > 0 ? (
+                  <section className="hc-section" aria-label="Proposals">
+                    <header className="hc-section-head">
+                      <h3>Proposed changes</h3>
+                      <span className="hc-hint">{pending.length} pending</span>
+                    </header>
+                    {changes.map((change) => (
+                      <ChangeCard key={change.id} change={change} current={current} act={act} onError={setError} />
+                    ))}
+                  </section>
+                ) : null}
               </>
             ) : null}
 
@@ -1646,10 +1669,6 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
                   </button>
                 </header>
                 <p className="hc-story">{goal.brief}</p>
-                <p className="hc-hint">
-                  rank {goal.rank} · parent {goal.parentGoalKey === null ? 'none' : goal.parentGoalKey}
-                  {goal.tags && goal.tags.length > 0 ? ` · tags: ${goal.tags.map((t) => `#${t}`).join(' ')}` : ''}
-                </p>
                 {editingGoal ? (
                   <form
                     className="hc-edit"
@@ -1702,49 +1721,65 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
                     </div>
                   </form>
                 ) : null}
-                <div className="hc-meta-row" style={{ marginTop: 8 }}>
-                  <span className="hc-meta-label">Tags</span>
-                  <div className="hc-chips">
-                    {(goal.tags ?? []).map((t) => (
-                      <span key={t} className="hc-chip hc-tag-chip">
-                        #{t}{' '}
-                        <button
-                          type="button"
-                          className="hc-saved-view-del"
-                          aria-label={`Remove tag ${t}`}
-                          onClick={() =>
-                            void run({ op: 'set_tags', key: goal.key, tags: (goal.tags ?? []).filter((x) => x !== t) })
-                          }
+
+                <details className="hc-disclosure-box">
+                  <summary>
+                    <span>Tags &amp; settings</span>
+                    <span className="hc-hint">
+                      rank {goal.rank}
+                      {(goal.tags ?? []).length > 0 ? ` · ${(goal.tags ?? []).length} tag${(goal.tags ?? []).length === 1 ? '' : 's'}` : ''}
+                    </span>
+                  </summary>
+                  <div className="hc-meta-editor">
+                    <p className="hc-hint" style={{ margin: 0 }}>
+                      rank {goal.rank} · parent {goal.parentGoalKey === null ? 'none (root)' : goal.parentGoalKey}
+                    </p>
+                    <div className="hc-meta-row">
+                      <span className="hc-meta-label">Tags</span>
+                      <div className="hc-chips">
+                        {(goal.tags ?? []).map((t) => (
+                          <span key={t} className="hc-chip hc-tag-chip">
+                            #{t}{' '}
+                            <button
+                              type="button"
+                              className="hc-saved-view-del"
+                              aria-label={`Remove tag ${t}`}
+                              onClick={() =>
+                                void run({ op: 'set_tags', key: goal.key, tags: (goal.tags ?? []).filter((x) => x !== t) })
+                              }
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                        <form
+                          className="hc-inline-group"
+                          onSubmit={(e) => {
+                            e.preventDefault()
+                            const nextTag = tagDraft.trim().toLowerCase().replace(/^#+/, '')
+                            if (!nextTag) return
+                            void run({ op: 'set_tags', key: goal.key, tags: [...new Set([...(goal.tags ?? []), nextTag])] }, () =>
+                              setTagDraft(''),
+                            )
+                          }}
                         >
-                          ×
-                        </button>
-                      </span>
-                    ))}
-                    <form
-                      className="hc-inline-group"
-                      onSubmit={(e) => {
-                        e.preventDefault()
-                        const nextTag = tagDraft.trim().toLowerCase().replace(/^#+/, '')
-                        if (!nextTag) return
-                        void run({ op: 'set_tags', key: goal.key, tags: [...new Set([...(goal.tags ?? []), nextTag])] }, () =>
-                          setTagDraft(''),
-                        )
-                      }}
-                    >
-                      <input
-                        className="hc-mini-input"
-                        style={{ width: 96 }}
-                        value={tagDraft}
-                        onChange={(e) => setTagDraft(e.target.value)}
-                        placeholder="+ tag"
-                        aria-label="Add goal tag"
-                      />
-                      <button type="submit" className="hc-btn">
-                        Add
-                      </button>
-                    </form>
+                          <input
+                            className="hc-mini-input"
+                            style={{ width: 96 }}
+                            value={tagDraft}
+                            onChange={(e) => setTagDraft(e.target.value)}
+                            placeholder="+ tag"
+                            aria-label="Add goal tag"
+                          />
+                          <button type="submit" className="hc-btn">
+                            Add
+                          </button>
+                        </form>
+                      </div>
+                    </div>
                   </div>
-                </div>
+                </details>
+
                 {childGoals.length > 0 ? (
                   <>
                     <h4>Sub-goals</h4>
@@ -1781,9 +1816,9 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
 
         {tab === 'live' && outcome !== undefined ? (
           <div role="tabpanel" id="hc-panel-live" aria-labelledby="hc-tab-live" className="hc-panel">
-            <section className="hc-section" aria-label="Dispatch">
+            <section className="hc-section" aria-label="Automated climb">
               <header className="hc-section-head">
-                <h3>Dispatch</h3>
+                <h3>Automated climb</h3>
                 <button type="button" className="hc-btn" onClick={() => void loadLive(outcome.key)} disabled={liveLoading}>
                   {liveLoading ? 'Reading…' : 'Refresh'}
                 </button>
@@ -1802,22 +1837,22 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
                 ))}
                 {configure === undefined ? null : (
                   <button type="button" className="hc-btn" onClick={() => void doConfigure()} disabled={configuring}>
-                    {configuring ? 'Opening…' : 'Configure verifier'}
+                    {configuring ? 'Opening…' : 'Verifier'}
                   </button>
                 )}
                 <button type="button" className="hc-btn hc-btn-primary" onClick={() => void doDispatch()} disabled={dispatching}>
-                  {dispatching ? 'Dispatching…' : `Dispatch to ${engine}`}
+                  {dispatching ? 'Starting…' : 'Start climb'}
                 </button>
                 {liveData?.engine !== null && liveData?.engine !== undefined ? (
                   <span className="hc-hint">
                     {liveData.worker?.liveness === 'active'
-                      ? `running on ${liveData.engine}`
+                      ? `running (${liveData.engine})`
                       : `${liveData.engine} · ${liveData.worker?.phase ?? 'idle'}`}
                   </span>
                 ) : null}
               </div>
               {liveData !== null && liveData.baseline === null ? (
-                <p className="hc-hint">No verifier has scored this outcome yet. Configure one before dispatching.</p>
+                <p className="hc-hint">No verifier has scored this outcome yet. Set up a verifier before starting a climb.</p>
               ) : null}
               {configureError === null ? null : (
                 <p className="hc-error" role="alert">
@@ -1837,50 +1872,24 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
             </section>
 
             {liveData === null ? (
-              <p className="hc-empty-note">{liveLoading ? 'Reading the climb…' : 'No live climb data for this outcome.'}</p>
+              <p className="hc-empty-note">{liveLoading ? 'Reading the climb…' : 'No climb data yet for this outcome.'}</p>
             ) : (
               <>
-                <section className="hc-section" aria-label="Progress and resume">
-                  <header className="hc-section-head">
-                    <h3>Progress</h3>
-                    <span className={`hc-badge hc-verdict-${verdictOf(liveData).kind}`}>{verdictOf(liveData).label}</span>
-                  </header>
-                  <dl className="hc-progress">
-                    {progressLines(liveData).map((line) => (
-                      <div key={line.label}>
-                        <dt>{line.label}</dt>
-                        <dd>{line.detail}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                </section>
-
                 <section className="hc-section" aria-label="Scores">
                   <header className="hc-section-head">
                     <h3>Score</h3>
-                    <span className="hc-hint">
-                      {formatScore(liveData.baseline)} → {formatScore(liveData.best)}
-                      {liveData.target === null ? '' : ` · target ${formatScore(liveData.target)}`}
-                    </span>
+                    <span className={`hc-badge hc-verdict-${verdictOf(liveData).kind}`}>{verdictOf(liveData).label}</span>
                   </header>
+                  <p className="hc-hint" style={{ margin: 0 }}>
+                    {formatScore(liveData.baseline)} → {formatScore(liveData.best)}
+                    {liveData.target === null ? '' : ` · target ${formatScore(liveData.target)}`}
+                  </p>
                   <LiveChart live={liveData} />
                   {liveData.holdout !== null ? (
                     <p className="hc-hint">
                       Holdout score: <code>{liveData.holdout}</code>
                     </p>
-                  ) : (
-                    <p className="hc-hint">No holdout score recorded yet; unseen holdout checks guard against overfitting.</p>
-                  )}
-                </section>
-
-                <section className="hc-section" aria-label="Candidate lineage">
-                  <h3>Candidates</h3>
-                  {liveData.search !== null && liveData.search !== undefined && liveData.search.count > 1 ? (
-                    <p className="hc-hint">
-                      This run holds {liveData.search.count} searches; these are <code>{liveData.search.id}</code>’s own candidates, not a run-wide tally.
-                    </p>
                   ) : null}
-                  <LineageGraph live={liveData} />
                 </section>
 
                 {liveData.engine === 'search' || (liveData.elite && liveData.elite.length > 0) ? (
@@ -1890,82 +1899,87 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
                   </section>
                 ) : null}
 
-                <section className="hc-section" aria-label="Operator stream">
-                  <h3>Operator stream</h3>
-                  {liveData.rows.length === 0 ? (
-                    <p className="hc-empty-note">The climb has not recorded a step.</p>
-                  ) : (
-                    <ol className="hc-stream">
-                      {liveData.rows
-                        .slice()
-                        .sort((a, b) => parseTime(a.at) - parseTime(b.at))
-                        .map((row) => {
-                          const best = liveData.best !== null && row.score === liveData.best
-                          return (
-                            <li key={row.id} className={best ? 'hc-stream-row is-best' : 'hc-stream-row'}>
-                              <span className="hc-stream-when">{formatWhen(parseTime(row.at))}</span>
-                              <code className="hc-stream-id">{row.id}</code>
-                              <span className="hc-stream-label">{row.label}</span>
-                              <span className="hc-stream-score">{formatScore(row.score)}</span>
-                              <span className="hc-stream-parent">{row.parent === null ? 'root' : `← ${row.parent}`}</span>
-                            </li>
-                          )
-                        })}
-                    </ol>
-                  )}
-                </section>
+                <details className="hc-disclosure-box">
+                  <summary>
+                    <span>Technical details &amp; step log</span>
+                    <span className="hc-hint">
+                      {liveData.rows.length} step{liveData.rows.length === 1 ? '' : 's'}
+                    </span>
+                  </summary>
+                  <div className="hc-panel" style={{ gap: 14 }}>
+                    <dl className="hc-progress">
+                      {progressLines(liveData).map((line) => (
+                        <div key={line.label}>
+                          <dt>{line.label}</dt>
+                          <dd>{line.detail}</dd>
+                        </div>
+                      ))}
+                    </dl>
+
+                    {liveData.rows.length > 0 ? (
+                      <>
+                        <div>
+                          <h4 style={{ margin: '0 0 6px', fontSize: 12.5 }}>Candidates</h4>
+                          {liveData.search !== null && liveData.search !== undefined && liveData.search.count > 1 ? (
+                            <p className="hc-hint">
+                              Showing <code>{liveData.search.id}</code> ({liveData.search.count} searches in run).
+                            </p>
+                          ) : null}
+                          <LineageGraph live={liveData} />
+                        </div>
+
+                        <div>
+                          <h4 style={{ margin: '0 0 6px', fontSize: 12.5 }}>Step log</h4>
+                          <ol className="hc-stream">
+                            {liveData.rows
+                              .slice()
+                              .sort((a, b) => parseTime(a.at) - parseTime(b.at))
+                              .map((row) => {
+                                const best = liveData.best !== null && row.score === liveData.best
+                                return (
+                                  <li key={row.id} className={best ? 'hc-stream-row is-best' : 'hc-stream-row'}>
+                                    <span className="hc-stream-when">{formatWhen(parseTime(row.at))}</span>
+                                    <code className="hc-stream-id">{row.id}</code>
+                                    <span className="hc-stream-label">{row.label}</span>
+                                    <span className="hc-stream-score">{formatScore(row.score)}</span>
+                                    <span className="hc-stream-parent">{row.parent === null ? 'root' : `← ${row.parent}`}</span>
+                                  </li>
+                                )
+                              })}
+                          </ol>
+                        </div>
+                      </>
+                    ) : null}
+                  </div>
+                </details>
               </>
             )}
           </div>
         ) : null}
 
+        {tab === 'live' && outcome === undefined ? (
+          <div role="tabpanel" id="hc-panel-live" aria-labelledby="hc-tab-live" className="hc-panel">
+            <p className="hc-empty-note">Select an outcome under this goal to view or start an automated climb.</p>
+          </div>
+        ) : null}
+
         {tab === 'evidence' && selected !== null ? (
           <div role="tabpanel" id="hc-panel-evidence" aria-labelledby="hc-tab-evidence" className="hc-panel">
-            <section className="hc-section" aria-label="Record evidence">
-              <h3>Record evidence</h3>
-              {outcome !== undefined ? (
-                <EvidenceForm
-                  outcome={outcome}
-                  track={track}
-                  act={act}
-                  onError={setError}
-                />
-              ) : (
-                <p className="hc-empty-note">Evidence attaches to an outcome.</p>
-              )}
-            </section>
-
-            {outcome !== undefined ? (
-              <details className="hc-section hc-output-details">
-                <summary className="hc-section-head">
-                  <span>PR summary export</span>
-                  <button
-                    type="button"
-                    className="hc-btn"
-                    onClick={(event) => {
-                      event.preventDefault()
-                      void navigator.clipboard?.writeText(evidenceText).catch(() => setError('The clipboard is not available.'))
-                    }}
-                  >
-                    Copy
-                  </button>
-                </summary>
-                <pre className="hc-output" tabIndex={0} aria-label="Evidence as text">
-                  {evidenceText}
-                </pre>
-              </details>
-            ) : null}
-
             <section className="hc-section" aria-label="Evidence list">
-              <h3>Evidence ({evidence.length})</h3>
+              <header className="hc-section-head">
+                <h3>Recorded proof ({evidence.length})</h3>
+                <span className="hc-hint">track {track}</span>
+              </header>
               {evidenceElsewhere > 0 ? (
                 <p className="hc-hint" role="status">
-                  {evidenceElsewhere} more recorded on another track, not shown here.
+                  {evidenceElsewhere} more recorded on another track.
                 </p>
               ) : null}
               {evidence.length === 0 ? (
                 <p className="hc-empty-note">
-                  {evidenceElsewhere > 0 ? `Nothing recorded on track ${track}.` : 'Nothing recorded against this outcome.'}
+                  {evidenceElsewhere > 0
+                    ? `No proof recorded on track ${track} yet.`
+                    : 'No proof recorded yet. Record test output or verification notes below.'}
                 </p>
               ) : (
                 <ul className="hc-evidence">
@@ -1973,9 +1987,8 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
                     <li key={row.id} className={`hc-evidence-row hc-kind-${row.kind}`}>
                       <div className="hc-evidence-head">
                         <span className={`hc-badge hc-kind-${row.kind}`}>{row.kind}</span>
-                        <code>{row.key}.v{row.version}</code>
+                        <code>v{row.version}</code>
                         <span className="hc-hint">{formatWhen(parseTime(row.created))}</span>
-                        <span className="hc-hint">track {row.track}</span>
                         {row.criterionIds.map((id) => (
                           <span key={id} className="hc-chip">
                             {id}
@@ -1984,8 +1997,8 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
                       </div>
                       <p>{row.text}</p>
                       <p className="hc-hint">
-                        source: {row.source}
-                        {row.actor ? ` · by ${row.actor}${row.via ? ` (${row.via})` : ''}` : ''}
+                        {row.source}
+                        {row.actor ? ` · ${row.actor}${row.via ? ` (${row.via})` : ''}` : ''}
                       </p>
                       {row.attachments && row.attachments.length > 0 ? (
                         <div className="hc-attachments">
@@ -2009,15 +2022,48 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
                 </ul>
               )}
             </section>
+
+            {outcome !== undefined ? (
+              <details className="hc-disclosure-box">
+                <summary>
+                  <span>+ Record proof</span>
+                  <span className="hc-hint">confirm, deny, or add note</span>
+                </summary>
+                <EvidenceForm outcome={outcome} track={track} act={act} onError={setError} />
+              </details>
+            ) : (
+              <p className="hc-empty-note">Proof attaches to an outcome.</p>
+            )}
+
+            {outcome !== undefined && evidence.length > 0 ? (
+              <details className="hc-disclosure-box">
+                <summary>
+                  <span>PR summary export</span>
+                  <button
+                    type="button"
+                    className="hc-btn"
+                    onClick={(event) => {
+                      event.preventDefault()
+                      void navigator.clipboard?.writeText(evidenceText).catch(() => setError('The clipboard is not available.'))
+                    }}
+                  >
+                    Copy
+                  </button>
+                </summary>
+                <pre className="hc-output" tabIndex={0} aria-label="Evidence as text">
+                  {evidenceText}
+                </pre>
+              </details>
+            ) : null}
           </div>
         ) : null}
 
         {tab === 'plan' && selected !== null ? (
           <div role="tabpanel" id="hc-panel-plan" aria-labelledby="hc-tab-plan" className="hc-panel">
             <section className="hc-section" aria-label="Plans">
-              <h3>Plans</h3>
+              <h3>Plan</h3>
               {plans.length === 0 ? (
-                <p className="hc-empty-note">No plan written. Say how you will build this before you start.</p>
+                <p className="hc-empty-note">No plan written yet.</p>
               ) : (
                 plans.map((plan: Plan, idx) => {
                   const prevPlan = plans[idx + 1]
@@ -2051,7 +2097,7 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
                               setPlanCommentVersion(planCommentVersion === plan.version ? null : plan.version)
                             }
                           >
-                            Comment on v{plan.version}
+                            Note on v{plan.version}
                             {planComments.length > 0 ? ` (${planComments.length})` : ''}
                           </button>
                         </div>
@@ -2117,40 +2163,43 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
                   )
                 })
               )}
-              <form
-                className="hc-plan-form"
-                onSubmit={(event) => {
-                  event.preventDefault()
-                  if (planDraft.trim() === '') return
-                  const action: Action =
-                    plans.length === 0
-                      ? { op: 'write_plan', key: selected, body: planDraft.trim() }
-                      : { op: 'revise_plan', key: selected, version: plans[0]?.version ?? 1, body: planDraft.trim() }
-                  void run(action, () => setPlanDraft(''))
-                }}
-              >
-                <label htmlFor="hc-plan-draft">{plans.length === 0 ? 'Write a plan' : 'Revise the plan'}</label>
-                <textarea
-                  id="hc-plan-draft"
-                  rows={5}
-                  value={planDraft}
-                  onChange={(event) => setPlanDraft(event.target.value)}
-                  placeholder="What you will change, and what proves it."
-                />
-                <button type="submit" className="hc-btn hc-btn-primary" disabled={planDraft.trim() === ''}>
-                  {plans.length === 0 ? 'Write plan' : `Save v${(plans[0]?.version ?? 0) + 1}`}
-                </button>
-              </form>
+              <details className="hc-disclosure-box" open={plans.length === 0}>
+                <summary>
+                  <span>{plans.length === 0 ? '+ Write a plan' : '+ Revise plan'}</span>
+                </summary>
+                <form
+                  className="hc-plan-form"
+                  onSubmit={(event) => {
+                    event.preventDefault()
+                    if (planDraft.trim() === '') return
+                    const action: Action =
+                      plans.length === 0
+                        ? { op: 'write_plan', key: selected, body: planDraft.trim() }
+                        : { op: 'revise_plan', key: selected, version: plans[0]?.version ?? 1, body: planDraft.trim() }
+                    void run(action, () => setPlanDraft(''))
+                  }}
+                >
+                  <label htmlFor="hc-plan-draft" className="hc-sr-only">
+                    {plans.length === 0 ? 'Write a plan' : 'Revise the plan'}
+                  </label>
+                  <textarea
+                    id="hc-plan-draft"
+                    rows={4}
+                    value={planDraft}
+                    onChange={(event) => setPlanDraft(event.target.value)}
+                    placeholder="What you will change, and how you will verify it…"
+                  />
+                  <button type="submit" className="hc-btn hc-btn-primary" disabled={planDraft.trim() === ''}>
+                    {plans.length === 0 ? 'Save plan' : `Save v${(plans[0]?.version ?? 0) + 1}`}
+                  </button>
+                </form>
+              </details>
             </section>
-          </div>
-        ) : null}
 
-        {tab === 'discussion' && selected !== null ? (
-          <div role="tabpanel" id="hc-panel-discussion" aria-labelledby="hc-tab-discussion" className="hc-panel">
-            <section className="hc-section" aria-label="Discussion">
-              <h3>Discussion</h3>
+            <section className="hc-section" aria-label="Notes and questions">
+              <h3>Notes &amp; questions ({comments.length})</h3>
               {comments.length === 0 ? (
-                <p className="hc-empty-note">No questions on this key.</p>
+                <p className="hc-empty-note">No notes or questions yet.</p>
               ) : (
                 <ul className="hc-comments">
                   {comments
@@ -2174,10 +2223,18 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
                   void run({ op: 'comment', key: selected, text: reply.trim(), options: [], parentId: null }, () => setReply(''))
                 }}
               >
-                <label htmlFor="hc-reply">Ask or say something</label>
-                <textarea id="hc-reply" rows={3} value={reply} onChange={(event) => setReply(event.target.value)} />
+                <label htmlFor="hc-reply" className="hc-sr-only">
+                  Add a note or question
+                </label>
+                <textarea
+                  id="hc-reply"
+                  rows={2}
+                  value={reply}
+                  onChange={(event) => setReply(event.target.value)}
+                  placeholder="Add a note or question…"
+                />
                 <button type="submit" className="hc-btn hc-btn-primary" disabled={reply.trim() === ''}>
-                  Comment
+                  Post note
                 </button>
               </form>
             </section>

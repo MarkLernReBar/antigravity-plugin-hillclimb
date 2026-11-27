@@ -60,7 +60,7 @@ export function InsightsView(props: InsightsViewProps): JSX.Element {
         <div>
           <h2 className="pf-title">Insights</h2>
           <p className="pf-sub">
-            Evidence-verified throughput, provenance, and inner-loop climb telemetry · track <strong>{track}</strong>
+            Progress, verification rate, and climb performance · track <strong>{track}</strong>
           </p>
         </div>
         <div className="pf-actions">
@@ -113,7 +113,7 @@ export function InsightsView(props: InsightsViewProps): JSX.Element {
               </strong>
               <span className="pf-muted pf-small">
                 {data.totals.deferred > 0 ? `${data.totals.deferred} deferred · ` : ""}
-                {data.totals.inbox} inbox
+                {data.totals.inbox} pending
               </span>
             </div>
             <div className="hc-kpi-card">
@@ -198,9 +198,9 @@ export function InsightsView(props: InsightsViewProps): JSX.Element {
               <header className="pf-card-head">
                 <div>
                   <h3 className="pf-card-title" id="hc-ins-climbs">
-                    Inner-loop climb telemetry
+                    Climb performance
                   </h3>
-                  <p className="pf-muted pf-small">Mechanical guardrails &amp; unseen holdout checks across repo climbs.</p>
+                  <p className="pf-muted pf-small">Kept edits, regression guards, and holdout checks.</p>
                 </div>
                 <button type="button" className="pf-btn pf-btn-ghost" onClick={onOpenClimbs}>
                   Open Climbs →
@@ -249,9 +249,9 @@ export function InsightsView(props: InsightsViewProps): JSX.Element {
               <header className="pf-card-head">
                 <div>
                   <h3 className="pf-card-title" id="hc-ins-actors">
-                    Provenance breakdown
+                    Activity by contributor
                   </h3>
-                  <p className="pf-muted pf-small">Human, agent, CI, and climb engine contributions.</p>
+                  <p className="pf-muted pf-small">Human, agent, CI, and climb contributions.</p>
                 </div>
               </header>
               {data.byActor.length === 0 ? (
