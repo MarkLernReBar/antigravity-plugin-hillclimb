@@ -22,6 +22,7 @@ import {
   getClimbStatus,
   getClimbVerdict,
   installEngine,
+  readWorktreeBranch,
   resolveRepoDirectory,
   scanProjectClimbs,
   type ScanProjectClimbsOptions,
@@ -273,7 +274,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     return projects[0]?.id ?? repo.resolveProjectId();
   };
   const server = new McpServer(
-    { name: "hillclimb", version: "0.6.2" },
+    { name: "hillclimb", version: "0.6.3" },
     {
       capabilities: {
         tools: {},
@@ -407,15 +408,35 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
       try {
         const dir = resolveRepoDirectory(directory);
         const rowCount = last ?? (format === "full" ? 15 : 10);
-        const res = getClimbStatus(dir, name, rowCount);
-        if (format === "full") {
-          return jsonResult({ directory: dir, engine: res.engine, ...res.summary }, res.textWithNext);
+        try {
+          const res = getClimbStatus(dir, name, rowCount);
+          if (format === "full") {
+            return jsonResult({ directory: dir, engine: res.engine, ...res.summary }, res.textWithNext);
+          }
+          const { recent: _recent, ...compactSummary } = res.summary;
+          return jsonResult(
+            { directory: dir, engine: res.engine, ...compactSummary, recentCount: res.summary.recent.length },
+            res.textWithNext,
+          );
+        } catch (err) {
+          if (name === undefined && err instanceof HillClimbError && err.code === "ambiguous_climb") {
+            const list = getClimbList(dir);
+            const branch = readWorktreeBranch(dir);
+            const header = `Multiple climbs in ${dir}${branch ? ` (branch: ${branch})` : ""}. Pass \`name\` to hillclimb_status for one climb's full trail:\n`;
+            return jsonResult(
+              {
+                directory: dir,
+                multiple: true,
+                branch,
+                climbs: list.climbs,
+                prepared: list.prepared,
+                next: "Pass `name` to hillclimb_status for one climb's full score, trail, and verdict.",
+              },
+              `${header}${list.text}`,
+            );
+          }
+          throw err;
         }
-        const { recent: _recent, ...compactSummary } = res.summary;
-        return jsonResult(
-          { directory: dir, engine: res.engine, ...compactSummary, recentCount: res.summary.recent.length },
-          res.textWithNext,
-        );
       } catch (error) {
         return errorResult(error);
       }
@@ -946,7 +967,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
           baseVersion: existing?.version ?? 0,
           state: pending?.state ?? "unknown",
           approved: false,
-          next: "Rendered an inline Approve/Reject decision card in this thread (and synced to Decisions). Nothing changed until the user approves.",
+          next: "Rendered an inline Approve/Reject decision card in this thread (and synced to Decisions). Stop calling tools and yield to the user now so the inline card stays visible; nothing changes until the user approves.",
           inbox: inboxOf(after),
           ...(pending
             ? {
@@ -1190,6 +1211,11 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
           comment: posted?.id ?? null,
           key: input.key,
           isQuestion: input.options.length > 0,
+          ...(input.options.length > 0
+            ? {
+                next: "Rendered an inline multiple-choice question card in this thread (and synced to Decisions). Stop calling tools and yield to the user now so the inline card stays visible.",
+              }
+            : {}),
           inbox: inboxOf(after),
           ...(posted
             ? {
@@ -2294,7 +2320,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
           kind: resolvedKind,
           state: pending?.state ?? "unknown",
           approved: false,
-          next: "Rendered an interactive visual design review card inline in this thread (and synced to Flows & Decisions). Wait for the user to Accept or annotate & Send back.",
+          next: "Rendered an interactive visual design review card inline in this thread (and synced to Flows & Decisions). Stop calling tools and yield to the user now so the inline card stays visible until the user clicks Accept or Send back.",
           inbox: inboxOf(after),
           ...(pending
             ? {

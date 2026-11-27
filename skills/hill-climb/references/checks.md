@@ -4,6 +4,12 @@ The check is a command. Its last line of output is the score as a bare number.
 Exit non-zero only when the check itself broke, not when the score is bad.
 Everything else it prints is for you to read when a step fails.
 
+### Holdout hygiene (strictly blind)
+
+- Holdout checks (`--holdout`) must print **only** the aggregate score (never per-case names, counts, or failure traces). Per-case breakdowns belong only on the dev/visible check.
+- Never run the `--holdout` command manually during setup or iteration — let `climb.py init` measure baseline and `climb.py holdout --why final` run the final blind check.
+- Never pass a cached-replay flag (e.g. `--from-json`) in `--check` or `--holdout`; always unlink stale output artifacts before running fresh so cached files can never mask a real regression.
+
 Before you write one, run `climb.py kits "<goal words>"`. A kit from an
 earlier climb is often most of the check you need.
 

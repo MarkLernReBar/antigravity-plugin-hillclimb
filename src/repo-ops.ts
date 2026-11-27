@@ -174,6 +174,30 @@ export function readClimb(repoPath: string, wanted?: string): { card: ClimbCard;
     });
   }
   if (names.length > 1) {
+    const branch = readWorktreeBranch(repoPath);
+    if (branch) {
+      if (branch.startsWith("climb/")) {
+        const fromBranch = branch.slice("climb/".length);
+        if (names.includes(fromBranch)) {
+          const file = readCardFile(repoPath, fromBranch);
+          if (file.text !== null) return { card: parseCard(file.text), name: fromBranch };
+        }
+      }
+      const matching: Array<{ card: ClimbCard; name: string }> = [];
+      for (const candidate of names) {
+        const file = readCardFile(repoPath, candidate);
+        if (file.text === null) continue;
+        try {
+          const card = parseCard(file.text);
+          if (card.branch === branch) matching.push({ card, name: candidate });
+        } catch {
+          // ignore malformed card while probing branch match
+        }
+      }
+      if (matching.length === 1) {
+        return matching[0]!;
+      }
+    }
     throw new HillClimbError("name the climb: this repository has more than one", {
       code: "ambiguous_climb",
       hint: `Climbs here: ${names.join(", ")}.`,
@@ -519,7 +543,7 @@ function latestMtimeIso(dir: string): string | null {
   }
 }
 
-function readWorktreeBranch(dir: string): string | null {
+export function readWorktreeBranch(dir: string): string | null {
   try {
     const dotGit = join(dir, ".git");
     let headPath = join(dotGit, "HEAD");

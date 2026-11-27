@@ -9,7 +9,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { createRepository, openDatabase } from "../src/repository.js";
 import { conversationServiceGuardReason, createRuntime } from "../src/runtime.js";
-import { createAutoTracker } from "../src/auto-track.js";
+import { buildOutcomeContract, createAutoTracker } from "../src/auto-track.js";
 import { clearScanCache, getClimbCard, getClimbList, getClimbStatus, getClimbVerdict, installEngine, redactSecrets, scanProjectClimbs } from "../src/repo-ops.js";
 import { actionSchema } from "../src/actions.js";
 import { lintTree } from "../src/linter.js";
@@ -1732,6 +1732,227 @@ experiments:
       rmSync(workDir, { recursive: true, force: true });
       rmSync(dataDir, { recursive: true, force: true });
       rmSync(outsideDir, { recursive: true, force: true });
+    }
+  });
+
+  it("v0.6.3 agent ergonomics: clean auto-track lint, multi-climb status resolution, inline last-call hints, and holdout hygiene", async () => {
+    const repoDir = tempDir("hc-v063-repo-");
+    const dataDir = tempDir("hc-v063-data-");
+    try {
+      initGitRepo(repoDir);
+      const { mkdirSync } = await import("node:fs");
+
+      // 1. Auto-track contracts pass 22-rule lintTree with 0 errors and 0 warnings even for messy goals & raw check commands
+      const db = openDatabase(join(dataDir, "lint-auto.db"));
+      try {
+        const repo = createRepository(db);
+        repo.registerProject({ id: "auto-lint", name: "Auto Lint", directory: repoDir });
+        const tracker = createAutoTracker(repo);
+        const makeClimb = (overrides: Partial<import("../src/repo-ops.js").ScannedClimb>): import("../src/repo-ops.js").ScannedClimb => ({
+          id: `${repoDir}::${overrides.name ?? "demo"}`,
+          name: "demo",
+          status: "active",
+          origin: "checkout",
+          isLive: false,
+          directory: repoDir,
+          worktreeName: "main",
+          workerLabel: "main checkout",
+          isMainCheckout: true,
+          conversationId: null,
+          branch: "climb/demo",
+          goal: "Checkout throughput stays above 120 req/s",
+          direction: "max",
+          baseline: 0.55,
+          best: 0.62,
+          target: 0.85,
+          targetText: "0.85",
+          steps: 3,
+          kept: 1,
+          undone: 2,
+          sinceGain: 1,
+          verdict: "climbing",
+          sparkline: "▁█",
+          check: ["SEARCH_AUTH_TOKEN=secret .venv/bin/python scripts/eval_bench.py --split dev --json-out out.json"],
+          guards: ["pytest -q tests/test_core.py"],
+          holdout: ".venv/bin/python scripts/eval_bench.py --split holdout",
+          locked: ["scripts/eval_bench.py"],
+          scoreMode: null,
+          rows: [],
+          notes: null,
+          bestCommit: null,
+          preparedFiles: 0,
+          preparedSampleFiles: [],
+          updatedAt: new Date().toISOString(),
+          ...overrides,
+        });
+
+        const cleanContract = buildOutcomeContract(makeClimb({ name: "checkout-speed", goal: "Checkout throughput stays above 120 req/s" }));
+        assert.equal(cleanContract.title, "Checkout throughput stays above 120 req/s");
+
+        tracker.syncScannedClimbs("auto-lint", {
+          projectDirectory: repoDir,
+          engineInstalled: true,
+          worktreesScanned: 1,
+          currentCount: 4,
+          archivedCount: 0,
+          warnings: [],
+          climbs: [
+            makeClimb({ name: "checkout-speed", goal: "Checkout throughput stays above 120 req/s" }),
+            makeClimb({ name: "messy-eval", goal: "Fix slow build in scripts/eval.py --timeout=200ms (2025-01-01)" }),
+            makeClimb({ name: "bug-regression", goal: "Bug: no longer crashes with 500 on checkout" }),
+            makeClimb({ name: "fix-slow-queries", status: "prepared", goal: null, baseline: null, best: null, target: null, targetText: null, steps: 0, kept: 0, undone: 0, preparedFiles: 2 }),
+          ],
+        });
+
+        const snap = repo.view("auto-lint", "main");
+        const lint = lintTree(snap);
+        assert.equal(lint.errorCount, 0, `Expected 0 lint errors on auto-tracked climbs, got: ${JSON.stringify(lint.findings)}`);
+        assert.equal(lint.warningCount, 0, `Expected 0 lint warnings on auto-tracked climbs, got: ${JSON.stringify(lint.findings)}`);
+        assert.equal(lint.passed, true);
+      } finally {
+        db.close();
+      }
+
+      // 2. Multi-climb hillclimb_status: summarizes on main, auto-resolves checked-out climb/<name> branch
+      const writeFakeClimb = (name: string, baseline: number, best: number, target: number) => {
+        const dir = join(repoDir, ".hill-climb", name);
+        mkdirSync(dir, { recursive: true });
+        writeFileSync(
+          join(dir, "card.json"),
+          JSON.stringify({
+            name,
+            goal: `${name} metric meets target`,
+            branch: `climb/${name}`,
+            base: "main",
+            check: ["echo 1"],
+            direction: "max",
+            baseline,
+            best: { score: best, step: 1 },
+            target,
+          }),
+          "utf8",
+        );
+        writeFileSync(
+          join(dir, "log.jsonl"),
+          `${JSON.stringify({ kind: "baseline", score: baseline, time: "2026-11-27T10:00:00Z" })}\n${JSON.stringify({ kind: "step", step: 1, result: "kept", score: best, idea: "first gain", time: "2026-11-27T10:05:00Z" })}\n`,
+          "utf8",
+        );
+      };
+      writeFakeClimb("alpha", 0.4, 0.55, 0.8);
+      writeFakeClimb("beta", 0.5, 0.72, 0.9);
+
+      const transport = new StdioClientTransport({
+        command: process.execPath,
+        args: [join(PLUGIN_ROOT, "dist", "mcp-server.mjs")],
+        env: { ...process.env, HILLCLIMB_DATA_DIR: dataDir },
+      });
+      const client = new Client({ name: "v063-test-client", version: "1.0.0" });
+      await client.connect(transport);
+      try {
+        // On main with 2 climbs: hillclimb_status without name succeeds with compact overview instead of throwing
+        const multiRes = await client.callTool({
+          name: "hillclimb_status",
+          arguments: { directory: repoDir },
+        });
+        assert.ok(!multiRes.isError, `Expected non-error multi-climb status, got: ${JSON.stringify(multiRes)}`);
+        const multiData = multiRes.structuredContent as { multiple?: boolean; branch?: string; climbs?: Array<{ name: string }> };
+        assert.equal(multiData.multiple, true);
+        assert.equal(multiData.branch, "main");
+        assert.deepEqual((multiData.climbs ?? []).map((c) => c.name).sort(), ["alpha", "beta"]);
+
+        // Switch to climb/beta branch: hillclimb_status and hillclimb_card without name auto-resolve beta!
+        execFileSync("git", ["checkout", "-q", "-b", "climb/beta"], { cwd: repoDir });
+        const branchStatus = await client.callTool({
+          name: "hillclimb_status",
+          arguments: { directory: repoDir },
+        });
+        assert.ok(!branchStatus.isError, `Expected branch-resolved status, got: ${JSON.stringify(branchStatus)}`);
+        assert.equal((branchStatus.structuredContent as { name?: string; best?: number }).name, "beta");
+        assert.equal((branchStatus.structuredContent as { best?: number }).best, 0.72);
+
+        const branchCard = await client.callTool({
+          name: "hillclimb_card",
+          arguments: { directory: repoDir },
+        });
+        assert.ok(!branchCard.isError);
+        assert.equal((branchCard.structuredContent as { name?: string }).name, "beta");
+
+        // 3. Inline-card tools return explicit "Stop calling tools and yield" next hint
+        await client.callTool({
+          name: "hillclimb_act",
+          arguments: {
+            projectId: "ergo-demo",
+            action: { op: "create_goal", key: "G-ERGO", parentGoalKey: null, title: "Agents stay reliable", brief: "Keep agent UX frictionless." },
+          },
+        });
+        const propRes = await client.callTool({
+          name: "hillclimb_propose_change",
+          arguments: {
+            projectId: "ergo-demo",
+            key: "ERGO-1",
+            goalKey: "G-ERGO",
+            contract: {
+              title: "Inline cards stay visible",
+              story: "As a user, I want inline decision cards to stay visible, so that I can approve right in chat.",
+              criteria: [{ id: "ac1", given: "a proposal", when: "the agent yields", then: "the inline card remains visible" }],
+            },
+          },
+        });
+        assert.match(String((propRes.structuredContent as { next?: string }).next), /Stop calling tools and yield/i);
+
+        await client.callTool({
+          name: "hillclimb_act",
+          arguments: {
+            projectId: "ergo-demo",
+            action: {
+              op: "create_outcome",
+              key: "ERGO-Q",
+              goalKey: "G-ERGO",
+              contract: {
+                title: "Questions stay visible inline",
+                story: "As a user, I want question cards to stay visible, so that I can click an option.",
+                criteria: [{ id: "ac1", given: "a question", when: "the agent yields", then: "the option card stays visible" }],
+              },
+            },
+          },
+        });
+        const qRes = await client.callTool({
+          name: "hillclimb_comment",
+          arguments: {
+            projectId: "ergo-demo",
+            key: "ERGO-Q",
+            text: "Pick a strategy",
+            options: ["Fast", "Thorough"],
+          },
+        });
+        assert.match(String((qRes.structuredContent as { next?: string }).next), /Stop calling tools and yield/i);
+
+        const designRes = await client.callTool({
+          name: "hillclimb_design",
+          arguments: {
+            mode: "propose",
+            projectId: "ergo-demo",
+            flowName: "Ergo Flow",
+            frames: [{ title: "Step 1", key: "ERGO-Q", criterionId: "ac1", html: "<div>Preview</div>" }],
+          },
+        });
+        assert.match(String((designRes.structuredContent as { next?: string }).next), /Stop calling tools and yield/i);
+      } finally {
+        await client.close();
+      }
+
+      // 4. Rules & docs document inline-card last-call rule and blind holdout hygiene
+      const rulesMd = readFileSync(join(PLUGIN_ROOT, "rules", "AGENTS.md"), "utf8");
+      const skillMd = readFileSync(join(PLUGIN_ROOT, "skills", "hill-climb", "SKILL.md"), "utf8");
+      const checksMd = readFileSync(join(PLUGIN_ROOT, "skills", "hill-climb", "references", "checks.md"), "utf8");
+      assert.match(rulesMd, /FINAL tool step/i);
+      assert.match(rulesMd, /holdout/i);
+      assert.match(skillMd, /FINAL tool call/i);
+      assert.match(skillMd, /only the aggregate score/i);
+      assert.match(checksMd, /Holdout hygiene/i);
+    } finally {
+      rmSync(repoDir, { recursive: true, force: true });
+      rmSync(dataDir, { recursive: true, force: true });
     }
   });
 });

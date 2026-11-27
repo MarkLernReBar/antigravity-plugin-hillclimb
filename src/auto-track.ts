@@ -2,6 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 import type { LiveData } from "./view-props.js";
 import type { Outcome, Tree } from "./model.js";
 import type { Repository } from "./repository.js";
+import { lintOutcome } from "./linter.js";
 import { redactSecrets, scanProjectClimbs, type ScannedClimb, type ScannedProjectClimbs } from "./repo-ops.js";
 import { applyCore, outcomeSignal } from "./tree.js";
 
@@ -81,50 +82,126 @@ export function deriveOutcomeKey(
   return `${candidate.slice(0, 86)}-${Date.now().toString(36).toUpperCase()}`.slice(0, 95);
 }
 
-function buildOutcomeContract(climb: ScannedClimb) {
-  const rawGoal = redactSecrets(climb.goal?.trim() ?? "");
-  const title =
-    rawGoal.length >= 4 && rawGoal.length <= 96
-      ? rawGoal
-      : humanizeClimbName(climb.name);
+const AUTO_TASK_VERB_PREFIX =
+  /^(?:bug\s*:|issue\s*:|task\s*:|chore\s*:|todo\s*:|(?:add|build|fix|measure|decide|document|migrate|cut\s+over|install|set\s+up|investigate|implement|refactor|create|update|write|remove|delete|wire|rename|bump|upgrade|launch|replace|rewrite|adopt|deprecate)\b)\s*/i;
 
-  const workerNote =
-    climb.origin === "antigravity"
-      ? `Antigravity worker ${climb.workerLabel}`
-      : climb.origin === "archived"
-        ? `archived worktree ${climb.workerLabel}`
-        : `local checkout`;
+const AUTO_STRIP_TOKENS =
+  /\S*\b[a-zA-Z0-9_-]+\.(?:ts|tsx|js|jsx|py|rs|go|sql|mjs|cjs|rb|java|kt)(?::\d+)?\b|\b[a-z]+_[a-z]+_\w+\s*=\s*(?:true|false|1|0)\b|\b#[0-9a-fA-F]{6}\b|\b\d+(?:\.\d+)?\s*(?:px|ms|rem)\b|\b(?:PR\s*#\d+|issue\s*#\d+|commit\s+[0-9a-f]{7,40}|20\d{2}-\d{2}-\d{2})\b/gi;
 
-  const story =
-    rawGoal.length > 0
-      ? `${rawGoal} (tracked from .hill-climb/${climb.name} in ${workerNote}).`
-      : climb.status === "prepared"
-        ? `Preparing benchmark inputs (${climb.preparedFiles} staged file${climb.preparedFiles === 1 ? "" : "s"}) before running climb.py in ${workerNote}.`
-        : `Tracked from .hill-climb/${climb.name} in ${workerNote}.`;
+function sanitizeAutoPhrase(raw: string): string {
+  return redactSecrets(raw)
+    .replace(AUTO_STRIP_TOKENS, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[.!?:;,\s]+$/, "");
+}
 
-  const checkCmd = redactSecrets(climb.check.join(" ; ").trim());
+function safeClimbLabel(name: string): string {
+  const humanized = sanitizeAutoPhrase(humanizeClimbName(name)) || "tracked metric";
+  if (AUTO_TASK_VERB_PREFIX.test(humanized)) {
+    return `Tracked climb ${humanized.charAt(0).toLowerCase()}${humanized.slice(1)}`;
+  }
+  return humanized;
+}
+
+export function buildOutcomeContract(climb: ScannedClimb) {
   const targetLabel = climb.targetText ?? (climb.target !== null ? fmtNum(climb.target) : "the climb target");
   const dirLabel = climb.direction === "min" ? "lower is better" : "higher is better";
+  const label = safeClimbLabel(climb.name);
+  const labelLower = `${label.charAt(0).toLowerCase()}${label.slice(1)}`;
+  const cleanedGoal = sanitizeAutoPhrase(climb.goal ?? "");
 
   const criterion =
     climb.status === "active"
       ? {
           id: "C1",
-          given: `Baseline score ${fmtNum(climb.baseline)} measured in .hill-climb/${climb.name}`,
-          when: checkCmd ? `Running scoring check (${checkCmd})` : `Running climb.py verifier for ${climb.name}`,
-          then: `Score reaches ${targetLabel} (${dirLabel}) with all regression guards passing`,
+          given: `A measured baseline of ${fmtNum(climb.baseline)} for ${label}`,
+          when: "The locked scoring check and guard suite run",
+          then: `The measured score reaches ${targetLabel} (${dirLabel}) with all guards passing`,
         }
       : {
           id: "C1",
-          given: `Climb ${climb.name} staged in ${workerNote}`,
-          when: `Initialized and iterated with climb.py`,
-          then: `Score reaches the climb target with all regression guards passing`,
+          given: `A staged climb check for ${label}`,
+          when: "The locked scoring check is initialized and run",
+          then: "The measured score reaches the climb target with all guards passing",
+        };
+
+  const fallbackTitle = `${label} meets target score`;
+  const fallbackStory =
+    climb.status === "active"
+      ? `As a maintainer, I want ${labelLower} to reach target ${targetLabel} (${dirLabel}), so that measured quality stays verified.`
+      : `As a maintainer, I want ${labelLower} to pass its locked scoring check once initialized, so that measured quality stays verified.`;
+
+  const goalCandidateTitle =
+    cleanedGoal.length >= 4 && cleanedGoal.length <= 96 && !AUTO_TASK_VERB_PREFIX.test(cleanedGoal)
+      ? cleanedGoal
+      : fallbackTitle;
+
+  const goalSnippet = cleanedGoal.length >= 4 && cleanedGoal.length <= 160 ? cleanedGoal : "";
+  const goalCandidateStory = goalSnippet
+    ? `As a maintainer, I want ${goalSnippet.charAt(0).toLowerCase()}${goalSnippet.slice(1)}, so that measured quality stays verified.`
+    : fallbackStory;
+
+  const candidate = {
+    title: goalCandidateTitle,
+    story: goalCandidateStory,
+    criteria: [criterion],
+    dependsOn: [] as string[],
+    rank: 100,
+    recheckDays: null as number | null,
+  };
+
+  if (
+    lintOutcome({
+      key: "AUTO-CHECK",
+      goalKey: DEFAULT_GOAL_KEY,
+      ...candidate,
+    }).length === 0
+  ) {
+    return candidate;
+  }
+
+  const fallback = {
+    title: fallbackTitle,
+    story: fallbackStory,
+    criteria: [criterion],
+    dependsOn: [] as string[],
+    rank: 100,
+    recheckDays: null as number | null,
+  };
+
+  if (
+    lintOutcome({
+      key: "AUTO-CHECK",
+      goalKey: DEFAULT_GOAL_KEY,
+      ...fallback,
+    }).length === 0
+  ) {
+    return fallback;
+  }
+
+  const neutralCriterion =
+    climb.status === "active"
+      ? {
+          id: "C1",
+          given: `A measured baseline of ${fmtNum(climb.baseline)} for this tracked climb`,
+          when: "The locked scoring check and guard suite run",
+          then: `The measured score reaches ${targetLabel} (${dirLabel}) with all guards passing`,
+        }
+      : {
+          id: "C1",
+          given: "A staged climb check in this repository",
+          when: "The locked scoring check is initialized and run",
+          then: "The measured score reaches the climb target with all guards passing",
         };
 
   return {
-    title,
-    story,
-    criteria: [criterion],
+    title: "Tracked climb metric meets target score",
+    story:
+      climb.status === "active"
+        ? `As a maintainer, I want this tracked climb metric to reach target ${targetLabel} (${dirLabel}), so that measured quality stays verified.`
+        : "As a maintainer, I want this tracked climb metric to pass its locked scoring check once initialized, so that measured quality stays verified.",
+    criteria: [neutralCriterion],
     dependsOn: [] as string[],
     rank: 100,
     recheckDays: null as number | null,
@@ -182,7 +259,8 @@ function canUpgradePreparedContract(
     !tree.changes.some((c) => c.key === outcome.key) &&
     outcome.criteria.length === 1 &&
     outcome.criteria[0]?.id === "C1" &&
-    outcome.criteria[0]?.when === "Initialized and iterated with climb.py"
+    (outcome.criteria[0]?.when === "Initialized and iterated with climb.py" ||
+      outcome.criteria[0]?.when === "The locked scoring check is initialized and run")
   );
 }
 
