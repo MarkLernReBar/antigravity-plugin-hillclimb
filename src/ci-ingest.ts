@@ -11,7 +11,7 @@ import {
   type TestResult,
 } from "../assets/ci/hillclimb-evidence.mjs";
 import { HillClimbError } from "./errors.js";
-import type { Evidence, Snapshot, Tree } from "./model.js";
+import { isOpenQuestion, type Evidence, type Snapshot, type Tree } from "./model.js";
 import type { Repository } from "./repository.js";
 
 export const KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,95}$/;
@@ -59,7 +59,7 @@ function inboxOf(snapshot: Snapshot) {
   return {
     count: snapshot.inbox,
     pendingChanges: snapshot.changes.filter((change) => change.state === "pending").length,
-    openQuestions: snapshot.comments.filter((comment) => comment.answer === null).length,
+    openQuestions: snapshot.comments.filter(isOpenQuestion).length,
   };
 }
 

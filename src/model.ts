@@ -245,3 +245,20 @@ export const emptyTree = (): Tree => ({
   flowProposals: [],
   activity: [],
 });
+
+/**
+ * A comment counts as an open decision waiting on a human ONLY when it is still
+ * unanswered AND actually asks for a decision:
+ * - Any unanswered comment with multiple-choice `options` (root or follow-up).
+ * - Or an unanswered root question ending in `?` that was not posted as a plain
+ *   human UI note or plan review note.
+ * Replies without options (`parentId !== null`) and plain notes NEVER reopen Decisions.
+ */
+export function isOpenQuestion(comment: Comment): boolean {
+  if (comment.answer !== null) return false;
+  if (comment.options.length > 0) return true;
+  if (comment.parentId !== null) return false;
+  if (comment.actor === "human" || comment.via === "ui") return false;
+  if (comment.planVersion !== null && comment.planVersion !== undefined) return false;
+  return comment.text.trim().endsWith("?");
+}

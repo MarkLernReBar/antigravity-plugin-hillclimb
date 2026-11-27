@@ -8,7 +8,7 @@ import { coreActions, planningActions } from "./actions.js";
 import { treeSchema } from "./tree-schema.js";
 import { applyCore, snapshot, type ActionMeta } from "./tree.js";
 import { applyPlanning } from "./planning.js";
-import { emptyTree, type Snapshot, type Tree } from "./model.js";
+import { emptyTree, isOpenQuestion, type Snapshot, type Tree } from "./model.js";
 import { redactSecrets } from "./state.js";
 
 export interface SavedViewFilter {
@@ -478,7 +478,7 @@ export function createRepository(db: DatabaseSync) {
       outcomeCount: tree.outcomes.length,
       inboxCount:
         tree.changes.filter((c) => c.state === "pending").length +
-        tree.comments.filter((c) => c.answer === null).length +
+        tree.comments.filter(isOpenQuestion).length +
         (tree.flowProposals ?? []).filter((p) => p.state === "pending").length,
       lastActivityAt: tree.activity.length > 0 ? tree.activity[tree.activity.length - 1]!.at : null,
       hasRepo: projectHasRepo(project),
@@ -542,11 +542,11 @@ export function createRepository(db: DatabaseSync) {
   }
 
   const userVersion = (db.prepare("PRAGMA user_version").get() as { user_version: number } | undefined)?.user_version ?? 0;
-  if (userVersion < 2) {
+  if (userVersion < 3) {
     runInImmediateTx(() => {
       const currentVersion =
         (db.prepare("PRAGMA user_version").get() as { user_version: number } | undefined)?.user_version ?? 0;
-      if (currentVersion >= 2) return;
+      if (currentVersion >= 3) return;
       const rows = db.prepare("SELECT project, body FROM hc_trees").all() as Array<{ project: string; body: string }>;
       const stamp = new Date().toISOString();
       for (const row of rows) {
@@ -564,9 +564,11 @@ export function createRepository(db: DatabaseSync) {
           meta.hasRepo ? 1 : 0,
           meta.updated,
         );
-        reindexTreeFts(row.project, tree);
+        if (currentVersion < 2) {
+          reindexTreeFts(row.project, tree);
+        }
       }
-      db.exec("PRAGMA user_version = 2;");
+      db.exec("PRAGMA user_version = 3;");
     });
   } else {
     const missingCount =

@@ -37891,6 +37891,14 @@ var emptyTree = () => ({
   flowProposals: [],
   activity: []
 });
+function isOpenQuestion(comment) {
+  if (comment.answer !== null) return false;
+  if (comment.options.length > 0) return true;
+  if (comment.parentId !== null) return false;
+  if (comment.actor === "human" || comment.via === "ui") return false;
+  if (comment.planVersion !== null && comment.planVersion !== void 0) return false;
+  return comment.text.trim().endsWith("?");
+}
 
 // src/tree.ts
 var LIVE_TRACK = "main";
@@ -38277,7 +38285,7 @@ function snapshot(tree, track2 = LIVE_TRACK, now = (/* @__PURE__ */ new Date()).
     (row) => row.signal !== "verified" && (row.availability ?? "active") === "active" && row.blockedBy.length === 0 && row.claim === null
   ).map((row) => row.key);
   const flowProposals = [...tree.flowProposals ?? []];
-  const inbox = tree.changes.filter((change2) => change2.state === "pending").length + tree.comments.filter((comment) => comment.answer === null).length + flowProposals.filter((proposal) => proposal.state === "pending").length;
+  const inbox = tree.changes.filter((change2) => change2.state === "pending").length + tree.comments.filter(isOpenQuestion).length + flowProposals.filter((proposal) => proposal.state === "pending").length;
   return {
     goals: [...tree.goals],
     outcomes: [...tree.outcomes],
@@ -40949,7 +40957,7 @@ function createRepository(db) {
     return {
       goalCount: tree.goals.length,
       outcomeCount: tree.outcomes.length,
-      inboxCount: tree.changes.filter((c) => c.state === "pending").length + tree.comments.filter((c) => c.answer === null).length + (tree.flowProposals ?? []).filter((p2) => p2.state === "pending").length,
+      inboxCount: tree.changes.filter((c) => c.state === "pending").length + tree.comments.filter(isOpenQuestion).length + (tree.flowProposals ?? []).filter((p2) => p2.state === "pending").length,
       lastActivityAt: tree.activity.length > 0 ? tree.activity[tree.activity.length - 1].at : null,
       hasRepo: projectHasRepo(project),
       updated: stamp2
@@ -41003,10 +41011,10 @@ ${(o.tags ?? []).join(" ")} ${o.availabilityReason ?? ""}`
 ${art.citations.join(" ")}`);
   }
   const userVersion = db.prepare("PRAGMA user_version").get()?.user_version ?? 0;
-  if (userVersion < 2) {
+  if (userVersion < 3) {
     runInImmediateTx(() => {
       const currentVersion = db.prepare("PRAGMA user_version").get()?.user_version ?? 0;
-      if (currentVersion >= 2) return;
+      if (currentVersion >= 3) return;
       const rows = db.prepare("SELECT project, body FROM hc_trees").all();
       const stamp2 = (/* @__PURE__ */ new Date()).toISOString();
       for (const row of rows) {
@@ -41024,9 +41032,11 @@ ${art.citations.join(" ")}`);
           meta3.hasRepo ? 1 : 0,
           meta3.updated
         );
-        reindexTreeFts(row.project, tree);
+        if (currentVersion < 2) {
+          reindexTreeFts(row.project, tree);
+        }
       }
-      db.exec("PRAGMA user_version = 2;");
+      db.exec("PRAGMA user_version = 3;");
     });
   } else {
     const missingCount = db.prepare("SELECT COUNT(*) AS cnt FROM hc_trees t LEFT JOIN hc_tree_meta m ON m.project = t.project WHERE m.project IS NULL").get()?.cnt ?? 0;
@@ -46926,7 +46936,7 @@ function inboxOf(snapshot2) {
   return {
     count: snapshot2.inbox,
     pendingChanges: snapshot2.changes.filter((change2) => change2.state === "pending").length,
-    openQuestions: snapshot2.comments.filter((comment) => comment.answer === null).length
+    openQuestions: snapshot2.comments.filter(isOpenQuestion).length
   };
 }
 function evidenceSignature(row) {
@@ -50305,7 +50315,7 @@ function inboxOf2(snapshot2) {
   return {
     count: snapshot2.inbox,
     pendingChanges: snapshot2.changes.filter((change2) => change2.state === "pending").length,
-    openQuestions: snapshot2.comments.filter((comment) => comment.answer === null).length,
+    openQuestions: snapshot2.comments.filter(isOpenQuestion).length,
     pendingFlowChanges: snapshot2.flowProposals.filter((proposal) => proposal.state === "pending").length
   };
 }
@@ -50419,7 +50429,7 @@ function createHillClimbServer(repo, runtime) {
     return projects[0]?.id ?? repo.resolveProjectId();
   };
   const server = new McpServer(
-    { name: "hillclimb", version: "0.5.3" },
+    { name: "hillclimb", version: "0.5.4" },
     {
       capabilities: {
         tools: {},
@@ -51305,7 +51315,7 @@ function createHillClimbServer(repo, runtime) {
             review: "approve_change / reject_change are confirmed by a person in the Hill Climb UI"
           };
         });
-        const questions = snapshot2.comments.filter((comment) => comment.answer === null && inScope(comment.key)).map((comment) => ({
+        const questions = snapshot2.comments.filter((comment) => isOpenQuestion(comment) && inScope(comment.key)).map((comment) => ({
           id: comment.id,
           key: comment.key,
           parentId: comment.parentId,

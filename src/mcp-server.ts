@@ -38,7 +38,7 @@ import { computeInsights } from "./insights.js";
 import { ARTIFACT_TEMPLATES, exportShareableReport, generateArtifactFromTemplate, type ArtifactTemplateId } from "./artifacts.js";
 import { blueprintActions, listBlueprints, parseMarkdownImport } from "./templates.js";
 import { createAutomationEngine, ingestAlert } from "./hooks.js";
-import type { Contract, Criterion, Evidence, Outcome, Snapshot, Tree } from "./model.js";
+import { isOpenQuestion, type Contract, type Criterion, type Evidence, type Outcome, type Snapshot, type Tree } from "./model.js";
 import type { HookEvent, SearchHit } from "./repository.js";
 
 const APP_URI = "ui://hillclimb/app.html";
@@ -117,7 +117,7 @@ function inboxOf(snapshot: Snapshot) {
   return {
     count: snapshot.inbox,
     pendingChanges: snapshot.changes.filter((change) => change.state === "pending").length,
-    openQuestions: snapshot.comments.filter((comment) => comment.answer === null).length,
+    openQuestions: snapshot.comments.filter(isOpenQuestion).length,
     pendingFlowChanges: snapshot.flowProposals.filter((proposal) => proposal.state === "pending").length,
   };
 }
@@ -252,7 +252,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     return projects[0]?.id ?? repo.resolveProjectId();
   };
   const server = new McpServer(
-    { name: "hillclimb", version: "0.5.3" },
+    { name: "hillclimb", version: "0.5.4" },
     {
       capabilities: {
         tools: {},
@@ -1225,7 +1225,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
             };
           });
         const questions = snapshot.comments
-          .filter((comment) => comment.answer === null && inScope(comment.key))
+          .filter((comment) => isOpenQuestion(comment) && inScope(comment.key))
           .map((comment) => ({
             id: comment.id,
             key: comment.key,

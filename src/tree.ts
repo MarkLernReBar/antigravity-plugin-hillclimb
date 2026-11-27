@@ -19,8 +19,9 @@
 // lifted to the best rank of anything that depends on it, through chains. A
 // dependency that is not proven holds its dependents out of `next`.
 
-import type {
-  Activity,
+import {
+  isOpenQuestion,
+  type Activity,
   ActorVia,
   Claim,
   Contract,
@@ -567,7 +568,7 @@ export function snapshot(
   const flowProposals = [...(tree.flowProposals ?? [])];
   const inbox =
     tree.changes.filter((change) => change.state === "pending").length +
-    tree.comments.filter((comment) => comment.answer === null).length +
+    tree.comments.filter(isOpenQuestion).length +
     flowProposals.filter((proposal) => proposal.state === "pending").length;
   return {
     goals: [...tree.goals],

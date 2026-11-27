@@ -7,19 +7,20 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import type { Action } from "../actions.js";
-import type {
-  Change,
-  Comment,
-  Contract,
-  Criterion,
-  Flow,
-  FlowProposal,
-  Outcome,
-  Pin,
-  PinKind,
-  Release,
-  Signal,
-  Snapshot,
+import {
+  isOpenQuestion,
+  type Change,
+  type Comment,
+  type Contract,
+  type Criterion,
+  type Flow,
+  type FlowProposal,
+  type Outcome,
+  type Pin,
+  type PinKind,
+  type Release,
+  type Signal,
+  type Snapshot,
 } from "../model.js";
 
 export interface PromotionPreviewRow {
@@ -256,23 +257,28 @@ export function questionThreads(data: Snapshot, key?: string): QuestionThread[] 
     if (list === undefined) replies.set(comment.parentId, [comment]);
     else list.push(comment);
   }
-  const threads = roots.map((root) => {
-    const children = (replies.get(root.id) ?? []).slice().sort(byCreated);
-    const all = [root, ...children];
-    return {
-      root,
-      replies: children,
-      open: all.some((comment) => comment.answer === null),
-      optionCount: all.reduce((total, comment) => total + comment.options.length, 0),
-    };
-  });
+  const threads = roots
+    .map((root) => {
+      const children = (replies.get(root.id) ?? []).slice().sort(byCreated);
+      const all = [root, ...children];
+      const hasDecision = all.some((comment) => isOpenQuestion(comment) || comment.answer !== null);
+      return {
+        root,
+        replies: children,
+        open: all.some(isOpenQuestion),
+        hasDecision,
+        optionCount: all.reduce((total, comment) => total + comment.options.length, 0),
+      };
+    })
+    .filter((thread) => thread.hasDecision)
+    .map(({ hasDecision: _hasDecision, ...thread }) => thread);
   return threads.sort((a, b) => Number(b.open) - Number(a.open) || b.root.created.localeCompare(a.root.created));
 }
 
 export function inboxCounts(data: Snapshot): { changes: number; questions: number; flowProposals: number } {
   return {
     changes: data.changes.filter((change) => change.state === "pending").length,
-    questions: data.comments.filter((comment) => comment.answer === null).length,
+    questions: data.comments.filter(isOpenQuestion).length,
     flowProposals: (data.flowProposals ?? []).filter((proposal) => proposal.state === "pending").length,
   };
 }
@@ -689,10 +695,11 @@ function ContractDiffView({ diff, base, next }: { diff: ContractDiff; base: Cont
 }
 
 function Message({ comment, act, run, busy }: { comment: Comment; act: PortfolioProps["act"]; run: Run; busy: string | null }): ReactNode {
+  const showAnswer = comment.answer !== null || isOpenQuestion(comment);
   return (
     <div className="pf-message">
       <p className="pf-message-text">{comment.text}</p>
-      <AnswerForm comment={comment} act={act} run={run} busy={busy} />
+      {showAnswer ? <AnswerForm comment={comment} act={act} run={run} busy={busy} /> : null}
       <p className="pf-muted pf-small">{new Date(comment.created).toLocaleString()}</p>
     </div>
   );

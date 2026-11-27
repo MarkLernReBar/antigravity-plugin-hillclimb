@@ -988,7 +988,7 @@ experiments:
       const db = openDatabase(dataDir);
       const repo = createRepository(db);
       const userVer = (db.prepare("PRAGMA user_version").get() as { user_version: number }).user_version;
-      assert.equal(userVer, 2, "SQLite schema must migrate to user_version = 2");
+      assert.equal(userVer, 3, "SQLite schema must migrate to user_version = 3");
       repo.registerProject({ id: "v05", name: "V05 App", directory: workDir });
 
       // 1. Goals (update_goal + cycle rejection), sectionNumber, tags, propose_outcome -> approve_change
@@ -1179,8 +1179,25 @@ experiments:
         ref: "PR #99",
         note: "Shows disabled spinner during POST",
       });
-      // 1 unanswered plan comment + 1 pending flow proposal = 2 inbox items
+      // Plain plan review note does NOT open an inbox decision; only the pending flow proposal counts (1)
+      assert.equal(repo.view("v05").inbox, 1);
+
+      // Regression: replying to an answered question NEVER reopens Decisions
+      repo.act(
+        "v05",
+        { op: "comment", key: "PAY-1", text: "Which SSO mode?", options: ["Per-user SSO", "Shared"], parentId: null },
+        { actor: "agent-a", via: "mcp" },
+      );
+      const qId = repo.read("v05").comments.at(-1)!.id;
       assert.equal(repo.view("v05").inbox, 2);
+      repo.act("v05", { op: "answer", id: qId, answer: "Per-user SSO" }, { actor: "human", via: "ui" });
+      assert.equal(repo.view("v05").inbox, 1);
+      repo.act(
+        "v05",
+        { op: "comment", key: "PAY-1", text: "Every team member gets their own SSO", options: [], parentId: qId },
+        { actor: "human", via: "ui" },
+      );
+      assert.equal(repo.view("v05").inbox, 1, "plain reply to an answered question must not reopen inbox");
       const flowPropId = repo.read("v05").flowProposals![0]!.id;
       repo.act("v05", { op: "accept_flow_change", id: flowPropId, reviewNote: "Ship it" }, { actor: "human", via: "ui" });
       let flowFrame = repo.read("v05").flows[0]!.frames[0]!;
