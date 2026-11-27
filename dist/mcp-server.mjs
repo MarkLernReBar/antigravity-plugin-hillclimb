@@ -51076,7 +51076,7 @@ function createHillClimbServer(repo, runtime) {
     return projects[0]?.id ?? repo.resolveProjectId();
   };
   const server = new McpServer(
-    { name: "hillclimb", version: "0.9.0" },
+    { name: "hillclimb", version: "0.9.1" },
     {
       capabilities: {
         tools: {},

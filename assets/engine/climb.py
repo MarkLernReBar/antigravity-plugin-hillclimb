@@ -1136,9 +1136,16 @@ _TEST_FILE_RE = re.compile(r"(?:^|/)(?:tests?|specs?|fixtures?|__tests__)/|(?:_t
 _QUOTED_LITERAL_RE = re.compile(r"""(['"])([^'"\\\n]{5,80})\1""")
 
 
+_SUMMARY_BAR_LINE_RE = re.compile(r"\[(?:PASS|FAIL|OK|WARN|SKIP)\]|\(bar\s*[<>]=?|===", re.I)
+
+
 def _extract_case_identifiers(best_text):
     """Extract non-generic benchmark case identifiers from best.txt (format-agnostic)."""
-    metrics, _ = _extract_case_metrics(best_text)
+    filtered_lines = [
+        ln for ln in (best_text or "").splitlines()
+        if not _SUMMARY_BAR_LINE_RE.search(ln)
+    ]
+    metrics, _ = _extract_case_metrics("\n".join(filtered_lines))
     idents = set()
     for key in metrics:
         base = key.split(".", 1)[0]
@@ -1147,6 +1154,22 @@ def _extract_case_identifiers(best_text):
             continue
         idents.add(base)
     return sorted(idents)
+
+
+def _preexisting_in_prod(ident, start_commit, locked):
+    """Return True if ident already appeared in non-locked, non-test files at start_commit."""
+    out = git("grep", "-I", "-i", "-F", "-l", "--", ident, start_commit, check=False)
+    if not out:
+        return False
+    prefix = f"{start_commit}:"
+    for raw in out.splitlines():
+        path = raw[len(prefix):] if raw.startswith(prefix) else raw
+        if not path or path.startswith(".hill-climb/") or _TEST_FILE_RE.search(path):
+            continue
+        if locked and not outside([path], locked):
+            continue
+        return True
+    return False
 
 
 def scan_case_id_leaks(card, folder):
@@ -1166,6 +1189,7 @@ def scan_case_id_leaks(card, folder):
     if not diff_text:
         return []
     locked = card.get("lock") or []
+    preexisting_cache = {}
     hits = []
     seen = set()
     cur_file = ""
@@ -1181,11 +1205,16 @@ def scan_case_id_leaks(card, folder):
                 for ident, pat in patterns:
                     if pat.search(lit_low):
                         key = (cur_file, ident.lower())
-                        if key not in seen:
-                            seen.add(key)
-                            hits.append({"file": cur_file, "identifier": ident, "literal": lit[:80]})
-                            if len(hits) >= 20:
-                                return hits
+                        if key in seen:
+                            continue
+                        if ident.lower() not in preexisting_cache:
+                            preexisting_cache[ident.lower()] = _preexisting_in_prod(ident, start_commit, locked)
+                        if preexisting_cache[ident.lower()]:
+                            continue
+                        seen.add(key)
+                        hits.append({"file": cur_file, "identifier": ident, "literal": lit[:80]})
+                        if len(hits) >= 20:
+                            return hits
     return hits
 
 
@@ -1693,7 +1722,13 @@ def cmd_audit(args):
     dev_gain = dev_delta if card["direction"] == "max" else -dev_delta
     h_delta = (holdouts[-1]["score"] - holdouts[0]["score"]) if len(holdouts) >= 2 else None
     h_gain = (h_delta if card["direction"] == "max" else -h_delta) if h_delta is not None else None
-    transfer_ratio = round(h_gain / dev_gain, 3) if (h_gain is not None and dev_gain > 1e-9) else None
+    win_dev_gain = dev_gain
+    if len(holdouts) >= 2:
+        v0 = holdouts[0].get("visible")
+        v1 = holdouts[-1].get("visible")
+        if isinstance(v0, (int, float)) and isinstance(v1, (int, float)) and abs(v1 - v0) > 1e-9:
+            win_dev_gain = (v1 - v0) if card["direction"] == "max" else (v0 - v1)
+    transfer_ratio = round(h_gain / win_dev_gain, 3) if (h_gain is not None and win_dev_gain > 1e-9) else None
 
     findings = []
     if leaks:

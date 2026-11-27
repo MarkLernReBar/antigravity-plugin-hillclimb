@@ -2587,7 +2587,7 @@ experiments:
 
       writeFileSync(
         join(repoDir, "engine.py"),
-        "DEV_A = 0.50\nDEV_B = 0.50\nHOLDOUT = 0.50\nSPECIAL = []\n",
+        'DEV_A = 0.50\nDEV_B = 0.50\nHOLDOUT = 0.50\nSPECIAL = []\nPREEXISTING = "catalog_feature"\n',
         "utf8",
       );
       writeFileSync(
@@ -2601,7 +2601,8 @@ experiments:
           "    cp.write_text(str(n + 1))",
           "    jitter = [0.0, 0.04, -0.02][n % 3]",
           "a = engine.DEV_A + jitter",
-          'print(f"CASES widget_case_a={a:.3f} widget_case_b={engine.DEV_B:.3f}")',
+          'print(f"CASES widget_case_a={a:.3f} widget_case_b={engine.DEV_B:.3f} catalog_feature=0.900")',
+          'print("  pillar_signal            0.8000  (bar >= 0.55)  [PASS]")',
           'print(f"{(a + engine.DEV_B) / 2:.4f}")',
         ].join("\n") + "\n",
         "utf8",
@@ -2673,10 +2674,11 @@ experiments:
       assert.match(relockOut, /1 locked file\(s\)/);
       assert.equal(getClimbStatus(repoDir, "win-audit").summary.relockCount, 1);
 
-      // 3. Auto-extracted case-ID leak scan: hardcoding "widget_case_a" in engine.py is caught by `climb.py audit`!
+      // 3. Auto-extracted case-ID leak scan: hardcoding "widget_case_a" in engine.py is caught by `climb.py audit`,
+      // while [PASS] summary pillar names ("pillar_signal") and pre-existing codebase terms ("catalog_feature") are NOT false positives!
       writeFileSync(
         join(repoDir, "engine.py"),
-        'DEV_A = 0.80\nDEV_B = 0.60\nHOLDOUT = 0.70\nSPECIAL = ["widget_case_a"]\n',
+        'DEV_A = 0.80\nDEV_B = 0.60\nHOLDOUT = 0.70\nSPECIAL = ["widget_case_a", "pillar_signal", "catalog_feature"]\n',
         "utf8",
       );
       const s3 = execFileSync("python3", [climbPy, "try", "special case widget"], { cwd: repoDir, encoding: "utf8" });
@@ -2694,6 +2696,25 @@ experiments:
       assert.equal(auditJson.case_id_leaks[0]?.identifier, "widget_case_a");
       assert.equal(auditJson.relocks.length, 1);
       assert.deepEqual(auditJson.relocks[0]?.files, ["check_dev.py"]);
+
+      // Verify exact-window transfer_ratio when first holdout ran mid-climb (not at Step 0)
+      execFileSync("python3", [climbPy, "holdout", "--why", "mid-check"], { cwd: repoDir, encoding: "utf8" });
+      const logPathWin = join(repoDir, ".hill-climb", "win-audit", "log.jsonl");
+      const rawLogWin = readFileSync(logPathWin, "utf8").trim().split("\n").map((l) => JSON.parse(l) as Record<string, unknown>);
+      // Remove the initial Step-0 baseline holdout so the remaining window is [visible 0.60->0.70 (+0.10), holdout 0.50->0.70 (+0.20) => ratio 2.0]
+      let droppedFirstH = false;
+      const midOnly = rawLogWin.filter((r) => {
+        if (!droppedFirstH && r.kind === "holdout") {
+          droppedFirstH = true;
+          return false;
+        }
+        return true;
+      });
+      writeFileSync(logPathWin, `${midOnly.map((r) => JSON.stringify(r)).join("\n")}\n`, "utf8");
+      const midWindowAudit = JSON.parse(
+        execFileSync("python3", [climbPy, "audit", "--json"], { cwd: repoDir, encoding: "utf8" }),
+      ) as { transfer_ratio: number | null };
+      assert.equal(midWindowAudit.transfer_ratio, 2.0);
 
       // --strict must fail non-zero when case-ID leak exists!
       let strictFailed = false;
