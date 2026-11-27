@@ -50530,6 +50530,24 @@ var contractInputSchema = external_exports.object({
   rank: external_exports.number().int().nonnegative().default(100),
   recheckDays: external_exports.number().positive().nullable().default(null)
 });
+var leanContractSchema = external_exports.object({
+  title: external_exports.string(),
+  story: external_exports.string(),
+  criteria: external_exports.array(external_exports.object({ id: external_exports.string(), given: external_exports.string(), when: external_exports.string(), then: external_exports.string() })),
+  dependsOn: external_exports.array(external_exports.string()).optional(),
+  rank: external_exports.number().optional(),
+  recheckDays: external_exports.number().nullable().optional()
+});
+var designFrameSchema = external_exports.object({
+  title: external_exports.string(),
+  key: external_exports.string(),
+  criterionId: external_exports.string(),
+  kind: external_exports.enum(["html", "image"]).optional(),
+  html: external_exports.string().optional(),
+  imagePath: external_exports.string().optional(),
+  notes: external_exports.string().optional(),
+  componentRefs: external_exports.array(external_exports.string()).optional()
+});
 function parseDataDirArg(argv) {
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -50691,7 +50709,7 @@ function createHillClimbServer(repo, runtime) {
     return projects[0]?.id ?? repo.resolveProjectId();
   };
   const server = new McpServer(
-    { name: "hillclimb", version: "0.6.0" },
+    { name: "hillclimb", version: "0.6.1" },
     {
       capabilities: {
         tools: {},
@@ -51253,14 +51271,13 @@ function createHillClimbServer(repo, runtime) {
     server,
     "hillclimb_propose_change",
     {
-      title: "Propose edit",
       description: "Propose a contract edit (or new outcome via `goalKey`) inline for human approval.",
       inputSchema: {
         projectId: external_exports.string().optional(),
         directory: external_exports.string().optional(),
         key: keySchema,
         goalKey: keySchema.optional(),
-        contract: external_exports.record(external_exports.string(), external_exports.unknown())
+        contract: leanContractSchema
       },
       _meta: INLINE_DECISION_META
     },
@@ -51626,7 +51643,7 @@ function createHillClimbServer(repo, runtime) {
         criterionIds: external_exports.array(keySchema).default([]),
         text: external_exports.string().trim().min(1),
         source: external_exports.string().trim().min(1),
-        attachments: external_exports.array(external_exports.record(external_exports.string(), external_exports.unknown())).max(12).optional(),
+        attachments: external_exports.array(external_exports.object({ label: external_exports.string(), path: external_exports.string(), mimeType: external_exports.string().optional() })).optional(),
         track: external_exports.string().optional(),
         version: external_exports.number().int().positive().optional()
       }
@@ -52323,7 +52340,6 @@ function createHillClimbServer(repo, runtime) {
     server,
     "hillclimb_design",
     {
-      title: "Design flows & kit",
       description: "Scan repo UI components/tokens (`kit`), propose inline HTML/image mockups (`propose`), inspect flows (`inspect`), or resolve pins (`resolve_pin`).",
       inputSchema: {
         mode: external_exports.enum(["kit", "propose", "inspect", "resolve_pin"]).default("kit"),
@@ -52337,8 +52353,8 @@ function createHillClimbServer(repo, runtime) {
         kind: external_exports.enum(["new_flow", "new_step", "change"]).optional(),
         frameIndex: external_exports.number().optional(),
         basedOnVersion: external_exports.number().optional(),
-        frame: external_exports.record(external_exports.string(), external_exports.unknown()).optional(),
-        frames: external_exports.array(external_exports.record(external_exports.string(), external_exports.unknown())).optional(),
+        frame: designFrameSchema.optional(),
+        frames: external_exports.array(designFrameSchema).optional(),
         componentRefs: external_exports.array(external_exports.string()).optional(),
         selfGrade: external_exports.string().optional(),
         ref: external_exports.string().optional(),
@@ -52377,6 +52393,35 @@ function createHillClimbServer(repo, runtime) {
           if (!repo.getSetting(pid, "designKit") && scan.designDocs[0]?.path) {
             repo.setSetting(pid, "designKit", scan.designDocs[0].path);
           }
+          const kitLines = [
+            `Design kit in ${dir}: ${scan.components.length} UI component(s), ${Object.keys(scan.tokens).length} CSS token(s)${scan.tailwindDetected ? ", Tailwind detected" : ""}${savedKit2 ? `, kit: ${savedKit2}` : ""}.`
+          ];
+          if (scan.designDocs.length > 0) {
+            kitLines.push(
+              "",
+              "Design docs:",
+              ...scan.designDocs.map((d2) => `- ${d2.path}: ${d2.excerpt.slice(0, 260).replace(/\s+/g, " ")}`)
+            );
+          }
+          if (scan.components.length > 0) {
+            kitLines.push(
+              "",
+              "UI components:",
+              ...scan.components.map(
+                (c) => `- ${c.name} (${c.path})${c.exports.length > 0 ? ` [exports: ${c.exports.join(", ")}]` : ""}${c.propsHint.length > 0 ? ` props: ${c.propsHint.join(", ")}` : ""}`
+              )
+            );
+          }
+          if (scan.tokenStyleBlock) {
+            kitLines.push("", "CSS tokens (paste into mockup <style>):", scan.tokenStyleBlock);
+          }
+          if (scan.componentSnippet) {
+            kitLines.push(
+              "",
+              `Component source (${scan.componentSnippet.path}${scan.componentSnippet.truncated ? ", truncated" : ""}):`,
+              scan.componentSnippet.content
+            );
+          }
           return jsonResult(
             {
               projectId: pid,
@@ -52393,7 +52438,7 @@ function createHillClimbServer(repo, runtime) {
                 components: scan.components.slice(0, 10).map((c) => ({ name: c.name, path: c.path }))
               }
             },
-            `Design kit in ${dir}: ${scan.components.length} UI component(s), ${Object.keys(scan.tokens).length} CSS token(s)${scan.tailwindDetected ? ", Tailwind detected" : ""}${savedKit2 ? `, kit: ${savedKit2}` : ""}.`
+            cap2(kitLines.join("\n"))
           );
         }
         if (input2.mode === "resolve_pin") {

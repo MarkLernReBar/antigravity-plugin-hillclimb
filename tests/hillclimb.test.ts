@@ -1551,18 +1551,30 @@ experiments:
       await client.connect(transport);
       try {
         const listed = await client.listTools();
-        const designMeta = listed.tools.find((t) => t.name === "hillclimb_design")?._meta as
+        const designTool = listed.tools.find((t) => t.name === "hillclimb_design");
+        const designMeta = designTool?._meta as
           | { ui?: { resourceUri?: string }; "com.google.antigravity/ui"?: unknown }
           | undefined;
         assert.equal(designMeta?.ui?.resourceUri, "ui://hillclimb/app.html");
         assert.equal(designMeta?.["com.google.antigravity/ui"], undefined, "hillclimb_design must render inline, not steal aux_pane");
 
-        // mode="kit"
+        // Regression v0.6.1: frames/frame/contract must expose explicit object properties (not bare z.record) so tool callers serialize nested frames
+        const designProps = (designTool?.inputSchema as { properties?: Record<string, { properties?: Record<string, unknown>; items?: { properties?: Record<string, unknown> } }> })?.properties;
+        assert.ok(designProps?.frame?.properties?.html, "hillclimb_design.frame must declare explicit properties");
+        assert.ok(designProps?.frames?.items?.properties?.html, "hillclimb_design.frames[] must declare explicit properties");
+        const proposeProps = (listed.tools.find((t) => t.name === "hillclimb_propose_change")?.inputSchema as { properties?: Record<string, { properties?: Record<string, unknown> }> })?.properties;
+        assert.ok(proposeProps?.contract?.properties?.criteria, "hillclimb_propose_change.contract must declare explicit properties");
+
+        // mode="kit" (verify text content ALSO carries components, CSS tokens, and readComponent source for the LLM!)
         const kitRes = await client.callTool({
           name: "hillclimb_design",
-          arguments: { mode: "kit", projectId: "design-demo", componentQuery: "Pay" },
+          arguments: { mode: "kit", projectId: "design-demo", componentQuery: "Pay", readComponent: "src/components/PayButton.tsx" },
         });
         assert.ok(!kitRes.isError);
+        const kitText = ((kitRes.content as Array<{ type: string; text?: string }>)?.[0]?.text) ?? "";
+        assert.ok(kitText.includes("PayButton"), "kit text response must list discovered components for the agent");
+        assert.ok(kitText.includes("--brand-primary: #2563eb"), "kit text response must include CSS tokenStyleBlock");
+        assert.ok(kitText.includes("btn-primary"), "kit text response must include readComponent source snippet");
         const kitData = kitRes.structuredContent as {
           inlineDecision?: { kind: string; componentCount: number; tokenCount: number };
         };

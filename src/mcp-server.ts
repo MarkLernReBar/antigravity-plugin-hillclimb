@@ -68,6 +68,26 @@ const contractInputSchema = z.object({
   recheckDays: z.number().positive().nullable().default(null),
 });
 
+const leanContractSchema = z.object({
+  title: z.string(),
+  story: z.string(),
+  criteria: z.array(z.object({ id: z.string(), given: z.string(), when: z.string(), then: z.string() })),
+  dependsOn: z.array(z.string()).optional(),
+  rank: z.number().optional(),
+  recheckDays: z.number().nullable().optional(),
+});
+
+const designFrameSchema = z.object({
+  title: z.string(),
+  key: z.string(),
+  criterionId: z.string(),
+  kind: z.enum(["html", "image"]).optional(),
+  html: z.string().optional(),
+  imagePath: z.string().optional(),
+  notes: z.string().optional(),
+  componentRefs: z.array(z.string()).optional(),
+});
+
 function parseDataDirArg(argv: string[]): string {
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]!;
@@ -253,7 +273,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     return projects[0]?.id ?? repo.resolveProjectId();
   };
   const server = new McpServer(
-    { name: "hillclimb", version: "0.6.0" },
+    { name: "hillclimb", version: "0.6.1" },
     {
       capabilities: {
         tools: {},
@@ -878,14 +898,13 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     server,
     "hillclimb_propose_change",
     {
-      title: "Propose edit",
       description: "Propose a contract edit (or new outcome via `goalKey`) inline for human approval.",
       inputSchema: {
         projectId: z.string().optional(),
         directory: z.string().optional(),
         key: keySchema,
         goalKey: keySchema.optional(),
-        contract: z.record(z.string(), z.unknown()),
+        contract: leanContractSchema,
       },
       _meta: INLINE_DECISION_META,
     },
@@ -1279,7 +1298,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
         criterionIds: z.array(keySchema).default([]),
         text: z.string().trim().min(1),
         source: z.string().trim().min(1),
-        attachments: z.array(z.record(z.string(), z.unknown())).max(12).optional(),
+        attachments: z.array(z.object({ label: z.string(), path: z.string(), mimeType: z.string().optional() })).optional(),
         track: z.string().optional(),
         version: z.number().int().positive().optional(),
       },
@@ -2011,7 +2030,6 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     server,
     "hillclimb_design",
     {
-      title: "Design flows & kit",
       description: "Scan repo UI components/tokens (`kit`), propose inline HTML/image mockups (`propose`), inspect flows (`inspect`), or resolve pins (`resolve_pin`).",
       inputSchema: {
         mode: z.enum(["kit", "propose", "inspect", "resolve_pin"]).default("kit"),
@@ -2025,8 +2043,8 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
         kind: z.enum(["new_flow", "new_step", "change"]).optional(),
         frameIndex: z.number().optional(),
         basedOnVersion: z.number().optional(),
-        frame: z.record(z.string(), z.unknown()).optional(),
-        frames: z.array(z.record(z.string(), z.unknown())).optional(),
+        frame: designFrameSchema.optional(),
+        frames: z.array(designFrameSchema).optional(),
         componentRefs: z.array(z.string()).optional(),
         selfGrade: z.string().optional(),
         ref: z.string().optional(),
@@ -2067,6 +2085,36 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
           if (!repo.getSetting(pid, "designKit") && scan.designDocs[0]?.path) {
             repo.setSetting(pid, "designKit", scan.designDocs[0].path);
           }
+          const kitLines: string[] = [
+            `Design kit in ${dir}: ${scan.components.length} UI component(s), ${Object.keys(scan.tokens).length} CSS token(s)${scan.tailwindDetected ? ", Tailwind detected" : ""}${savedKit ? `, kit: ${savedKit}` : ""}.`,
+          ];
+          if (scan.designDocs.length > 0) {
+            kitLines.push(
+              "",
+              "Design docs:",
+              ...scan.designDocs.map((d) => `- ${d.path}: ${d.excerpt.slice(0, 260).replace(/\s+/g, " ")}`),
+            );
+          }
+          if (scan.components.length > 0) {
+            kitLines.push(
+              "",
+              "UI components:",
+              ...scan.components.map(
+                (c) =>
+                  `- ${c.name} (${c.path})${c.exports.length > 0 ? ` [exports: ${c.exports.join(", ")}]` : ""}${c.propsHint.length > 0 ? ` props: ${c.propsHint.join(", ")}` : ""}`,
+              ),
+            );
+          }
+          if (scan.tokenStyleBlock) {
+            kitLines.push("", "CSS tokens (paste into mockup <style>):", scan.tokenStyleBlock);
+          }
+          if (scan.componentSnippet) {
+            kitLines.push(
+              "",
+              `Component source (${scan.componentSnippet.path}${scan.componentSnippet.truncated ? ", truncated" : ""}):`,
+              scan.componentSnippet.content,
+            );
+          }
           return jsonResult(
             {
               projectId: pid,
@@ -2083,7 +2131,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
                 components: scan.components.slice(0, 10).map((c) => ({ name: c.name, path: c.path })),
               },
             },
-            `Design kit in ${dir}: ${scan.components.length} UI component(s), ${Object.keys(scan.tokens).length} CSS token(s)${scan.tailwindDetected ? ", Tailwind detected" : ""}${savedKit ? `, kit: ${savedKit}` : ""}.`,
+            cap(kitLines.join("\n")),
           );
         }
 
