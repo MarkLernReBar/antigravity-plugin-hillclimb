@@ -39,6 +39,8 @@ export interface PortfolioProps {
   preview: (name: string, keys: string[]) => Promise<PromotionPreviewRow[]>;
   initialFlow?: string | null;
   onFocusScopeFromRelease?: (release: Release) => Promise<void>;
+  otherPendingProjects?: Array<{ id: string; name: string; count: number }>;
+  onSelectProject?: (projectId: string) => void;
 }
 
 type Run = (label: string, action: () => Promise<void>, done?: string) => Promise<boolean>;
@@ -437,7 +439,7 @@ function Empty({ title, body, children }: { title: string; body: string; childre
 }
 
 function TrackChips({ data, track, chooseTrack }: { data: Snapshot; track: string; chooseTrack: (t: string) => void }): ReactNode {
-  if (data.tracks.length === 0) return null;
+  if (data.tracks.length <= 1) return null;
   return (
     <div className="pf-tracks" role="group" aria-label="Track">
       <span className="pf-label">Track</span>
@@ -944,12 +946,16 @@ function Inbox({
   run,
   busy,
   select,
+  otherPendingProjects,
+  onSelectProject,
 }: {
   data: Snapshot;
   act: PortfolioProps["act"];
   run: Run;
   busy: string | null;
   select: (key: string | null) => void;
+  otherPendingProjects?: Array<{ id: string; name: string; count: number }>;
+  onSelectProject?: (projectId: string) => void;
 }): ReactNode {
   const changes = useMemo(
     () => data.changes.filter((change) => change.state === "pending").sort((a, b) => b.created.localeCompare(a.created)),
@@ -1016,9 +1022,21 @@ function Inbox({
     <>
       {changes.length === 0 && open.length === 0 && pendingFlowProposals.length === 0 ? (
         <Empty
-          title="Nothing needs your decision right now."
-          body="Proposed contract edits, visual flow updates, and agent questions appear here for your approval."
+          title="Nothing needs your decision in this project."
+          body="Proposed contract edits, visual flow updates, and agent questions for this project appear here (and inline in chat) for your approval."
         >
+          {otherPendingProjects && otherPendingProjects.length > 0 && onSelectProject ? (
+            otherPendingProjects.map((other) => (
+              <button
+                key={other.id}
+                type="button"
+                className="pf-btn pf-btn-primary"
+                onClick={() => onSelectProject(other.id)}
+              >
+                Review {other.count} pending in {other.name} →
+              </button>
+            ))
+          ) : null}
           {data.next[0] !== undefined && (
             <button type="button" className="pf-btn" onClick={() => select(data.next[0] ?? null)}>
               Inspect next outcome: {data.next[0]}
@@ -2846,6 +2864,8 @@ export function Portfolio({
   preview,
   initialFlow,
   onFocusScopeFromRelease,
+  otherPendingProjects,
+  onSelectProject,
 }: PortfolioProps): ReactNode {
   const { busy, error, notice, run } = useAction(act);
   const counts = inboxCounts(data);
@@ -2880,7 +2900,17 @@ export function Portfolio({
 
       <Feedback error={error} notice={notice} />
 
-      {page === "inbox" && <Inbox data={data} act={act} run={run} busy={busy} select={select} />}
+      {page === "inbox" && (
+        <Inbox
+          data={data}
+          act={act}
+          run={run}
+          busy={busy}
+          select={select}
+          otherPendingProjects={otherPendingProjects}
+          onSelectProject={onSelectProject}
+        />
+      )}
       {page === "roadmap" && (
         <Roadmap
           data={data}

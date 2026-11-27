@@ -429,13 +429,13 @@
 }
 
 .pf-empty {
-  background: var(--pf-raised);
-  border: 1px dashed var(--pf-line-strong);
+  background: var(--pf-surface);
+  border: 1px solid var(--pf-line);
   border-radius: var(--pf-radius);
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 22px 18px;
+  padding: 22px 20px;
 }
 
 .pf-empty-title {

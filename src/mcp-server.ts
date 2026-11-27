@@ -186,6 +186,13 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     requireApprovalForNewOutcomes: repo.getSetting(projectId, "requireApprovalForNewOutcomes") === "true",
     designKit: repo.getSetting(projectId, "designKit") ?? "",
   });
+  const inboxByProjectMap = (): Record<string, number> => {
+    const out: Record<string, number> = {};
+    for (const s of repo.projectSummaries()) {
+      if (s.inboxCount > 0) out[s.project] = s.inboxCount;
+    }
+    return out;
+  };
   const searchWithClimbs = (
     projectId: string | null,
     query: string,
@@ -245,7 +252,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     return projects[0]?.id ?? repo.resolveProjectId();
   };
   const server = new McpServer(
-    { name: "hillclimb", version: "0.5.2" },
+    { name: "hillclimb", version: "0.5.3" },
     {
       capabilities: {
         tools: {},
@@ -326,6 +333,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
           tree,
           repoClimbs,
           inboxCount,
+          inboxByProject: inboxByProjectMap(),
           views: repo.listViews(chosen),
           scopes: repo.listScopes(chosen),
           settings: projectSettingsOf(chosen),
@@ -2016,7 +2024,10 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
       try {
         const projects = repo.listProjects();
         const inboxCount = repo.inboxCountTotal();
-        return appJsonResult({ projects, inboxCount }, `${projects.length} project(s), ${inboxCount} inbox item(s)`);
+        return appJsonResult(
+          { projects, inboxCount, inboxByProject: inboxByProjectMap() },
+          `${projects.length} project(s), ${inboxCount} inbox item(s)`,
+        );
       } catch (error) {
         return errorResult(error);
       }
@@ -2063,6 +2074,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
             tree,
             repoClimbs,
             inboxCount,
+            inboxByProject: inboxByProjectMap(),
             views: repo.listViews(projectId),
             scopes: repo.listScopes(projectId),
             settings: projectSettingsOf(projectId),
@@ -2172,7 +2184,10 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
         repo.act(projectId, parsed, { actor: "human", via: "ui" });
         const tree = repo.view(projectId, track ?? "main");
         const inboxCount = repo.inboxCountTotal();
-        return appJsonResult({ ok: true, tree, inboxCount }, `Applied ${parsed.op} on ${projectId}`);
+        return appJsonResult(
+          { ok: true, tree, inboxCount, inboxByProject: inboxByProjectMap() },
+          `Applied ${parsed.op} on ${projectId}`,
+        );
       } catch (error) {
         return errorResult(error);
       }
@@ -2591,6 +2606,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
             lint: built.lint,
             tree: mode === "apply" ? repo.view(projectId, typeof p.track === "string" ? p.track : "main") : undefined,
             inboxCount: repo.inboxCountTotal(),
+            inboxByProject: inboxByProjectMap(),
           },
           `${mode} ${built.actions.length} action(s)`,
         );

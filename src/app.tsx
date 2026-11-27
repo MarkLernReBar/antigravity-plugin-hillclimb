@@ -49,6 +49,7 @@ interface InitialPayload {
   tree?: Snapshot;
   repoClimbs?: RepoClimbsPayload;
   inboxCount?: number;
+  inboxByProject?: Record<string, number>;
   views?: SavedViewDto[];
   scopes?: FocusScopeDto[];
   settings?: ProjectSettingsDto;
@@ -230,7 +231,7 @@ function HillClimbApp() {
   const [repoClimbs, setRepoClimbs] = useState<RepoClimbsPayload | null>(null);
   const [climbsLoading, setClimbsLoading] = useState(false);
   const [treeError, setTreeError] = useState<string | null>(null);
-  const [inboxCount, setInboxCount] = useState(0);
+  const [inboxByProject, setInboxByProject] = useState<Record<string, number>>({});
   const [notice, setNotice] = useState<string>("");
   const [busy, setBusy] = useState(false);
 
@@ -317,9 +318,13 @@ function HillClimbApp() {
   }, []);
 
   const loadProjects = useCallback(async () => {
-    const res = await callTool<{ projects: ProjectItem[]; inboxCount: number }>("app_projects");
+    const res = await callTool<{
+      projects: ProjectItem[];
+      inboxCount: number;
+      inboxByProject?: Record<string, number>;
+    }>("app_projects");
     setProjects(res.projects);
-    setInboxCount(res.inboxCount);
+    if (res.inboxByProject) setInboxByProject(res.inboxByProject);
     setProject((prev) => prev || res.projects[0]?.id || "default");
   }, [callTool]);
 
@@ -332,6 +337,7 @@ function HillClimbApp() {
           tree: Snapshot;
           repoClimbs?: RepoClimbsPayload;
           inboxCount: number;
+          inboxByProject?: Record<string, number>;
           views?: SavedViewDto[];
           scopes?: FocusScopeDto[];
           settings?: ProjectSettingsDto;
@@ -342,7 +348,7 @@ function HillClimbApp() {
         });
         setTree(res.tree);
         if (res.repoClimbs) setRepoClimbs(res.repoClimbs);
-        setInboxCount(res.inboxCount);
+        if (res.inboxByProject) setInboxByProject(res.inboxByProject);
         if (res.views) setViews(res.views);
         if (res.scopes) setScopes(res.scopes);
         if (res.settings) {
@@ -395,7 +401,6 @@ function HillClimbApp() {
         }>("app_set_auto_track", { projectId: project, enabled, track });
         setTree(res.tree);
         setRepoClimbs(res.repoClimbs);
-        setInboxCount(res.inboxCount);
         setNotice(
           enabled
             ? "Auto-track enabled: active climbs sync into Goals automatically."
@@ -421,7 +426,6 @@ function HillClimbApp() {
         }>("app_track_climb", { projectId: project, climbId, track });
         setTree(res.tree);
         setRepoClimbs(res.repoClimbs);
-        setInboxCount(res.inboxCount);
         setNotice(`Tracked climb as ${res.outcomeKey}.`);
       } catch (e) {
         setNotice(`Could not track climb: ${errMsg(e)}`);
@@ -575,7 +579,7 @@ function HillClimbApp() {
           }
         }
         if (data.repoClimbs) setRepoClimbs(data.repoClimbs);
-        if (typeof data.inboxCount === "number") setInboxCount(data.inboxCount);
+        if (data.inboxByProject) setInboxByProject(data.inboxByProject);
         if (data.views) setViews(data.views);
         if (data.scopes) setScopes(data.scopes);
         if (data.settings) {
@@ -785,14 +789,19 @@ function HillClimbApp() {
         confirmed = await askConfirmation(action);
         if (!confirmed) throw new Error("Decision cancelled.");
       }
-      const res = await callTool<{ ok: true; tree: Snapshot; inboxCount?: number }>("app_act", {
+      const res = await callTool<{
+        ok: true;
+        tree: Snapshot;
+        inboxCount?: number;
+        inboxByProject?: Record<string, number>;
+      }>("app_act", {
         projectId: project,
         action,
         confirmed,
         track,
       });
       setTree(res.tree);
-      if (typeof res.inboxCount === "number") setInboxCount(res.inboxCount);
+      if (res.inboxByProject) setInboxByProject(res.inboxByProject);
     },
     [project, track, askConfirmation, callTool],
   );
@@ -970,11 +979,12 @@ function HillClimbApp() {
         lint: LintReport;
         tree?: Snapshot;
         inboxCount?: number;
+        inboxByProject?: Record<string, number>;
       }>("app_import", { projectId: project, mode, payload });
       setImportPreview({ actionCount: res.actionCount, lint: res.lint });
       if (mode === "apply") {
         if (res.tree) setTree(res.tree);
-        if (typeof res.inboxCount === "number") setInboxCount(res.inboxCount);
+        if (res.inboxByProject) setInboxByProject(res.inboxByProject);
         setImportOpen(false);
         setNotice(
           importAsProposals
@@ -1019,6 +1029,10 @@ function HillClimbApp() {
   }, []);
 
   const activeSecondary = SECONDARY_PAGES.find((p) => p.id === page) ?? null;
+  const currentInboxCount = tree?.inbox ?? 0;
+  const otherPendingProjects = projects
+    .filter((p) => p.id !== project && (inboxByProject[p.id] ?? 0) > 0)
+    .map((p) => ({ id: p.id, name: p.name, count: inboxByProject[p.id]! }));
 
   if (connectError) {
     return (
@@ -1076,11 +1090,15 @@ function HillClimbApp() {
             }}
           >
             {projects.length === 0 ? <option value="default">default</option> : null}
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
+            {projects.map((p) => {
+              const pending = inboxByProject[p.id] ?? 0;
+              return (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                  {pending > 0 ? ` (${pending} pending)` : ""}
+                </option>
+              );
+            })}
             <option value="__add__">+ Link repository…</option>
           </select>
         </div>
@@ -1194,7 +1212,7 @@ function HillClimbApp() {
             onClick={() => setPage("inbox")}
           >
             Decisions
-            {inboxCount > 0 ? <span className="hill-nav-badge">{inboxCount}</span> : null}
+            {currentInboxCount > 0 ? <span className="hill-nav-badge">{currentInboxCount}</span> : null}
           </button>
 
           <button
@@ -1376,6 +1394,11 @@ function HillClimbApp() {
                 preview={preview}
                 initialFlow={selectedFlow}
                 onFocusScopeFromRelease={handleFocusScopeFromRelease}
+                otherPendingProjects={otherPendingProjects}
+                onSelectProject={(id) => {
+                  setProject(id);
+                  setSelected(null);
+                }}
               />
             )}
 

@@ -50359,6 +50359,13 @@ function createHillClimbServer(repo, runtime) {
     requireApprovalForNewOutcomes: repo.getSetting(projectId, "requireApprovalForNewOutcomes") === "true",
     designKit: repo.getSetting(projectId, "designKit") ?? ""
   });
+  const inboxByProjectMap = () => {
+    const out = {};
+    for (const s2 of repo.projectSummaries()) {
+      if (s2.inboxCount > 0) out[s2.project] = s2.inboxCount;
+    }
+    return out;
+  };
   const searchWithClimbs = (projectId, query, opts) => {
     const base = repo.search(projectId, query, opts);
     const wantClimbs = !opts?.types || opts.types.length === 0 || opts.types.includes("climb");
@@ -50412,7 +50419,7 @@ function createHillClimbServer(repo, runtime) {
     return projects[0]?.id ?? repo.resolveProjectId();
   };
   const server = new McpServer(
-    { name: "hillclimb", version: "0.5.2" },
+    { name: "hillclimb", version: "0.5.3" },
     {
       capabilities: {
         tools: {},
@@ -50481,6 +50488,7 @@ function createHillClimbServer(repo, runtime) {
           tree,
           repoClimbs,
           inboxCount,
+          inboxByProject: inboxByProjectMap(),
           views: repo.listViews(chosen),
           scopes: repo.listScopes(chosen),
           settings: projectSettingsOf(chosen)
@@ -52048,7 +52056,10 @@ function createHillClimbServer(repo, runtime) {
       try {
         const projects = repo.listProjects();
         const inboxCount = repo.inboxCountTotal();
-        return appJsonResult({ projects, inboxCount }, `${projects.length} project(s), ${inboxCount} inbox item(s)`);
+        return appJsonResult(
+          { projects, inboxCount, inboxByProject: inboxByProjectMap() },
+          `${projects.length} project(s), ${inboxCount} inbox item(s)`
+        );
       } catch (error62) {
         return errorResult(error62);
       }
@@ -52093,6 +52104,7 @@ function createHillClimbServer(repo, runtime) {
             tree,
             repoClimbs,
             inboxCount,
+            inboxByProject: inboxByProjectMap(),
             views: repo.listViews(projectId),
             scopes: repo.listScopes(projectId),
             settings: projectSettingsOf(projectId)
@@ -52198,7 +52210,10 @@ function createHillClimbServer(repo, runtime) {
         repo.act(projectId, parsed, { actor: "human", via: "ui" });
         const tree = repo.view(projectId, track2 ?? "main");
         const inboxCount = repo.inboxCountTotal();
-        return appJsonResult({ ok: true, tree, inboxCount }, `Applied ${parsed.op} on ${projectId}`);
+        return appJsonResult(
+          { ok: true, tree, inboxCount, inboxByProject: inboxByProjectMap() },
+          `Applied ${parsed.op} on ${projectId}`
+        );
       } catch (error62) {
         return errorResult(error62);
       }
@@ -52599,7 +52614,8 @@ function createHillClimbServer(repo, runtime) {
             actionCount: built.actions.length,
             lint: built.lint,
             tree: mode === "apply" ? repo.view(projectId, typeof p2.track === "string" ? p2.track : "main") : void 0,
-            inboxCount: repo.inboxCountTotal()
+            inboxCount: repo.inboxCountTotal(),
+            inboxByProject: inboxByProjectMap()
           },
           `${mode} ${built.actions.length} action(s)`
         );
