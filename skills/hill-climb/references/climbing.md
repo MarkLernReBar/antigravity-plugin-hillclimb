@@ -92,6 +92,15 @@ Single-threaded greedy tweaking naturally saturates on local heuristics. When `c
 4. **Run a Parallel Orthogonal Tournament on `STALL`:** Instead of tweaking the same narrow patch a 3rd or 4th time, fan out 2–3 parallel subagents via `invoke_subagent` — each assigned a **distinct untouched failure bucket** (using `Workspace="share"` for isolated code probes, plus one fresh-context `research` Skeptic auditing raw inputs/upstream responses with zero inherited narrative). Prove winners on the fast slice first, then land them sequentially in the main climb checkout through `climb.py try`.
 5. **Check contract-vs-check drift:** If the user approved a contract update (`v2+`), check `hillclimb_outcome`'s `linkedClimb.contractCheckDrift` and update/relock the scoring check (`climb.py relock --why "..."`) before climbing further against stale rules.
 
+## Auditing wins & checking you're on the right hill
+
+Skepticism should be symmetric: audit wins just as rigorously as ceilings.
+
+1. **Mid-climb holdout checkpoints:** Don't wait 15 steps to learn whether dev gains transfer. Set `--holdout-every 3` on `init` or run `climb.py holdout --why checkpoint` whenever `HOLDOUT CHECKPOINT DUE` fires. Treat any mid-climb `OVERFIT WARNING` as an immediate stop-and-diagnose signal.
+2. **Empirical noise verification:** If identical runs appear to jitter (`CANCEL-OUT / TRADE-OFF` or `below min_gain`), run `climb.py check-noise --runs 3` on clean `HEAD` to measure true spread and pinpoint jittering sub-metrics.
+3. **Pre-ship `climb.py audit` + Adversarial Win Audit:** Before confirming outcome criteria or merging after `BAR REACHED` (or after any `climb.py relock`), run `climb.py audit <name>` (auto-scans added production literals for benchmark case IDs from `best.txt`, lists every `relock`, and checks transfer ratio) AND spawn a fresh-context read-only `research` subagent to check `git diff <start>..HEAD` against every Given/When/Then qualifier (checking for unenforced scope/labeling rules across scorer, export, and UI, or fallback cannibalization).
+4. **Right-hill upstream check:** Before squeezing marginal gains out of a downstream sub-metric, check what fraction of remaining misses fail in an upstream stage. If `>=25%` fail upstream — or a sibling pillar/outcome has a far larger gap to the ship bar — fix the upstream prerequisite (`dependsOn`) or ask the user via `hillclimb_comment(options=[...])` whether to pivot.
+
 ## When you're blocked
 
 - **Never declare your own ceiling:** Before claiming a climb is "impossible", at a "physical/structural ceiling", or "needs a new paid vendor/API", spawn a fresh-context read-only `research` subagent (zero inherited narrative from the climber or prior climbs' `notes.md`) to audit raw inputs/queries, raw uncached upstream responses, and official docs on >=3 missed cases and try to **falsify** your excuse. Pass its concrete findings to `climb.py review "..." --skeptic "..."`.

@@ -7,8 +7,17 @@ Everything else it prints is for you to read when a step fails.
 ### Holdout hygiene (strictly blind)
 
 - Holdout checks (`--holdout`) must print **only** the aggregate score (never per-case names, counts, or failure traces). Per-case breakdowns belong only on the dev/visible check.
-- Never run the `--holdout` command manually during setup or iteration — let `climb.py init` measure baseline and `climb.py holdout --why final` run the final blind check.
+- Never run the `--holdout` command manually during setup or iteration — let `climb.py init` measure baseline, `--holdout-every N` (or `climb.py holdout --why checkpoint`) verify mid-climb transfer, and `climb.py holdout --why final` run the final blind check.
 - Never pass a cached-replay flag (e.g. `--from-json`) in `--check` or `--holdout`; always unlink stale output artifacts before running fresh so cached files can never mask a real regression.
+
+### Anti-Goodhart & fallback check design (especially on `relock`)
+
+Whenever a contract or approved change (`v2+`) allows a fallback, exception, or secondary path alongside the primary behavior, make sure the locked check prevents shortcut cannibalization:
+
+1. **Enforce every qualifier inside the locked check & selftest:** Phrases like *"only when X"*, *"strictly verified by Y"*, or *"clearly labeled as Z"* must fail the check (or increment an integrity violation counter) when violated — across scorer, export/API, and UI, not just in one layer.
+2. **Report primary vs. fallback separately in check stdout:** Print both the primary rate and fallback count (e.g. `primary=0.68 fallback=0.07`) so `climb.py`'s per-case diff immediately flags if a step improved the total only by trading primary quality for fallback shortcuts.
+3. **Measure empirical noise before trusting `runs=1`:** Run `climb.py check-noise --runs 3` on clean `HEAD` whenever a check touches external services, LLMs, or timing. If `spread >= min_gain`, cache/freeze nondeterministic calls, raise `--min-gain`, or switch to `--runs 3` / `--paired`.
+4. **Audit every win and relock:** Run `climb.py audit` (automatic case-ID leak scan + relock ledger + holdout transfer ratio) before shipping.
 
 Before you write one, run `climb.py kits "<goal words>"`. A kit from an
 earlier climb is often most of the check you need.

@@ -2575,4 +2575,205 @@ experiments:
       rmSync(dataDir, { recursive: true, force: true });
     }
   });
+
+  it("v0.9.0 generalized win-audit & generalization gates: --holdout-every checkpoints, HOLDOUT CHECKPOINT DUE, relock Anti-Goodhart ledger, check-noise, and climb.py audit case-ID leak scanner", async () => {
+    const repoDir = tempDir("hc-v090-repo-");
+    const dataDir = tempDir("hc-v090-data-");
+    try {
+      initGitRepo(repoDir);
+      installEngine(repoDir);
+      const climbPy = join(repoDir, ".hill-climb", "engine", "climb.py");
+      const noiseCounter = join(dataDir, "noise-counter.txt");
+
+      writeFileSync(
+        join(repoDir, "engine.py"),
+        "DEV_A = 0.50\nDEV_B = 0.50\nHOLDOUT = 0.50\nSPECIAL = []\n",
+        "utf8",
+      );
+      writeFileSync(
+        join(repoDir, "check_dev.py"),
+        [
+          "import pathlib, engine",
+          `cp = pathlib.Path(${JSON.stringify(noiseCounter)})`,
+          "jitter = 0.0",
+          "if cp.exists():",
+          "    n = int(cp.read_text().strip() or '0')",
+          "    cp.write_text(str(n + 1))",
+          "    jitter = [0.0, 0.04, -0.02][n % 3]",
+          "a = engine.DEV_A + jitter",
+          'print(f"CASES widget_case_a={a:.3f} widget_case_b={engine.DEV_B:.3f}")',
+          'print(f"{(a + engine.DEV_B) / 2:.4f}")',
+        ].join("\n") + "\n",
+        "utf8",
+      );
+      writeFileSync(
+        join(repoDir, "check_holdout.py"),
+        "import engine\nprint(f'{engine.HOLDOUT:.4f}')\n",
+        "utf8",
+      );
+      execFileSync("git", ["add", "engine.py", "check_dev.py", "check_holdout.py"], { cwd: repoDir });
+      execFileSync("git", ["commit", "-q", "-m", "seed v090 dev and holdout checks"], { cwd: repoDir });
+
+      // 1. --holdout-every 2 auto-runs blind holdout checkpoint after 2 kept wins and catches mid-climb OVERFIT!
+      execFileSync(
+        "python3",
+        [
+          climbPy, "init", "win-audit",
+          "--goal", "Reach 0.90 without overfitting",
+          "--check", "python3 -B check_dev.py",
+          "--holdout", "python3 -B check_holdout.py",
+          "--holdout-every", "2",
+          "--direction", "max",
+          "--target", "0.90",
+          "--min-gain", "0.010",
+          "--lock", "check_dev.py",
+          "--lock", "check_holdout.py",
+        ],
+        { cwd: repoDir, encoding: "utf8" },
+      );
+      assert.equal(getClimbCard(repoDir, "win-audit").data.holdoutEvery, 2);
+
+      // Clean deterministic check-noise
+      const detNoise = execFileSync("python3", [climbPy, "check-noise", "--runs", "3"], {
+        cwd: repoDir,
+        encoding: "utf8",
+      });
+      assert.match(detNoise, /DETERMINISTIC: 0 spread/);
+
+      // Enable artificial nondeterminism -> check-noise catches spread + jittering sub-metric!
+      writeFileSync(noiseCounter, "0", "utf8");
+      const noisyOut = execFileSync("python3", [climbPy, "check-noise", "--runs", "3"], {
+        cwd: repoDir,
+        encoding: "utf8",
+      });
+      assert.match(noisyOut, /NOISE WARNING/);
+      assert.match(noisyOut, /Jittering sub-metrics: widget_case_a/);
+      rmSync(noiseCounter, { force: true });
+
+      // Step 1 (kept, dev=0.55, holdout still 0.50 -> 1 kept since holdout, no checkpoint yet)
+      writeFileSync(join(repoDir, "engine.py"), "DEV_A = 0.60\nDEV_B = 0.50\nHOLDOUT = 0.50\nSPECIAL = []\n", "utf8");
+      const s1 = execFileSync("python3", [climbPy, "try", "improve dev case a"], { cwd: repoDir, encoding: "utf8" });
+      assert.match(s1, /kept/);
+      assert.doesNotMatch(s1, /Holdout checkpoint:/);
+
+      // Step 2 (kept, dev=0.60, holdout still 0.50 -> auto-checkpoint fires + OVERFIT WARNING!)
+      writeFileSync(join(repoDir, "engine.py"), "DEV_A = 0.70\nDEV_B = 0.50\nHOLDOUT = 0.50\nSPECIAL = []\n", "utf8");
+      const s2 = execFileSync("python3", [climbPy, "try", "overfit dev only"], { cwd: repoDir, encoding: "utf8" });
+      assert.match(s2, /Holdout checkpoint: 0\.5 -> 0\.5 \(\+0\)/);
+      assert.match(s2, /OVERFIT WARNING/);
+
+      // 2. Relock records diff ledger + prints Anti-Goodhart checklist
+      const checkContent = readFileSync(join(repoDir, "check_dev.py"), "utf8");
+      writeFileSync(join(repoDir, "check_dev.py"), `${checkContent}# enforced qualifier\n`, "utf8");
+      const relockOut = execFileSync("python3", [climbPy, "relock", "--why", "enforce v2 qualifier"], {
+        cwd: repoDir,
+        encoding: "utf8",
+      });
+      assert.match(relockOut, /Relock Anti-Goodhart Checklist:/);
+      assert.match(relockOut, /1 locked file\(s\)/);
+      assert.equal(getClimbStatus(repoDir, "win-audit").summary.relockCount, 1);
+
+      // 3. Auto-extracted case-ID leak scan: hardcoding "widget_case_a" in engine.py is caught by `climb.py audit`!
+      writeFileSync(
+        join(repoDir, "engine.py"),
+        'DEV_A = 0.80\nDEV_B = 0.60\nHOLDOUT = 0.70\nSPECIAL = ["widget_case_a"]\n',
+        "utf8",
+      );
+      const s3 = execFileSync("python3", [climbPy, "try", "special case widget"], { cwd: repoDir, encoding: "utf8" });
+      assert.match(s3, /kept/);
+
+      const auditJson = JSON.parse(
+        execFileSync("python3", [climbPy, "audit", "--json"], { cwd: repoDir, encoding: "utf8" }),
+      ) as {
+        case_id_leaks: Array<{ file: string; identifier: string }>;
+        relocks: Array<{ files: string[]; why: string }>;
+        findings: string[];
+      };
+      assert.equal(auditJson.case_id_leaks.length, 1);
+      assert.equal(auditJson.case_id_leaks[0]?.file, "engine.py");
+      assert.equal(auditJson.case_id_leaks[0]?.identifier, "widget_case_a");
+      assert.equal(auditJson.relocks.length, 1);
+      assert.deepEqual(auditJson.relocks[0]?.files, ["check_dev.py"]);
+
+      // --strict must fail non-zero when case-ID leak exists!
+      let strictFailed = false;
+      try {
+        execFileSync("python3", [climbPy, "audit", "--strict"], { cwd: repoDir, encoding: "utf8" });
+      } catch {
+        strictFailed = true;
+      }
+      assert.ok(strictFailed, "climb.py audit --strict must fail on case-ID leak");
+
+      // 4. Standard climb without --holdout-every emits HOLDOUT CHECKPOINT DUE after 3 kept wins across CLI, TS, and MCP!
+      execFileSync("git", ["switch", "-q", "main"], { cwd: repoDir });
+      execFileSync(
+        "python3",
+        [
+          climbPy, "init", "manual-cp",
+          "--goal", "Reach 0.90",
+          "--check", "python3 -B check_dev.py",
+          "--holdout", "python3 -B check_holdout.py",
+          "--direction", "max",
+          "--target", "0.90",
+          "--min-gain", "0.010",
+          "--lock", "check_dev.py",
+          "--lock", "check_holdout.py",
+        ],
+        { cwd: repoDir, encoding: "utf8" },
+      );
+      for (const [stepIdx, val] of [[1, 0.56], [2, 0.62], [3, 0.68]] as const) {
+        writeFileSync(join(repoDir, "engine.py"), `DEV_A = ${val}\nDEV_B = ${val}\nHOLDOUT = ${val}\nSPECIAL = []\n`, "utf8");
+        const out = execFileSync("python3", [climbPy, "try", `general improvement ${stepIdx}`], {
+          cwd: repoDir,
+          encoding: "utf8",
+        });
+        if (stepIdx === 3) assert.match(out, /HOLDOUT CHECKPOINT DUE: 3 kept step\(s\)/);
+      }
+      const tsManual = getClimbStatus(repoDir, "manual-cp");
+      assert.equal(tsManual.summary.keptSinceHoldout, 3);
+      assert.match(tsManual.summary.holdoutCheckpointWarning ?? "", /HOLDOUT CHECKPOINT DUE/);
+      assert.match(getClimbCard(repoDir, "manual-cp").text, /HOLDOUT CHECKPOINT DUE/);
+
+      // Clean audit on manual-cp has 0 case-ID leaks!
+      const cleanAudit = JSON.parse(
+        execFileSync("python3", [climbPy, "audit", "manual-cp", "--json"], { cwd: repoDir, encoding: "utf8" }),
+      ) as { case_id_leaks: unknown[]; kept_since_holdout: number };
+      assert.equal(cleanAudit.case_id_leaks.length, 0);
+      assert.equal(cleanAudit.kept_since_holdout, 3);
+
+      // Verify MCP hillclimb_outcome surfaces holdoutCheckpointWarning
+      const transport = new StdioClientTransport({
+        command: process.execPath,
+        args: [join(PLUGIN_ROOT, "dist", "mcp-server.mjs")],
+        env: { ...process.env, HILLCLIMB_DATA_DIR: dataDir },
+      });
+      const client = new Client({ name: "v090-test-client", version: "1.0.0" });
+      await client.connect(transport);
+      try {
+        await client.callTool({ name: "hillclimb_projects", arguments: { id: "v090", name: "V090", registerDirectory: repoDir } });
+        await client.callTool({ name: "app_tree", arguments: { projectId: "v090", force: true } });
+        const out = (await client.callTool({
+          name: "hillclimb_outcome",
+          arguments: { projectId: "v090", key: "MANUAL-CP" },
+        })).structuredContent as { linkedClimb?: { holdoutCheckpointWarning?: string; relockCount?: number } };
+        assert.match(out.linkedClimb?.holdoutCheckpointWarning ?? "", /HOLDOUT CHECKPOINT DUE/);
+      } finally {
+        await client.close();
+      }
+
+      // 5. Verify generalized rules & docs
+      const agentsMd = readFileSync(join(PLUGIN_ROOT, "rules", "AGENTS.md"), "utf8");
+      const skillMd = readFileSync(join(PLUGIN_ROOT, "skills", "hill-climb", "SKILL.md"), "utf8");
+      const checksMd = readFileSync(join(PLUGIN_ROOT, "skills", "hill-climb", "references", "checks.md"), "utf8");
+      const climbingMd = readFileSync(join(PLUGIN_ROOT, "skills", "hill-climb", "references", "climbing.md"), "utf8");
+      assert.match(agentsMd, /Adversarial Win Audit/);
+      assert.match(agentsMd, /check-noise/);
+      assert.match(skillMd, /"\$CLIMB" audit/);
+      assert.match(checksMd, /Anti-Goodhart/);
+      assert.match(climbingMd, /Auditing wins/i);
+    } finally {
+      rmSync(repoDir, { recursive: true, force: true });
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
 });

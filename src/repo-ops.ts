@@ -37,11 +37,13 @@ import {
 export { redactSecrets } from "./state.js";
 
 export const ENGINE_COMMANDS = [
-  'init <name> --goal "..." --check "<command>" [--probe "<fast-cmd>"] --lock <check files>',
+  'init <name> --goal "..." --check "<command>" [--probe "<fast-cmd>"] [--holdout-every N] --lock <check files>',
   'try "<idea>"  [--fix] [--probe "<fast-cmd>"] [--guards-first]',
   "status [name]",
   'relock [name] --why "..."',
   'holdout --why "..."',
+  "check-noise [name] [--runs 3]",
+  "audit [name] [--strict] [--json]",
   'raise <bar> --why "..."',
   'review "<what you found>"',
   "budget [name] [--hours N] [--steps N] [--off]",
@@ -393,6 +395,7 @@ export function getClimbCard(repoPath: string, name?: string) {
   const summary = summarize(state, 0);
   const extras: string[] = [];
   if (summary.notes) extras.push(`Notes:\n${summary.notes}`);
+  if (summary.holdoutCheckpointWarning) extras.push(summary.holdoutCheckpointWarning);
   if (summary.thrashWarning) extras.push(summary.thrashWarning);
   else if (summary.stallWarning) extras.push(summary.stallWarning);
   if (summary.notesWarning) extras.push(summary.notesWarning);
@@ -420,6 +423,10 @@ export function getClimbCard(repoPath: string, name?: string) {
       timeout: card.timeout ?? null,
       guards: (card.guards ?? []).map(redactSecrets),
       holdout: card.holdout ? redactSecrets(card.holdout) : null,
+      holdoutEvery: summary.holdoutEvery,
+      keptSinceHoldout: summary.keptSinceHoldout,
+      holdoutCheckpointWarning: summary.holdoutCheckpointWarning,
+      relockCount: summary.relockCount,
       locked: card.lock ?? [],
       fingerprint: card.fingerprint ?? null,
       repos: (card.repos ?? []).map((repo) => repo.path),

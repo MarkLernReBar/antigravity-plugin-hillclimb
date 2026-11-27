@@ -11,6 +11,7 @@ export type Direction = "min" | "max";
 export const STALL = 3;
 export const PLATEAU = 5;
 export const NOTES_STALE_STEPS = 3;
+export const HOLDOUT_CHECKPOINT_KEPT = 3;
 const BARS = "▁▂▃▄▅▆▇█";
 
 const SECRET_KEY_CACHE = new Map<string, boolean>();
@@ -1413,6 +1414,7 @@ export interface ClimbCard {
   fingerprint?: string | null;
   holdout?: string | null;
   holdout_once?: boolean;
+  holdout_every?: number | null;
   timeout?: number;
   repos?: Array<{ path: string; base?: string; branch?: string }>;
   runs?: number;
@@ -1439,6 +1441,8 @@ export interface LogRow {
   files?: string[];
   diff_lines?: number;
   delta_summary?: string;
+  commit?: string;
+  prev_score?: number;
 }
 
 export interface ClimbFiles {
@@ -1477,8 +1481,12 @@ export interface ClimbSummary {
   pendingTree: boolean;
   hasHoldout: boolean;
   holdoutOnce: boolean;
+  holdoutEvery: number | null;
+  keptSinceHoldout: number;
   holdoutGain: number | null;
   holdoutWarning: string | null;
+  holdoutCheckpointWarning: string | null;
+  relockCount: number;
   thrashWarning: string | null;
   stallWarning: string | null;
   notesStaleSteps: number;
@@ -1715,6 +1723,25 @@ export function summarize(files: ClimbFiles, recentLimit = 15, now = Date.now())
     }
   }
 
+  const hasHoldout = typeof card.holdout === "string" && card.holdout !== "";
+  const holdoutOnce = Boolean(card.holdout_once);
+  const holdoutEvery = typeof card.holdout_every === "number" && card.holdout_every >= 1 ? card.holdout_every : null;
+  let lastHoldoutIdx = -1;
+  for (let i = 0; i < rows.length; i += 1) {
+    if (rows[i]?.kind === "holdout") lastHoldoutIdx = i;
+  }
+  const keptSinceHoldout = rows
+    .slice(lastHoldoutIdx + 1)
+    .filter((r) => r.kind === "step" && r.result === "kept").length;
+  const relockCount = rows.filter((r) => r.kind === "relock").length;
+  const checkpointCadence = holdoutEvery ?? HOLDOUT_CHECKPOINT_KEPT;
+  const holdoutCheckpointWarning =
+    hasHoldout && !holdoutOnce && !reached && keptSinceHoldout >= checkpointCadence
+      ? `HOLDOUT CHECKPOINT DUE: ${keptSinceHoldout} kept step(s) since the last blind holdout check. ` +
+        `Run: climb.py holdout ${card.name} --why checkpoint  ` +
+        "(verifies visible gains actually transfer to unseen cases before investing more steps)."
+      : null;
+
   const thrash = !reached ? detectThrash(steps, card.best.step) : null;
   const thrashWarning = thrash ? thrash.message : null;
   const stallWarning =
@@ -1753,10 +1780,14 @@ export function summarize(files: ClimbFiles, recentLimit = 15, now = Date.now())
     maxSteps: card.max_steps ?? null,
     maxHours: card.max_hours ?? null,
     pendingTree,
-    hasHoldout: typeof card.holdout === "string" && card.holdout !== "",
-    holdoutOnce: Boolean(card.holdout_once),
+    hasHoldout,
+    holdoutOnce,
+    holdoutEvery,
+    keptSinceHoldout,
     holdoutGain,
     holdoutWarning,
+    holdoutCheckpointWarning,
+    relockCount,
     thrashWarning,
     stallWarning,
     notesStaleSteps,
@@ -1804,6 +1835,7 @@ export function formatSummary(summary: ClimbSummary): string {
   if (summary.holdouts.length > 0) {
     lines.push(`Holdout ${summary.holdouts.map((row) => `${number(row.score)} (${row.why})`).join(", ")}`);
     if (summary.holdoutWarning) lines.push(summary.holdoutWarning);
+    if (summary.holdoutCheckpointWarning) lines.push(summary.holdoutCheckpointWarning);
   } else if (summary.hasHoldout && !summary.holdoutOnce) {
     lines.push(
       `Holdout baseline missing — do not inspect holdout files; run: climb.py holdout ${summary.name} --why baseline`,
@@ -1901,7 +1933,11 @@ export function formatRig(card: ClimbCard): string {
   rows.push([
     "Holdout",
     typeof card.holdout === "string" && card.holdout !== ""
-      ? `${redactSecrets(card.holdout)}\nnever read it again; run holdout --why "…" at the bar`
+      ? `${redactSecrets(card.holdout)}\nnever read it again; run holdout --why "…" at the bar${
+          typeof card.holdout_every === "number" && card.holdout_every >= 1
+            ? ` (auto-checkpoint every ${card.holdout_every} kept step(s))`
+            : ""
+        }`
       : "none — nothing catches overfitting to the visible cases",
   ]);
   rows.push(["Locked", locks.length > 0 ? locks.join("\n") : "none — nothing stops a step from editing the check"]);

@@ -35,11 +35,12 @@ STALL = 3
 PLATEAU = 5
 BUNDLED_DIFF_LINES = 150
 NOTES_STALE_STEPS = 3
+HOLDOUT_CHECKPOINT_KEPT = 3
 FILE_LIMIT = 512_000
 KIT_LIMIT = 2_000_000
 COMMIT_LIMIT = 10_000_000
 STATE_WARN = 200_000_000
-KIT_KEYS = ("name", "goal", "check", "probe", "direction", "guards", "holdout", "lock", "runs", "paired", "min_gain", "timeout", "after", "max_steps", "max_hours", "hard", "repos", "score", "baseline", "score_mode", "holdout_once")
+KIT_KEYS = ("name", "goal", "check", "probe", "direction", "guards", "holdout", "holdout_every", "lock", "runs", "paired", "min_gain", "timeout", "after", "max_steps", "max_hours", "hard", "repos", "score", "baseline", "score_mode", "holdout_once")
 LEGACY_SCORE_MODE = "failure-count"
 SCORE_MODES = ("numeric", LEGACY_SCORE_MODE)
 SLOW_STEP = 120
@@ -700,7 +701,7 @@ def init_command(meta):
     for pattern in meta.get("score") or []:
         words += ["--score", pattern]
     words += ["--score-mode", meta.get("score_mode") or LEGACY_SCORE_MODE]
-    for flag, key in (("--target", "target"), ("--probe", "probe"), ("--holdout", "holdout"), ("--max-steps", "max_steps"), ("--max-hours", "max_hours")):
+    for flag, key in (("--target", "target"), ("--probe", "probe"), ("--holdout", "holdout"), ("--holdout-every", "holdout_every"), ("--max-steps", "max_steps"), ("--max-hours", "max_hours")):
         if meta.get(key) is not None:
             words += [flag, str(meta[key])]
     words += ["--after", meta["after"], "--runs", str(meta["runs"]), "--min-gain", str(meta["min_gain"]), "--timeout", str(meta["timeout"])]
@@ -731,6 +732,13 @@ def run_holdout(folder, card, reason):
 def cmd_init(args):
     if args.runs < 1:
         raise Fail("--runs must be at least 1")
+    if args.holdout_every is not None:
+        if args.holdout_every < 1:
+            raise Fail("--holdout-every must be at least 1")
+        if not args.holdout:
+            raise Fail("--holdout-every requires --holdout")
+        if args.holdout_once:
+            raise Fail("--holdout-every cannot be combined with --holdout-once")
     if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,40}", args.name):
         raise Fail("Use a short lowercase name with dashes, like build-speed.")
     folder = climbs_dir() / args.name
@@ -803,6 +811,7 @@ def cmd_init(args):
         "timeout": args.timeout,
         "holdout": args.holdout,
         "holdout_once": bool(args.holdout_once),
+        "holdout_every": args.holdout_every,
         "lock": lock,
         "fingerprint": locked,
         "max_steps": args.max_steps,
@@ -1045,6 +1054,32 @@ def cmd_try(args):
             warn = holdout_transfer_warning(card, [r for r in rows(folder) if r["kind"] == "holdout"])
             if warn:
                 print(warn)
+        print(f"Pre-ship audit: run `climb.py audit {card['name']}` and a fresh-context Adversarial Win Audit before confirming criteria or merging.")
+    elif card.get("holdout") and not card.get("holdout_once"):
+        log_now = rows(folder)
+        since_h = kept_since_holdout(log_now)
+        every = card.get("holdout_every")
+        if every and since_h >= every:
+            try:
+                h_score = run_holdout(folder, card, f"checkpoint step {step}")
+                holdouts_now = [r for r in rows(folder) if r["kind"] == "holdout"]
+                if len(holdouts_now) >= 2:
+                    h0 = holdouts_now[0]["score"]
+                    print(
+                        f"Holdout checkpoint: {number(h0)} -> {number(h_score)} ({_signed_delta(h_score - h0)}), "
+                        f"visible {number(card['baseline'])} -> {number(score)} ({_signed_delta(score - card['baseline'])})."
+                    )
+                    warn = holdout_transfer_warning(card, holdouts_now)
+                    if warn:
+                        print(warn)
+                else:
+                    print(f"Holdout checkpoint: {number(h_score)} (visible {number(score)}).")
+            except Fail as error:
+                print(f"Warning: automatic holdout checkpoint failed ({str(error).splitlines()[0]}). Kept step stands.")
+        else:
+            cp_warn = holdout_checkpoint_warning(card, log_now)
+            if cp_warn:
+                print(cp_warn)
 
 
 _EXCUSE_CLAIM_RE = re.compile(
@@ -1057,6 +1092,101 @@ _EXCUSE_CLAIM_RE = re.compile(
 def _signed_delta(delta):
     sign = "+" if delta >= 0 else "-"
     return f"{sign}{number(abs(delta))}"
+
+
+def kept_since_holdout(log):
+    """Count kept steps since the last holdout run (or since start if no holdout run yet)."""
+    last_h_idx = -1
+    for idx, row in enumerate(log):
+        if row.get("kind") == "holdout":
+            last_h_idx = idx
+    return sum(
+        1 for row in log[last_h_idx + 1:]
+        if row.get("kind") == "step" and row.get("result") == "kept"
+    )
+
+
+def holdout_checkpoint_warning(card, log):
+    """Warn when a climb with holdout has accumulated kept steps without a mid-climb transfer check."""
+    if not card.get("holdout") or card.get("holdout_once"):
+        return None
+    if card.get("target") is not None and reached(card, card["best"]["score"]):
+        return None
+    since_h = kept_since_holdout(log)
+    cadence = card.get("holdout_every") or HOLDOUT_CHECKPOINT_KEPT
+    if since_h < cadence:
+        return None
+    return (
+        f"HOLDOUT CHECKPOINT DUE: {since_h} kept step(s) since the last blind holdout check. "
+        f"Run: climb.py holdout {card['name']} --why checkpoint  "
+        "(verifies visible gains actually transfer to unseen cases before investing more steps)."
+    )
+
+
+_GENERIC_METRIC_WORDS = frozenset({
+    "score", "total", "overall", "mean", "median", "average", "count", "passed", "failed",
+    "valid", "error", "errors", "metric", "metrics", "output", "result", "results", "status",
+    "latency", "memory", "speed", "email", "emails", "phone", "title", "fields", "tier",
+    "verdict", "verified", "sample", "cases", "floor", "checks", "guards", "recall", "precision",
+    "accuracy", "throughput", "duration", "runtime", "tokens", "bytes", "queries", "requests",
+    "summary", "baseline", "target", "ratio", "delta", "spread", "integrity", "deliverable",
+    "legacy", "ship", "gate", "pillar", "pillars", "cassette", "saved", "missing",
+})
+_TEST_FILE_RE = re.compile(r"(?:^|/)(?:tests?|specs?|fixtures?|__tests__)/|(?:_test|\.test|\.spec)\.", re.I)
+_QUOTED_LITERAL_RE = re.compile(r"""(['"])([^'"\\\n]{5,80})\1""")
+
+
+def _extract_case_identifiers(best_text):
+    """Extract non-generic benchmark case identifiers from best.txt (format-agnostic)."""
+    metrics, _ = _extract_case_metrics(best_text)
+    idents = set()
+    for key in metrics:
+        base = key.split(".", 1)[0]
+        low = base.lower()
+        if len(low) < 5 or low in _GENERIC_METRIC_WORDS or low in _NOISE_METRIC_KEYS or low in _TABULAR_SKIP_KEYS:
+            continue
+        idents.add(base)
+    return sorted(idents)
+
+
+def scan_case_id_leaks(card, folder):
+    """Scan added string literals in non-locked, non-test code diff for benchmark case IDs from best.txt."""
+    best_path = folder / "best.txt"
+    start_commit = card.get("start_commit")
+    if not best_path.exists() or not start_commit:
+        return []
+    try:
+        idents = _extract_case_identifiers(best_path.read_text(errors="replace")[:FILE_LIMIT])
+    except OSError:
+        return []
+    if not idents:
+        return []
+    patterns = [(ident, re.compile(rf"(?<![a-z0-9]){re.escape(ident.lower())}(?![a-z0-9])")) for ident in idents]
+    diff_text = git("diff", "-U0", f"{start_commit}..HEAD", check=False)
+    if not diff_text:
+        return []
+    locked = card.get("lock") or []
+    hits = []
+    seen = set()
+    cur_file = ""
+    skip_file = True
+    for line in diff_text.splitlines():
+        if line.startswith("+++ b/"):
+            cur_file = line[6:]
+            is_locked = bool(locked) and not outside([cur_file], locked)
+            skip_file = is_locked or bool(_TEST_FILE_RE.search(cur_file)) or cur_file.startswith(".hill-climb/")
+        elif not skip_file and line.startswith("+") and not line.startswith("+++"):
+            for _, lit in _QUOTED_LITERAL_RE.findall(line):
+                lit_low = lit.lower()
+                for ident, pat in patterns:
+                    if pat.search(lit_low):
+                        key = (cur_file, ident.lower())
+                        if key not in seen:
+                            seen.add(key)
+                            hits.append({"file": cur_file, "identifier": ident, "literal": lit[:80]})
+                            if len(hits) >= 20:
+                                return hits
+    return hits
 
 
 def holdout_transfer_warning(card, holdouts):
@@ -1373,6 +1503,9 @@ def cmd_status(args):
         warn = holdout_transfer_warning(card, holdouts)
         if warn:
             print(warn)
+        cp_warn = holdout_checkpoint_warning(card, log)
+        if cp_warn:
+            print(cp_warn)
     elif card.get("holdout") and not card.get("holdout_once"):
         print(f"Holdout baseline missing — do not inspect holdout files; run: climb.py holdout {card['name']} --why baseline")
     for row in log[-args.last:]:
@@ -1440,9 +1573,12 @@ def cmd_relock(args):
     card = load(folder)
     if not card["lock"]:
         raise Fail("This climb locks no files.")
-    stray = outside(changed_files(checkouts(card)), card["lock"])
+    roots = checkouts(card)
+    stray = outside(changed_files(roots), card["lock"])
     if stray:
         raise Fail("Relock changes only the locked check files. Undo or try these first: " + ", ".join(stray[:5]))
+    relocked_files, relock_lines = diff_stats(roots)
+    prev_score = card["best"]["score"]
     cache_path = folder / "candidate-cache.json"
     guard_env = _cache_env(folder, uuid.uuid4().hex)
     measure_env = _cache_env(folder, uuid.uuid4().hex)
@@ -1450,16 +1586,199 @@ def cmd_relock(args):
         failed = failing_guards(card["guards"], card["timeout"], env=guard_env)
         if failed:
             raise Fail(f"A guard fails with the changed check: {failed[0]}\n{failed[1]}")
-        commit(checkouts(card), f"climb({card['name']}): fix the check\n\n{args.why}")
+        commit(roots, f"climb({card['name']}): fix the check\n\n{args.why}")
         score, _, _ = measure(card["check"], card["runs"], card["timeout"], folder / "best.txt", card["score"], score_mode(card), env=measure_env)
     finally:
         cache_path.unlink(missing_ok=True)
+    new_head = git("rev-parse", "HEAD")
     card["fingerprint"] = fingerprint(card["lock"])
-    card["best"] = {"score": score, "commit": git("rev-parse", "HEAD"), "step": len([r for r in rows(folder) if r["kind"] == "step"])}
+    card["best"] = {"score": score, "commit": new_head, "step": len([r for r in rows(folder) if r["kind"] == "step"])}
     save(folder, card)
-    append(folder, {"kind": "relock", "why": args.why, "score": score})
-    print(f"Check relocked. New best {number(score)} measured with the changed check.")
+    entry = {"kind": "relock", "why": args.why, "score": score, "prev_score": prev_score, "commit": new_head}
+    if relocked_files:
+        entry["files"] = relocked_files
+    if relock_lines > 0:
+        entry["diff_lines"] = relock_lines
+    append(folder, entry)
+    print(
+        f"Check relocked. New best {number(score)} (was {number(prev_score)}) measured with the changed check "
+        f"({len(relocked_files)} locked file(s), {relock_lines} changed line(s))."
+    )
+    print(
+        "Relock Anti-Goodhart Checklist:\n"
+        "  1. Every contract qualifier ('only when X', 'clearly labeled as Y') is enforced in the locked check, export, and selftest.\n"
+        "  2. Primary vs. fallback/secondary paths are printed separately so shortcuts cannot mask primary regressions.\n"
+        f"  3. Run `climb.py audit {card['name']}` and a fresh-context Adversarial Win Audit before claiming the bar."
+    )
     print(save_kit(folder, card))
+
+
+def cmd_check_noise(args):
+    folder = resolve(args.name)
+    card = load(folder)
+    if args.runs < 2:
+        raise Fail("--runs must be at least 2 to measure noise")
+    if dirty(checkouts(card)):
+        raise Fail("Commit or undo uncommitted edits first so noise is measured on clean HEAD.")
+    scores = []
+    durations = []
+    metric_maps = []
+    cache_path = folder / "candidate-cache.json"
+    tmp_out = folder / "noise-last.txt"
+    try:
+        for idx in range(args.runs):
+            env = _cache_env(folder, uuid.uuid4().hex)
+            score, _, sec = measure(card["check"], 1, card["timeout"], tmp_out, card["score"], score_mode(card), env=env)
+            scores.append(score)
+            durations.append(sec)
+            try:
+                m, _ = _extract_case_metrics(tmp_out.read_text(errors="replace")[:FILE_LIMIT])
+            except OSError:
+                m = {}
+            metric_maps.append(m)
+    finally:
+        cache_path.unlink(missing_ok=True)
+        tmp_out.unlink(missing_ok=True)
+    low, high = min(scores), max(scores)
+    spread = high - low
+    stdev = statistics.stdev(scores) if len(scores) >= 2 else 0.0
+    need = threshold(card["min_gain"], card["best"]["score"])
+    jitter_keys = []
+    if metric_maps:
+        base_m = metric_maps[0]
+        for k, v0 in base_m.items():
+            vals = [m[k] for m in metric_maps if k in m]
+            if len(vals) >= 2 and (max(vals) - min(vals)) > 1e-9:
+                jitter_keys.append((k, max(vals) - min(vals)))
+        jitter_keys.sort(key=lambda item: (-item[1], item[0]))
+    runs_str = ", ".join(number(s) for s in scores)
+    print(f"Noise check for {card['name']} ({args.runs} identical runs on clean HEAD): [{runs_str}]")
+    print(f"Spread {number(spread)} (stdev {number(stdev)}), avg {sum(durations) / len(durations):.1f}s, current min_gain {number(need)}, card runs={card['runs']}.")
+    if jitter_keys:
+        j_str = ", ".join(f"{k} (±{number(sp)})" for k, sp in jitter_keys[:6])
+        print(f"Jittering sub-metrics: {j_str}")
+    if spread <= 1e-9 and not jitter_keys:
+        print("DETERMINISTIC: 0 spread across identical-code runs.")
+    elif spread >= need or (spread > 1e-9 and card["runs"] == 1):
+        rec_gain = max(spread * 1.5, need)
+        print(
+            f"NOISE WARNING: check spread ({number(spread)}) is >= min_gain ({number(need)}) or non-zero at runs=1. "
+            f"Freeze/cache nondeterministic calls, raise --min-gain above {number(rec_gain)}, or use --runs 3 / --paired."
+        )
+    else:
+        print(f"ACCEPTABLE NOISE: spread ({number(spread)}) is below min_gain ({number(need)}), though sub-metrics shifted.")
+
+
+def cmd_audit(args):
+    folder = resolve(args.name)
+    card = load(folder)
+    log = rows(folder)
+    steps = [row for row in log if row["kind"] == "step"]
+    kept = [row for row in steps if row["result"] == "kept"]
+    relocks = [row for row in log if row["kind"] == "relock"]
+    holdouts = [row for row in log if row["kind"] == "holdout"]
+    leaks = scan_case_id_leaks(card, folder)
+    behind = branch_behind_base(card)
+    stale_notes = notes_staleness(folder, steps)
+    since_h = kept_since_holdout(log)
+    overfit_warn = holdout_transfer_warning(card, holdouts)
+    cp_warn = holdout_checkpoint_warning(card, log)
+    thrash = detect_thrash(steps, card["best"]["step"])
+    cancel_outs = sum(1 for r in steps if str(r.get("delta_summary") or "").startswith("cancel-out:"))
+    zero_changes = sum(1 for r in steps if r.get("delta_summary") == "zero-case-change")
+    start_commit = card.get("start_commit")
+    diff_stat = git("diff", "--stat", f"{start_commit}..HEAD", check=False) if start_commit else ""
+
+    dev_delta = card["best"]["score"] - card["baseline"]
+    dev_gain = dev_delta if card["direction"] == "max" else -dev_delta
+    h_delta = (holdouts[-1]["score"] - holdouts[0]["score"]) if len(holdouts) >= 2 else None
+    h_gain = (h_delta if card["direction"] == "max" else -h_delta) if h_delta is not None else None
+    transfer_ratio = round(h_gain / dev_gain, 3) if (h_gain is not None and dev_gain > 1e-9) else None
+
+    findings = []
+    if leaks:
+        findings.append(f"CASE-ID LEAK WARNING: {len(leaks)} benchmark identifier(s) found in added production string literals.")
+    if overfit_warn:
+        findings.append(overfit_warn)
+    if cp_warn:
+        findings.append(cp_warn)
+    if card.get("holdout") and not holdouts and not card.get("holdout_once"):
+        findings.append(f"Holdout baseline missing — run: climb.py holdout {card['name']} --why baseline")
+    if relocks:
+        findings.append(
+            f"Relock audit needed: locked check files were modified {len(relocks)} time(s) — verify every contract qualifier "
+            "and primary-vs-fallback reporting is enforced."
+        )
+    if behind > 0:
+        findings.append(f"Branch warning: {card['branch']} is {behind} commit(s) behind {card['base']}.")
+    if stale_notes >= NOTES_STALE_STEPS:
+        findings.append(f"Notes warning: notes.md has not been updated in {stale_notes} step(s).")
+    if thrash:
+        findings.append(thrash["message"])
+
+    report = {
+        "name": card["name"],
+        "branch": card.get("branch"),
+        "base": card.get("base"),
+        "baseline": card["baseline"],
+        "best": card["best"]["score"],
+        "target": card.get("target"),
+        "direction": card["direction"],
+        "steps": len(steps),
+        "kept": len(kept),
+        "relocks": [
+            {
+                "time": r.get("time"),
+                "why": r.get("why"),
+                "prev_score": r.get("prev_score"),
+                "score": r.get("score"),
+                "files": r.get("files") or [],
+                "diff_lines": r.get("diff_lines"),
+                "commit": r.get("commit"),
+            }
+            for r in relocks
+        ],
+        "holdouts": [{"score": h.get("score"), "why": h.get("why")} for h in holdouts],
+        "kept_since_holdout": since_h,
+        "transfer_ratio": transfer_ratio,
+        "case_id_leaks": leaks,
+        "cancel_out_steps": cancel_outs,
+        "zero_case_change_steps": zero_changes,
+        "behind_base": behind,
+        "notes_stale_steps": stale_notes,
+        "findings": findings,
+        "clean": len(findings) == 0,
+    }
+    if args.json:
+        print(json.dumps(report, indent=2))
+    else:
+        print(f"Audit {card['name']} on {card.get('branch')} ({number(card['baseline'])} -> {number(card['best']['score'])}, {len(kept)}/{len(steps)} kept)")
+        if holdouts:
+            tr_text = f", transfer_ratio={transfer_ratio:.2f}" if transfer_ratio is not None else ""
+            h_text = ", ".join(f"{number(h['score'])} ({h['why']})" for h in holdouts)
+            print(f"Holdout: {h_text} | kept_since_holdout={since_h}{tr_text}")
+        elif card.get("holdout"):
+            print(f"Holdout: configured, 0 runs recorded | kept_since_holdout={since_h}")
+        else:
+            print("Holdout: none configured (visible-only)")
+        print(f"Relocks: {len(relocks)} | Case-ID leak hits: {len(leaks)} | Cancel-outs: {cancel_outs} | Zero-case-change: {zero_changes} | Behind base: {behind}")
+        for r in relocks:
+            files_s = ", ".join(r.get("files") or []) or "(files not recorded)"
+            print(f"  relock: {r.get('why')} [{files_s}]")
+        for hit in leaks[:10]:
+            print(f"  LEAK: {hit['file']} matched case id {hit['identifier']!r} in {hit['literal']!r}")
+        if diff_stat:
+            last_stat = diff_stat.splitlines()[-1].strip()
+            print(f"Diff vs start: {last_stat}")
+        if findings:
+            print(f"AUDIT WARNINGS ({len(findings)}):")
+            for f in findings:
+                print(f"  - {f}")
+        else:
+            print("AUDIT CLEAN: no automated integrity, leak, overfit, or hygiene warnings.")
+        print("Next: run a fresh-context Adversarial Win Audit (read-only research subagent) against every outcome criterion before confirming or merging.")
+    if args.strict and (leaks or overfit_warn):
+        raise Fail("Strict audit failed: resolve case-ID leaks or overfit warnings before shipping.")
 
 
 def cmd_budget(args):
@@ -1629,6 +1948,8 @@ def parse(argv):
     init.add_argument("--holdout", help="check on cases the climber never sees")
     init.add_argument("--holdout-once", action="store_true",
                       help="skip automatic holdout runs on init/try and allow one post-selection holdout read")
+    init.add_argument("--holdout-every", type=int,
+                      help="auto-run blind holdout checkpoint every N kept steps to catch overfitting mid-climb")
     init.add_argument("--lock", action="append", help="file or folder the climber may not edit")
     init.add_argument("--max-steps", type=int, help="soft limit: past it, steps go on while they still gain")
     init.add_argument("--max-hours", type=float, help="soft limit in hours since init, like --max-steps")
@@ -1690,6 +2011,15 @@ def parse(argv):
 
     reuse = sub.add_parser("reuse", help="restore a kit's files and print its init command")
     reuse.add_argument("kit", help="name, or repo/name")
+
+    noise = sub.add_parser("check-noise", help="measure empirical score spread and sub-metric jitter on clean HEAD")
+    noise.add_argument("name", nargs="?")
+    noise.add_argument("--runs", type=int, default=3, help="number of identical clean-HEAD runs (default 3)")
+
+    audit = sub.add_parser("audit", help="pre-ship integrity audit: case-ID leak scan, relock ledger, holdout transfer, and hygiene")
+    audit.add_argument("name", nargs="?")
+    audit.add_argument("--json", action="store_true", help="print structured JSON audit report")
+    audit.add_argument("--strict", action="store_true", help="exit non-zero on case-ID leaks or overfit warnings")
     return parser.parse_args(argv)
 
 
@@ -1712,14 +2042,14 @@ def main(argv=None):
             home = Path(".hill-climb/home")
             if args.command != "init" and home.is_file() and not list(climbs_dir().glob("*/card.json")):
                 os.chdir(home.read_text().strip())
-            held = None if args.command in ("status", "list", "kits") else hold_lock()
+            held = None if args.command in ("status", "list", "kits", "audit") else hold_lock()
         except Fail as error:
             print(error, file=sys.stderr)
             return 1
         handlers = {
             "init": cmd_init, "try": cmd_try, "status": cmd_status, "holdout": cmd_holdout,
             "raise": cmd_raise, "relock": cmd_relock, "review": cmd_review, "budget": cmd_budget, "drop": cmd_drop, "list": cmd_list,
-            "save": cmd_save, "kits": cmd_kits, "reuse": cmd_reuse,
+            "save": cmd_save, "kits": cmd_kits, "reuse": cmd_reuse, "check-noise": cmd_check_noise, "audit": cmd_audit,
         }
         try:
             handlers[args.command](args)

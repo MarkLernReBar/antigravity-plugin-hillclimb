@@ -21542,6 +21542,7 @@ function applyPlanning(tree, a, now, meta3) {
 var STALL = 3;
 var PLATEAU = 5;
 var NOTES_STALE_STEPS = 3;
+var HOLDOUT_CHECKPOINT_KEPT = 3;
 var BARS = "\u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588";
 var SECRET_KEY_CACHE = /* @__PURE__ */ new Map();
 function isSecretKey(key2) {
@@ -22893,6 +22894,17 @@ function summarize(files, recentLimit = 15, now = Date.now()) {
       holdoutWarning = `OVERFIT WARNING: visible improved ${number4(card.baseline)} -> ${number4(card.best.score)} (${signed(card.best.score - card.baseline)}) while holdout ${status} ${number4(h0)} -> ${number4(h1)} (${signed(h1 - h0)}). Investigate why gains did not transfer before confirming holdout criteria or merging.`;
     }
   }
+  const hasHoldout = typeof card.holdout === "string" && card.holdout !== "";
+  const holdoutOnce = Boolean(card.holdout_once);
+  const holdoutEvery = typeof card.holdout_every === "number" && card.holdout_every >= 1 ? card.holdout_every : null;
+  let lastHoldoutIdx = -1;
+  for (let i = 0; i < rows.length; i += 1) {
+    if (rows[i]?.kind === "holdout") lastHoldoutIdx = i;
+  }
+  const keptSinceHoldout = rows.slice(lastHoldoutIdx + 1).filter((r) => r.kind === "step" && r.result === "kept").length;
+  const relockCount = rows.filter((r) => r.kind === "relock").length;
+  const checkpointCadence = holdoutEvery ?? HOLDOUT_CHECKPOINT_KEPT;
+  const holdoutCheckpointWarning = hasHoldout && !holdoutOnce && !reached && keptSinceHoldout >= checkpointCadence ? `HOLDOUT CHECKPOINT DUE: ${keptSinceHoldout} kept step(s) since the last blind holdout check. Run: climb.py holdout ${card.name} --why checkpoint  (verifies visible gains actually transfer to unseen cases before investing more steps).` : null;
   const thrash = !reached ? detectThrash(steps, card.best.step) : null;
   const thrashWarning = thrash ? thrash.message : null;
   const stallWarning = !reached && !thrashWarning && sinceGain >= STALL && sinceGain < PLATEAU ? `STALL: ${sinceGain} steps without gain. Update notes.md Pareto table, pivot to the largest untouched failure bucket (or check for pending contract relock), or fan out 2-3 parallel orthogonal subagents.` : null;
@@ -22922,10 +22934,14 @@ function summarize(files, recentLimit = 15, now = Date.now()) {
     maxSteps: card.max_steps ?? null,
     maxHours: card.max_hours ?? null,
     pendingTree,
-    hasHoldout: typeof card.holdout === "string" && card.holdout !== "",
-    holdoutOnce: Boolean(card.holdout_once),
+    hasHoldout,
+    holdoutOnce,
+    holdoutEvery,
+    keptSinceHoldout,
     holdoutGain,
     holdoutWarning,
+    holdoutCheckpointWarning,
+    relockCount,
     thrashWarning,
     stallWarning,
     notesStaleSteps,
@@ -22967,6 +22983,7 @@ function formatSummary(summary) {
   if (summary.holdouts.length > 0) {
     lines.push(`Holdout ${summary.holdouts.map((row) => `${number4(row.score)} (${row.why})`).join(", ")}`);
     if (summary.holdoutWarning) lines.push(summary.holdoutWarning);
+    if (summary.holdoutCheckpointWarning) lines.push(summary.holdoutCheckpointWarning);
   } else if (summary.hasHoldout && !summary.holdoutOnce) {
     lines.push(
       `Holdout baseline missing \u2014 do not inspect holdout files; run: climb.py holdout ${summary.name} --why baseline`
@@ -23043,7 +23060,7 @@ score: ${pattern}` : command2]);
   rows.push([
     "Holdout",
     typeof card.holdout === "string" && card.holdout !== "" ? `${redactSecrets(card.holdout)}
-never read it again; run holdout --why "\u2026" at the bar` : "none \u2014 nothing catches overfitting to the visible cases"
+never read it again; run holdout --why "\u2026" at the bar${typeof card.holdout_every === "number" && card.holdout_every >= 1 ? ` (auto-checkpoint every ${card.holdout_every} kept step(s))` : ""}` : "none \u2014 nothing catches overfitting to the visible cases"
   ]);
   rows.push(["Locked", locks.length > 0 ? locks.join("\n") : "none \u2014 nothing stops a step from editing the check"]);
   rows.push([
@@ -24188,11 +24205,13 @@ function bundledKitFiles() {
 
 // src/repo-ops.ts
 var ENGINE_COMMANDS = [
-  'init <name> --goal "..." --check "<command>" [--probe "<fast-cmd>"] --lock <check files>',
+  'init <name> --goal "..." --check "<command>" [--probe "<fast-cmd>"] [--holdout-every N] --lock <check files>',
   'try "<idea>"  [--fix] [--probe "<fast-cmd>"] [--guards-first]',
   "status [name]",
   'relock [name] --why "..."',
   'holdout --why "..."',
+  "check-noise [name] [--runs 3]",
+  "audit [name] [--strict] [--json]",
   'raise <bar> --why "..."',
   'review "<what you found>"',
   "budget [name] [--hours N] [--steps N] [--off]",
@@ -24495,6 +24514,7 @@ function getClimbCard(repoPath, name) {
   const extras = [];
   if (summary.notes) extras.push(`Notes:
 ${summary.notes}`);
+  if (summary.holdoutCheckpointWarning) extras.push(summary.holdoutCheckpointWarning);
   if (summary.thrashWarning) extras.push(summary.thrashWarning);
   else if (summary.stallWarning) extras.push(summary.stallWarning);
   if (summary.notesWarning) extras.push(summary.notesWarning);
@@ -24524,6 +24544,10 @@ ${extras.join("\n")}` : baseText;
       timeout: card.timeout ?? null,
       guards: (card.guards ?? []).map(redactSecrets),
       holdout: card.holdout ? redactSecrets(card.holdout) : null,
+      holdoutEvery: summary.holdoutEvery,
+      keptSinceHoldout: summary.keptSinceHoldout,
+      holdoutCheckpointWarning: summary.holdoutCheckpointWarning,
+      relockCount: summary.relockCount,
       locked: card.lock ?? [],
       fingerprint: card.fingerprint ?? null,
       repos: (card.repos ?? []).map((repo) => repo.path),
