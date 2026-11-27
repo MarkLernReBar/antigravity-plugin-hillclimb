@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { realpathSync } from "node:fs";
+import { readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRepository, defaultDataDir, openDatabase, type Repository } from "./repository.js";
@@ -15,6 +15,7 @@ import {
   getClimbVerdict,
   installEngine,
   resolveRepoDirectory,
+  scanProjectClimbs,
 } from "./repo-ops.js";
 import { climbCommand, engineDir, ENGINE_FILES } from "./engine.js";
 import { actionSchema } from "./actions.js";
@@ -22,9 +23,14 @@ import { lintTree } from "./linter.js";
 import { writeMirror } from "./mirror.js";
 import { ingestJunitReport, postTestEvidenceBundle } from "./ci-ingest.js";
 import { runStudyPreview, runStudyReport } from "./studies.js";
+import { computeInsights } from "./insights.js";
+import { exportShareableReport, generateArtifactFromTemplate, type ArtifactTemplateId } from "./artifacts.js";
+import { blueprintActions, listBlueprints, parseMarkdownImport } from "./templates.js";
+import { createAutomationEngine, ingestAlert } from "./hooks.js";
+import { startLoopbackServer } from "./http-server.js";
 import { HillClimbError } from "./errors.js";
 
-const BOOLEAN_FLAGS = new Set(["json", "apply", "help"]);
+const BOOLEAN_FLAGS = new Set(["json", "apply", "help", "watch", "propose"]);
 
 export function parseArgs(argv: string[]) {
   const positionals: string[] = [];
@@ -94,7 +100,13 @@ Contract tree commands:
   hillclimb tree [--project <id>] [--track <name>] [--outcome <key>] [--json]
   hillclimb act '<json>' [--project <id>]
   hillclimb lint [--project <id>]
-  hillclimb sync [--project <id>] [--dir <repo>]
+  hillclimb sync [--project <id>] [--dir <repo>] [--watch]
+  hillclimb search <query> [--project <id>] [--limit N] [--json]
+  hillclimb insights [--project <id>] [--days 30] [--track main] [--json]
+  hillclimb export [--project <id>] [--format html|markdown] [--release <name>] [--out <file>]
+  hillclimb import [--blueprint <id> | --file <md>] [--project <id>] [--propose] [--apply]
+  hillclimb ingest-alert --key <K> --message <msg> --source <src> [--severity error|warning|info] [--project <id>]
+  hillclimb serve [--port 4318] [--token <secret>] [--data-dir <dir>]
 
 CI evidence & equal-budget studies:
   hillclimb ingest-junit --report <file> [--project <id>] [--dir <repo>] [--format auto|junit|json|text] [--source <url>] [--track <name>] [--prefixes HC] [--contract-frozen-at <iso>] [--apply]
@@ -245,14 +257,20 @@ async function main(): Promise<number> {
         const rawAction = positionals[0];
         if (!rawAction) throw new HillClimbError("Pass a JSON action object as the positional argument.", { code: "missing_action" });
         const action = actionSchema.parse(JSON.parse(rawAction));
-        if (action.op === "approve_change" || action.op === "reject_change" || action.op === "promote_track") {
+        if (
+          action.op === "approve_change" ||
+          action.op === "reject_change" ||
+          action.op === "promote_track" ||
+          action.op === "accept_flow_change" ||
+          action.op === "reject_flow_change"
+        ) {
           throw new HillClimbError("Review this decision in the Hill Climb UI inbox (human confirmation required).", {
             code: "human_decision_required",
           });
         }
         const activeRepo = ensureRepo();
         const project = activeRepo.resolveProjectId(str(options.project), str(options.dir));
-        activeRepo.act(project, action);
+        activeRepo.act(project, action, { actor: "cli", via: "cli" });
         const view = activeRepo.view(project);
         console.log(
           JSON.stringify(
@@ -287,8 +305,199 @@ async function main(): Promise<number> {
             code: "missing_directory",
           });
         }
-        const res = await writeMirror(dir, activeRepo.view(project));
+        const runSync = async () =>
+          writeMirror(dir, activeRepo.view(project), {
+            artifacts: activeRepo.listArtifacts(project),
+            scannedClimbs: scanProjectClimbs(dir, { rowLimit: 10, includeNotes: true }),
+          });
+        const res = await runSync();
         console.log(JSON.stringify(res, null, 2));
+        if (bool(options.watch)) {
+          const intervalSec = Math.max(5, num(options.interval) ?? 30);
+          console.error(`Watching ${project} -> ${res.root} every ${intervalSec}s (Ctrl-C to stop)...`);
+          await new Promise<void>((resolveWatch) => {
+            const timer = setInterval(() => void runSync().catch(() => undefined), intervalSec * 1000);
+            const stop = () => {
+              clearInterval(timer);
+              resolveWatch();
+            };
+            process.once("SIGINT", stop);
+            process.once("SIGTERM", stop);
+          });
+        }
+        return 0;
+      }
+      case "search": {
+        const query = positionals.join(" ").trim() || str(options.query) || "";
+        if (!query) throw new HillClimbError("Pass a search query: hillclimb search <query>", { code: "missing_query" });
+        const activeRepo = ensureRepo();
+        const pid = str(options.project) || str(options.dir) ? activeRepo.resolveProjectId(str(options.project), str(options.dir)) : null;
+        const hits = activeRepo.search(pid, query, { limit: num(options.limit) ?? 25 });
+        if (bool(options.json)) {
+          console.log(JSON.stringify({ query, project: pid, hits }, null, 2));
+        } else if (hits.length === 0) {
+          console.log(`No matches for "${query}".`);
+        } else {
+          for (const h of hits) {
+            console.log(`[${h.entityType}] ${h.entityId} (${h.project}) — ${h.title}\n  ${h.snippet}`);
+          }
+        }
+        return 0;
+      }
+      case "insights": {
+        const activeRepo = ensureRepo();
+        const project = activeRepo.resolveProjectId(str(options.project), str(options.dir));
+        const dir = str(options.dir) ?? activeRepo.getProject(project)?.directory ?? null;
+        const scanned = dir ? scanProjectClimbs(dir, { rowLimit: 50, includeNotes: false }) : null;
+        const ins = computeInsights(activeRepo, project, {
+          days: num(options.days) ?? 30,
+          track: str(options.track) ?? "main",
+          scannedClimbs: scanned,
+        });
+        console.log(JSON.stringify(ins, null, 2));
+        return 0;
+      }
+      case "export": {
+        const activeRepo = ensureRepo();
+        const project = activeRepo.resolveProjectId(str(options.project), str(options.dir));
+        const dir = str(options.dir) ?? activeRepo.getProject(project)?.directory ?? null;
+        const scanned = dir ? scanProjectClimbs(dir, { rowLimit: 25, includeNotes: false }) : null;
+        const format = str(options.format) === "markdown" ? "markdown" : "html";
+        const out = exportShareableReport(activeRepo, project, {
+          format,
+          track: str(options.track) ?? "main",
+          releaseName: str(options.release),
+          scope: str(options.scope),
+          goalKey: str(options.goal),
+          scannedClimbs: scanned,
+        });
+        const outPath = str(options.out);
+        if (outPath) {
+          writeFileSync(resolve(outPath), out.content, "utf8");
+          console.log(JSON.stringify({ written: resolve(outPath), format: out.format, outcomes: out.outcomesIncluded }, null, 2));
+        } else {
+          process.stdout.write(out.content);
+        }
+        return 0;
+      }
+      case "import": {
+        const bpId = str(options.blueprint);
+        const filePath = str(options.file);
+        if (!bpId && !filePath) {
+          console.log(JSON.stringify({ blueprints: listBlueprints() }, null, 2));
+          return 0;
+        }
+        const activeRepo = ensureRepo();
+        const project = activeRepo.resolveProjectId(str(options.project), str(options.dir));
+        const existingTree = activeRepo.read(project);
+        const existingKeys = new Set([
+          ...existingTree.goals.map((g) => g.key),
+          ...existingTree.outcomes.map((o) => o.key),
+        ]);
+        const asProposals = bool(options.propose);
+        const built = bpId
+          ? blueprintActions(bpId, { asProposals, keyPrefix: str(options.prefix), existingKeys })
+          : parseMarkdownImport(readFileSync(resolve(filePath!), "utf8"), {
+              goalKey: str(options.goal),
+              prefix: str(options.prefix),
+              asProposals,
+              existingKeys,
+            });
+        if (bool(options.apply) && built.actions.length > 0) {
+          activeRepo.actBatch(project, built.actions, { actor: "cli", via: "cli" });
+        }
+        console.log(
+          JSON.stringify(
+            {
+              project,
+              applied: bool(options.apply) ? built.actions.length : 0,
+              actionCount: built.actions.length,
+              lint: { passed: built.lint.passed, errors: built.lint.errorCount, warnings: built.lint.warningCount },
+            },
+            null,
+            2,
+          ),
+        );
+        return 0;
+      }
+      case "artifact": {
+        const activeRepo = ensureRepo();
+        const project = activeRepo.resolveProjectId(str(options.project), str(options.dir));
+        const template = (str(options.template) ?? "weekly-update") as ArtifactTemplateId;
+        const dir = str(options.dir) ?? activeRepo.getProject(project)?.directory ?? null;
+        const scanned = dir ? scanProjectClimbs(dir, { rowLimit: 25, includeNotes: false }) : null;
+        const gen = generateArtifactFromTemplate(activeRepo, project, {
+          template,
+          title: str(options.title),
+          folder: str(options.folder),
+          releaseName: str(options.release),
+          scannedClimbs: scanned,
+          actor: "cli",
+          save: bool(options.apply),
+        });
+        console.log(bool(options.json) ? JSON.stringify(gen, null, 2) : gen.body);
+        return 0;
+      }
+      case "ingest-alert": {
+        const key = str(options.key);
+        const msg = str(options.message);
+        const src = str(options.source) ?? "monitoring";
+        if (!key || !msg) throw new HillClimbError("Pass --key <outcome> and --message <text>.", { code: "missing_alert_args" });
+        const activeRepo = ensureRepo();
+        const project = activeRepo.resolveProjectId(str(options.project), str(options.dir));
+        const sev = (str(options.severity) ?? "error") as "critical" | "error" | "warning" | "info";
+        const res = ingestAlert(activeRepo, {
+          project,
+          key,
+          message: msg,
+          source: src,
+          severity: sev,
+          track: str(options.track) ?? "main",
+          actor: "cli-alert",
+        });
+        console.log(JSON.stringify(res, null, 2));
+        return 0;
+      }
+      case "serve": {
+        const activeRepo = ensureRepo();
+        const automation = createAutomationEngine(activeRepo);
+        const srv = await startLoopbackServer(activeRepo, {
+          port: num(options.port) ?? 4318,
+          token: str(options.token),
+        });
+        console.log(
+          JSON.stringify(
+            {
+              url: srv.url,
+              bind: "127.0.0.1",
+              port: srv.port,
+              token: srv.token,
+              endpoints: [
+                "GET /api/v1/health",
+                "GET /api/v1/projects",
+                "GET /api/v1/projects/:id/tree",
+                "GET /api/v1/projects/:id/next",
+                "GET /api/v1/projects/:id/search?q=...",
+                "GET /api/v1/projects/:id/insights",
+                "GET /api/v1/projects/:id/artifacts",
+                "GET /api/v1/projects/:id/export?format=html|markdown",
+                "POST /api/v1/projects/:id/act",
+                "POST /api/v1/projects/:id/alerts",
+                "POST /api/v1/projects/:id/artifacts",
+              ],
+            },
+            null,
+            2,
+          ),
+        );
+        await new Promise<void>((done) => {
+          const stop = () => {
+            automation.stop();
+            void srv.close().finally(done);
+          };
+          process.once("SIGINT", stop);
+          process.once("SIGTERM", stop);
+        });
         return 0;
       }
       case "ingest-junit": {

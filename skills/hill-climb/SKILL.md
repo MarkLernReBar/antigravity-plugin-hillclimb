@@ -234,11 +234,11 @@ Blockers: <exact blocker, or "none">
 | `kits [words]` | Search saved kits across repos |
 | `reuse <name or repo/name>` | Restore kit and print its `init` command |
 
-### Plugin MCP tools (29) & CLI (`hillclimb <cmd>`)
+### Plugin MCP tools (33) & CLI (`hillclimb <cmd>`)
 
 | MCP Tool | CLI Equivalent | Purpose |
 | --- | --- | --- |
-| `hillclimb_open` | — | Open interactive UI (`tree` / `climbs` / `inbox` / `roadmap` / `flows`) |
+| `hillclimb_open` | — | Open interactive UI (`tree` / `climbs` / `inbox` / `roadmap` / `flows` / `insights` / `reports`) |
 | `hillclimb_setup` | `setup [--dir]` | Install `climb.py`, `judge.py`, and 5 kits into `.hill-climb/` |
 | `hillclimb_status` | `status [--name] [--dir] [--last N] [--json]` | Read `card.json` + `log.jsonl` (score, bar, trail, verdict) |
 | `hillclimb_card` | `card [--name] [--dir] [--json]` | Read rig, guards, holdout, lock hash, fingerprint |
@@ -246,18 +246,23 @@ Blockers: <exact blocker, or "none">
 | `hillclimb_log` | `log \| notes \| verdict [--name] [--dir]` | Read `log.jsonl`, `notes.md`, or one-line verdict |
 | — | `engine [--dir] [--json]` | Check installed engine path & version |
 | `hillclimb_projects` | `projects [--register <dir>] [--name] [--id]` | List or register Antigravity / Hill Climb projects |
-| `hillclimb_tree` / `hillclimb_next_outcomes` / `hillclimb_outcome` | `tree [--project] [--track] [--outcome] [--json]` | Ranked contract tree, `next` queue, single outcome + briefs/plans/evidence |
-| `hillclimb_act` | `act '<json>' [--project]` | Apply action ops (`create_goal`, `create_outcome`, `propose_change`, `claim_outcome`, `release_outcome`, `add_evidence`, `write_plan`, `revise_plan`, `comment`, `answer`, `create_track`, `create_release`, `create_flow`, `pin`; UI-only: `approve_change`, `reject_change`, `promote_track`) |
+| `hillclimb_tree` / `hillclimb_next_outcomes` / `hillclimb_outcome` | `tree [--project] [--track] [--outcome] [--json]` | Ranked contract tree (`tag` / `scope` filters, section numbers, availability), `next` queue, single outcome + briefs/plans/evidence/linked flows |
+| `hillclimb_act` | `act '<json>' [--project]` | Apply action ops (`create_goal`, `update_goal`, `create_outcome`, `propose_outcome`, `propose_change`, `set_outcome_availability`, `set_tags`, `claim_outcome`, `release_outcome`, `add_evidence`, `write_plan`, `revise_plan`, `comment`, `answer`, `create_track`, `create_release`, `revise_release`, `create_flow`, `pin`, `resolve_pin`, `propose_flow_change`, `restore_frame_version`, `set_frame_drift`; UI-only: `approve_change`, `reject_change`, `accept_flow_change`, `reject_flow_change`, `promote_track`) |
 | `hillclimb_propose_change` | `act '{"op":"propose_change",...}'` | Propose contract edit for Inbox human approval |
 | `hillclimb_lint_tree` | `lint [--project]` | Read-only 22-rule contract linter |
 | `hillclimb_claim` / `hillclimb_release` | `act` (`claim_outcome` / `release_outcome`) | Take or release time-boxed outcome lease |
 | `hillclimb_plan_write` | `act` (`write_plan` / `revise_plan`) | Write v1 or append revised full-text outcome plan |
-| `hillclimb_comment` / `hillclimb_inbox` | `act` (`comment` / `answer`) | Post comment/question (`options`), record answer, read Inbox |
-| `hillclimb_add_evidence` / `hillclimb_set_status` | `act` (`add_evidence`) | Version-scoped criterion evidence & evidence-backed `verified`/`broken` status |
-| `hillclimb_sync` | `sync [--project] [--dir]` | Export read-only `.hillclimb/` markdown & `tree.json` mirror |
+| `hillclimb_comment` / `hillclimb_inbox` | `act` (`comment` / `answer`) | Post comment/question (`options`, `planVersion`), record answer, read Inbox (changes, flow proposals, questions) |
+| `hillclimb_add_evidence` / `hillclimb_set_status` | `act` (`add_evidence`) | Version-scoped criterion evidence (with optional `attachments`) & evidence-backed `verified`/`broken` status |
+| `hillclimb_sync` | `sync [--project] [--dir] [--watch]` | Export read-only `.hillclimb/` mirror (`goals/`, `outcomes/`, `plans/`, `flows/`, `reports/`, `climbs/`, `tree.json`) |
+| `hillclimb_search` | `search <query> [--project] [--type]` | SQLite FTS5 full-text search across goals, outcomes, criteria, plans, evidence, comments, flows, artifacts, and climbs |
+| `hillclimb_insights` | `insights [--project] [--days N]` | Verified-per-day throughput, streak, actor provenance, and inner-loop climb keep rate / holdout gap telemetry |
+| `hillclimb_artifact` | `artifact list\|get\|generate\|save` / `export` | Evidence-backed Markdown reports (5 templates, citations, locks, history) & self-contained HTML/Markdown snapshot export |
+| `hillclimb_import` | `import --blueprint <id> \| --file <md>` | Seed contracts from 5 blueprints or Markdown stories with 22-rule lint preview (`--propose` for Inbox review) |
 | `hillclimb_rig` / `hillclimb_search_start` / `hillclimb_search_status` / `hillclimb_search_summit` | — | Manage version-bound rigs (`repo`/`search`), dispatch workers, read live MAP-Elites grid, verify receipts |
-| `hillclimb_ingest_junit` / `hillclimb_post_test_evidence` | `ingest-junit` / `post-test-evidence` | Dry-run or apply CI test evidence via `assets/ci/hillclimb-evidence.mjs` |
+| `hillclimb_ingest_junit` / `hillclimb_post_test_evidence` | `ingest-junit` / `post-test-evidence` / `ingest-alert` | Dry-run or apply CI test evidence (`assets/ci/hillclimb-evidence.mjs`) or monitoring alerts (`denies` evidence) |
 | `hillclimb_study_preview` / `hillclimb_study_report` | `study-preview` / `study-report` | Equal-budget study spec matrix & result reports |
+| — | `serve [--port 4189] [--token <secret>]` | Opt-in loopback-only (`127.0.0.1`) Bearer-authenticated local REST API |
 
 ---
 

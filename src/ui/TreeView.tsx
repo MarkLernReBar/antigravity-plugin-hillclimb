@@ -10,8 +10,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent, JSX, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react'
 import type { Action } from '../actions.js'
-import type { Activity, Goal, Outcome, Ranked, Signal, Snapshot } from '../model.js'
-import type { ViewProps } from '../view-props.js'
+import type { Activity, Goal, Outcome, OutcomeAvailability, Ranked, Signal, Snapshot } from '../model.js'
+import type { SavedViewDto, ViewProps } from '../view-props.js'
 
 export type ViewMode = 'map' | 'outline'
 export type WindowKey = '24h' | '7d' | '30d'
@@ -305,6 +305,8 @@ export interface TimelineEvent {
   text: string
   /** The signal an activity row recorded at that moment; null for every other kind. */
   signal: Signal | null
+  actor?: string
+  via?: string
 }
 
 function timeOf(value: string): number {
@@ -347,6 +349,8 @@ export function timelineOf(data: Snapshot, track?: string): TimelineEvent[] {
       kind: 'activity',
       text: row.text,
       signal: row.signal,
+      actor: row.actor,
+      via: row.via,
     })
   }
   for (const row of data.evidence) {
@@ -358,6 +362,8 @@ export function timelineOf(data: Snapshot, track?: string): TimelineEvent[] {
       kind: 'evidence',
       text: `${row.kind}: ${row.text}`,
       signal: null,
+      actor: row.actor,
+      via: row.via,
     })
   }
   for (const row of data.changes) {
@@ -366,8 +372,13 @@ export function timelineOf(data: Snapshot, track?: string): TimelineEvent[] {
       at: timeOf(row.created),
       key: row.key,
       kind: 'change',
-      text: `proposal for base v${row.baseVersion} — ${row.proposed.title}`,
+      text:
+        row.kind === 'create'
+          ? `proposed new outcome — ${row.proposed.title}`
+          : `proposal for base v${row.baseVersion} — ${row.proposed.title}`,
       signal: null,
+      actor: row.actor,
+      via: row.via,
     })
   }
   for (const row of data.comments) {
@@ -378,6 +389,8 @@ export function timelineOf(data: Snapshot, track?: string): TimelineEvent[] {
       kind: 'comment',
       text: row.text,
       signal: null,
+      actor: row.actor,
+      via: row.via,
     })
   }
   events.sort((a, b) => a.at - b.at || a.id.localeCompare(b.id))
@@ -526,6 +539,11 @@ interface NodeMeta {
   signal: Signal
   rank: number | null
   ordinal: number | null
+  sectionNumber: string | null
+  availability: OutcomeAvailability
+  availabilityReason: string | null
+  deferredUntil: string | null
+  tags: string[]
   goalProgress: { proven: number; total: number } | null
   blocked: boolean
   proposed: boolean
@@ -580,6 +598,23 @@ function metaFor(data: Snapshot, track: string): Map<string, NodeMeta> {
     return { proven, total }
   }
 
+  const goalSection = new Map<string, string>()
+  const goalByKeyMap = new Map(data.goals.map((g) => [g.key, g]))
+  const walkGoalSections = (parentKey: string | null, prefix: string): void => {
+    const kids = data.goals
+      .filter((g) => (parentKey === null ? g.parentGoalKey === null || !goalByKeyMap.has(g.parentGoalKey) : g.parentGoalKey === parentKey))
+      .slice()
+      .sort(sortGoals)
+    kids.forEach((g, idx) => {
+      const sec = prefix ? `${prefix}.${idx + 1}` : `${idx + 1}`
+      if (!goalSection.has(g.key)) {
+        goalSection.set(g.key, sec)
+        walkGoalSections(g.key, sec)
+      }
+    })
+  }
+  walkGoalSections(null, '')
+
   for (const goal of data.goals) {
     const row = ranked.get(goal.key)
     const goalProgress = countGoal(goal.key)
@@ -589,6 +624,11 @@ function metaFor(data: Snapshot, track: string): Map<string, NodeMeta> {
       signal: row?.signal ?? derivedGoalSignal,
       rank: row?.effectiveRank ?? goal.rank,
       ordinal: null,
+      sectionNumber: goalSection.get(goal.key) ?? null,
+      availability: 'active',
+      availabilityReason: null,
+      deferredUntil: null,
+      tags: goal.tags ?? [],
       goalProgress,
       blocked: (row?.blockedBy.length ?? 0) > 0,
       proposed: proposed.has(goal.key),
@@ -604,6 +644,11 @@ function metaFor(data: Snapshot, track: string): Map<string, NodeMeta> {
       signal: row?.signal ?? 'unverified',
       rank: row?.effectiveRank ?? outcome.rank,
       ordinal: ordinalByKey.get(outcome.key) ?? null,
+      sectionNumber: row?.sectionNumber ?? null,
+      availability: row?.availability ?? outcome.availability ?? 'active',
+      availabilityReason: row?.availabilityReason ?? outcome.availabilityReason ?? null,
+      deferredUntil: row?.deferredUntil ?? outcome.deferredUntil ?? null,
+      tags: row?.tags ?? outcome.tags ?? [],
       goalProgress: null,
       blocked: (row?.blockedBy.length ?? 0) > 0,
       proposed: proposed.has(outcome.key),
@@ -700,6 +745,7 @@ function MapCanvas(props: MapProps): JSX.Element {
             title={node.title}
           >
             <span className="hc-node-head">
+              {info?.sectionNumber ? <span className="hc-node-sec">{info.sectionNumber}</span> : null}
               <span className="hc-node-key">{node.key}</span>
               {info?.next !== null && info?.next !== undefined ? (
                 <span className="hc-node-next" title={`Next work, in order: #${info.next}`}>
@@ -719,7 +765,21 @@ function MapCanvas(props: MapProps): JSX.Element {
               ) : (
                 <SignalBadge signal={signal} />
               )}
+              {info?.availability === 'blocked' ? (
+                <span className="hc-chip hc-chip-warn" title={info.availabilityReason ?? 'Manually blocked'}>
+                  paused
+                </span>
+              ) : info?.availability === 'deferred' ? (
+                <span className="hc-chip" title={info.deferredUntil ? `Deferred until ${info.deferredUntil}` : 'Deferred'}>
+                  deferred
+                </span>
+              ) : null}
               {info?.blocked === true ? <span className="hc-chip hc-chip-warn">blocked</span> : null}
+              {info?.tags?.slice(0, 2).map((tag) => (
+                <span key={tag} className="hc-chip hc-tag-chip">
+                  #{tag}
+                </span>
+              ))}
               {info?.claim !== null && info?.claim !== undefined ? (
                 <span className="hc-chip" title={`Claimed by ${info.claim}`}>
                   #{info.claim.slice(0, 10)}
@@ -800,15 +860,29 @@ function OutlineList(props: OutlineProps): JSX.Element {
           aria-pressed={selected === key}
           aria-label={`${kind} ${key}: ${title}. ${signal}`}
         >
-          <span className="hc-outline-rank">
-            {kind === 'outcome' && info?.ordinal !== null && info?.ordinal !== undefined ? `#${info.ordinal}` : '—'}
+          <span className="hc-outline-rank" title={info?.sectionNumber ? `Section ${info.sectionNumber}` : undefined}>
+            {info?.sectionNumber ?? (kind === 'outcome' && info?.ordinal !== null && info?.ordinal !== undefined ? `#${info.ordinal}` : '—')}
           </span>
           <span className="hc-outline-key">{key}</span>
           <span className="hc-outline-title">{title}</span>
           <span className="hc-outline-tags">
             {info?.next !== null && info?.next !== undefined ? <span className="hc-chip hc-chip-next">next #{info.next}</span> : null}
             {info?.proposed === true ? <span className="hc-chip">proposed</span> : null}
+            {info?.availability === 'blocked' ? (
+              <span className="hc-chip hc-chip-warn" title={info.availabilityReason ?? 'Manually blocked'}>
+                paused
+              </span>
+            ) : info?.availability === 'deferred' ? (
+              <span className="hc-chip" title={info.deferredUntil ? `Deferred until ${info.deferredUntil}` : 'Deferred'}>
+                deferred
+              </span>
+            ) : null}
             {info?.blocked === true ? <span className="hc-chip hc-chip-warn">blocked</span> : null}
+            {info?.tags?.slice(0, 2).map((tag) => (
+              <span key={tag} className="hc-chip hc-tag-chip">
+                #{tag}
+              </span>
+            ))}
             {info?.claim !== null && info?.claim !== undefined ? (
               <span className="hc-chip" title={`Claimed by ${info.claim}`}>
                 {info.claim.slice(0, 12)}
@@ -1255,7 +1329,7 @@ function ReplayBar(props: ReplayProps): JSX.Element {
 // ---------------------------------------------------------------------------
 
 export function TreeView(props: ViewProps): JSX.Element {
-  const { data, track, selected, select, act } = props
+  const { data, track, selected, select, act, views = [], scopes = [], onSaveView, onDeleteView, onSaveScope, onDeleteScope, onOpenInbox } = props
   const [mode, setMode] = useState<ViewMode>(() =>
     typeof window !== 'undefined' && window.innerWidth < 640 ? 'outline' : 'map',
   )
@@ -1263,6 +1337,11 @@ export function TreeView(props: ViewProps): JSX.Element {
   const [query, setQuery] = useState('')
   const [signals, setSignals] = useState<Set<Signal>>(() => new Set())
   const [blockedOnly, setBlockedOnly] = useState(false)
+  const [selectedTag, setSelectedTag] = useState<string>('')
+  const [availabilityFilter, setAvailabilityFilter] = useState<'all' | OutcomeAvailability>('all')
+  const [scopeFilterId, setScopeFilterId] = useState<string>('')
+  const [savingView, setSavingView] = useState(false)
+  const [viewNameDraft, setViewNameDraft] = useState('')
   const [showAll, setShowAll] = useState(true)
   const [sortMode, setSortMode] = useState<'rank' | 'key'>('rank')
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
@@ -1274,6 +1353,65 @@ export function TreeView(props: ViewProps): JSX.Element {
   const [now, setNow] = useState(() => Date.now())
   const viewportRef = useRef<HTMLDivElement>(null)
   const fitted = useRef(false)
+
+  const allTags = useMemo(() => {
+    const set = new Set<string>()
+    for (const g of data.goals) for (const t of g.tags ?? []) set.add(t)
+    for (const o of data.outcomes) for (const t of o.tags ?? []) set.add(t)
+    return [...set].sort()
+  }, [data.goals, data.outcomes])
+
+  const pendingCreates = useMemo(
+    () => data.changes.filter((c) => c.state === 'pending' && c.kind === 'create'),
+    [data.changes],
+  )
+
+  const activeScope = useMemo(() => {
+    if (scopeFilterId) return scopes.find((s) => s.id === scopeFilterId) ?? null
+    return scopes.find((s) => s.active) ?? null
+  }, [scopes, scopeFilterId])
+
+  const scopeOutcomeKeys = useMemo(() => {
+    if (!activeScope) return null
+    const keys = new Set<string>()
+    if (activeScope.releaseName) {
+      const rel = data.releases.find((r) => r.name === activeScope.releaseName)
+      if (rel) for (const k of rel.keys) keys.add(k)
+    }
+    if (activeScope.goalKeys.length > 0) {
+      const goalSet = new Set(activeScope.goalKeys)
+      let added = true
+      while (added) {
+        added = false
+        for (const g of data.goals) {
+          if (g.parentGoalKey && goalSet.has(g.parentGoalKey) && !goalSet.has(g.key)) {
+            goalSet.add(g.key)
+            added = true
+          }
+        }
+      }
+      for (const o of data.outcomes) if (goalSet.has(o.goalKey)) keys.add(o.key)
+    }
+    if (activeScope.tags.length > 0) {
+      const tagSet = new Set(activeScope.tags)
+      const taggedGoals = new Set(data.goals.filter((g) => (g.tags ?? []).some((t) => tagSet.has(t))).map((g) => g.key))
+      for (const o of data.outcomes) {
+        if ((o.tags ?? []).some((t) => tagSet.has(t)) || taggedGoals.has(o.goalKey)) keys.add(o.key)
+      }
+    }
+    return keys
+  }, [activeScope, data.goals, data.outcomes, data.releases])
+
+  const applySavedView = (saved: SavedViewDto): void => {
+    setQuery(saved.filter.query ?? '')
+    setSignals(new Set((saved.filter.signals ?? []) as Signal[]))
+    setSelectedTag(saved.filter.tags?.[0] ?? '')
+    setBlockedOnly(Boolean(saved.filter.blockedOnly))
+    const avail = saved.filter.availability?.[0]
+    setAvailabilityFilter(avail === 'active' || avail === 'blocked' || avail === 'deferred' ? avail : 'all')
+    if (saved.filter.sortMode === 'key' || saved.filter.sortMode === 'rank') setSortMode(saved.filter.sortMode)
+    if (saved.filter.scope) setScopeFilterId(saved.filter.scope)
+  }
 
   useEffect(() => {
     setNow(Date.now())
@@ -1484,8 +1622,15 @@ export function TreeView(props: ViewProps): JSX.Element {
       // While replaying, filter on the signal the map is showing, not on today's.
       const signal = (recorded ? recorded.get(outcome.key) : info?.signal) ?? 'unverified'
       if (!showAll && signal === 'verified') return false
-      if (blockedOnly && info?.blocked !== true) return false
+      if (blockedOnly && info?.blocked !== true && info?.availability !== 'blocked') return false
       if (signals.size > 0 && !signals.has(signal)) return false
+      if (availabilityFilter !== 'all' && (info?.availability ?? 'active') !== availabilityFilter) return false
+      if (selectedTag !== '') {
+        const goalTags = goalByKey.get(outcome.goalKey)?.tags ?? []
+        const ownTags = info?.tags ?? []
+        if (!ownTags.includes(selectedTag) && !goalTags.includes(selectedTag)) return false
+      }
+      if (scopeOutcomeKeys !== null && !scopeOutcomeKeys.has(outcome.key)) return false
       if (!matchesOutcome(outcome, needle)) return false
       return true
     }
@@ -1512,13 +1657,13 @@ export function TreeView(props: ViewProps): JSX.Element {
         hops += 1
       }
     }
-    // Filters select work, not structure: with no text query every goal stays
+    // Filters select work, not structure: with no text query or active scope every goal stays
     // on the map so hiding verified outcomes never deletes their parent.
-    if (needle === '') {
+    if (needle === '' && scopeOutcomeKeys === null && selectedTag === '') {
       for (const goal of data.goals) shown.add(goal.key)
     }
     return shown
-  }, [blockedOnly, data.goals, data.outcomes, matchesOutcome, meta, query, recorded, showAll, signals])
+  }, [availabilityFilter, blockedOnly, data.goals, data.outcomes, matchesOutcome, meta, query, recorded, scopeOutcomeKeys, selectedTag, showAll, signals])
 
   const visibleOutcomeKeys = useMemo(
     () => data.outcomes.filter((outcome) => visible.has(outcome.key)).map((outcome) => outcome.key),
@@ -1697,6 +1842,159 @@ export function TreeView(props: ViewProps): JSX.Element {
           ) : null}
         </div>
 
+        <div className="hc-toolbar-row hc-subfilters" role="group" aria-label="Tags, availability, saved views, and focus scopes">
+          <select
+            aria-label="Filter by availability"
+            className="hc-mini-select"
+            value={availabilityFilter}
+            onChange={(e) => setAvailabilityFilter(e.target.value as 'all' | OutcomeAvailability)}
+          >
+            <option value="all">Availability: all</option>
+            <option value="active">Active only</option>
+            <option value="blocked">Manually blocked</option>
+            <option value="deferred">Deferred</option>
+          </select>
+
+          {allTags.length > 0 ? (
+            <select
+              aria-label="Filter by tag"
+              className="hc-mini-select"
+              value={selectedTag}
+              onChange={(e) => setSelectedTag(e.target.value)}
+            >
+              <option value="">All tags ({allTags.length})</option>
+              {allTags.map((t) => (
+                <option key={t} value={t}>
+                  #{t}
+                </option>
+              ))}
+            </select>
+          ) : null}
+
+          {scopes.length > 0 || onSaveScope ? (
+            <div className="hc-inline-group">
+              <select
+                aria-label="Focus scope"
+                className="hc-mini-select"
+                value={activeScope?.id ?? ''}
+                onChange={(e) => {
+                  const id = e.target.value
+                  setScopeFilterId(id)
+                  const chosen = scopes.find((s) => s.id === id)
+                  if (chosen && onSaveScope) {
+                    void onSaveScope({ ...chosen, active: true })
+                  } else if (!id && activeScope && onSaveScope) {
+                    void onSaveScope({ ...activeScope, active: false })
+                  }
+                }}
+              >
+                <option value="">Focus scope: none</option>
+                {scopes.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    Scope: {s.name}
+                    {s.active ? ' (active)' : ''}
+                  </option>
+                ))}
+              </select>
+              {activeScope && onDeleteScope ? (
+                <button
+                  type="button"
+                  className="hc-icon-btn"
+                  title="Delete focus scope"
+                  aria-label={`Delete scope ${activeScope.name}`}
+                  onClick={() => {
+                    setScopeFilterId('')
+                    void onDeleteScope(activeScope.id)
+                  }}
+                >
+                  ×
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
+          {views.length > 0 ? (
+            <div className="hc-chips" role="group" aria-label="Saved views">
+              {views.map((v) => (
+                <span key={v.id} className="hc-saved-view-pill">
+                  <button type="button" className="hc-chip" onClick={() => applySavedView(v)}>
+                    {v.name}
+                  </button>
+                  {onDeleteView ? (
+                    <button
+                      type="button"
+                      className="hc-saved-view-del"
+                      aria-label={`Delete saved view ${v.name}`}
+                      onClick={() => void onDeleteView(v.id)}
+                    >
+                      ×
+                    </button>
+                  ) : null}
+                </span>
+              ))}
+            </div>
+          ) : null}
+
+          {onSaveView ? (
+            savingView ? (
+              <form
+                className="hc-inline-group"
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  const trimmed = viewNameDraft.trim()
+                  if (!trimmed) return
+                  void onSaveView(trimmed, {
+                    query: query.trim() || undefined,
+                    signals: signals.size > 0 ? [...signals] : undefined,
+                    tags: selectedTag ? [selectedTag] : undefined,
+                    blockedOnly: blockedOnly || undefined,
+                    availability: availabilityFilter !== 'all' ? [availabilityFilter] : undefined,
+                    scope: activeScope?.id ?? null,
+                    sortMode,
+                  }).then(() => {
+                    setViewNameDraft('')
+                    setSavingView(false)
+                  })
+                }}
+              >
+                <input
+                  className="hc-mini-input"
+                  value={viewNameDraft}
+                  onChange={(e) => setViewNameDraft(e.target.value)}
+                  placeholder="View name…"
+                  aria-label="Saved view name"
+                  autoFocus
+                />
+                <button type="submit" className="hc-btn hc-btn-primary">
+                  Save
+                </button>
+                <button type="button" className="hc-btn" onClick={() => setSavingView(false)}>
+                  Cancel
+                </button>
+              </form>
+            ) : (
+              <button type="button" className="hc-btn" onClick={() => setSavingView(true)}>
+                Save view
+              </button>
+            )
+          ) : null}
+        </div>
+
+        {pendingCreates.length > 0 ? (
+          <div className="hc-proposed-strip" role="status">
+            <span>
+              <strong>{pendingCreates.length}</strong> proposed new outcome{pendingCreates.length === 1 ? '' : 's'} waiting for
+              approval: {pendingCreates.map((c) => c.key).slice(0, 4).join(', ')}
+              {pendingCreates.length > 4 ? ` +${pendingCreates.length - 4}` : ''}
+            </span>
+            {onOpenInbox ? (
+              <button type="button" className="hc-btn" onClick={onOpenInbox}>
+                Review in Inbox →
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+
         <CoverageBar coverage={coverage} replaying={recorded !== null} />
       </header>
 
@@ -1795,7 +2093,7 @@ export function TreeView(props: ViewProps): JSX.Element {
         creating === null &&
         visibleOutcomeKeys.length === 0 &&
         data.outcomes.length > 0 &&
-        (query.trim() !== '' || signals.size > 0 || blockedOnly || !showAll) ? (
+        (query.trim() !== '' || signals.size > 0 || blockedOnly || !showAll || selectedTag !== '' || availabilityFilter !== 'all' || activeScope !== null) ? (
           <p className="hc-empty-note hc-filter-empty" role="status">
             Nothing matches these filters.{' '}
             <button
@@ -1805,6 +2103,9 @@ export function TreeView(props: ViewProps): JSX.Element {
                 setQuery('')
                 setSignals(new Set())
                 setBlockedOnly(false)
+                setSelectedTag('')
+                setAvailabilityFilter('all')
+                setScopeFilterId('')
                 setShowAll(true)
               }}
             >
@@ -1846,6 +2147,12 @@ export function TreeView(props: ViewProps): JSX.Element {
                       {event.key}
                     </button>
                     <span className="hc-rail-kind">{event.kind}</span>
+                    {event.actor ? (
+                      <span className="hc-rail-actor" title={event.via ? `via ${event.via}` : undefined}>
+                        {event.actor}
+                        {event.via ? `·${event.via}` : ''}
+                      </span>
+                    ) : null}
                     <span className="hc-rail-text">{event.text}</span>
                   </li>
                 ))}

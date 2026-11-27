@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent, JSX, KeyboardEvent as ReactKeyboardEvent } from 'react'
 import type { Action } from '../actions.js'
-import type { Change, Comment, Contract, Evidence, Goal, Outcome, Plan } from '../model.js'
+import type { Change, Comment, Contract, Evidence, Goal, Outcome, OutcomeAvailability, Plan } from '../model.js'
 import type { LiveData, ViewProps } from '../view-props.js'
 import { formatWhen, sortOutcomes, signalOf } from './TreeView.js'
 
@@ -45,6 +45,13 @@ export function contractDiff(current: Contract, proposed: Contract): DiffRow[] {
     current.dependsOn.slice().sort().join(', ') || 'none',
     proposed.dependsOn.slice().sort().join(', ') || 'none',
   )
+  if ((current.tags && current.tags.length > 0) || (proposed.tags && proposed.tags.length > 0)) {
+    field(
+      'Tags',
+      (current.tags ?? []).slice().sort().join(', ') || 'none',
+      (proposed.tags ?? []).slice().sort().join(', ') || 'none',
+    )
+  }
 
   const previous = new Map(current.criteria.map((row) => [row.id, row]))
   const next = new Set(proposed.criteria.map((row) => row.id))
@@ -73,7 +80,41 @@ export function contractOf(outcome: Outcome): Contract {
     dependsOn: outcome.dependsOn.slice(),
     rank: outcome.rank,
     recheckDays: outcome.recheckDays,
+    ...(outcome.tags && outcome.tags.length > 0 ? { tags: outcome.tags.slice() } : {}),
   }
+}
+
+function computeLineDiff(before: string, after: string): Array<{ kind: 'same' | 'add' | 'del'; text: string }> {
+  const a = before.split('\n')
+  const b = after.split('\n')
+  const aSet = new Set(a)
+  const bSet = new Set(b)
+  const out: Array<{ kind: 'same' | 'add' | 'del'; text: string }> = []
+  let i = 0
+  let j = 0
+  while (i < a.length || j < b.length) {
+    if (i < a.length && j < b.length && a[i] === b[j]) {
+      out.push({ kind: 'same', text: a[i] ?? '' })
+      i += 1
+      j += 1
+    } else if (i < a.length && !bSet.has(a[i] ?? '')) {
+      out.push({ kind: 'del', text: a[i] ?? '' })
+      i += 1
+    } else if (j < b.length && !aSet.has(b[j] ?? '')) {
+      out.push({ kind: 'add', text: b[j] ?? '' })
+      j += 1
+    } else {
+      if (i < a.length) {
+        out.push({ kind: 'del', text: a[i] ?? '' })
+        i += 1
+      }
+      if (j < b.length) {
+        out.push({ kind: 'add', text: b[j] ?? '' })
+        j += 1
+      }
+    }
+  }
+  return out
 }
 
 /** `max` when the best score is above the baseline, `min` when below. */
@@ -786,6 +827,7 @@ function EditProposal({ outcome, act, onError, onDone }: EditFormProps): JSX.Ele
           dependsOn: draft.dependsOn,
           rank: draft.rank,
           recheckDays: draft.recheckDays,
+          ...(draft.tags && draft.tags.length > 0 ? { tags: draft.tags } : {}),
         },
       })
       onDone()
@@ -962,6 +1004,8 @@ function CommentNode({ comment, replies, act, onError }: CommentThreadProps): JS
         <p className="hc-comment-text">{comment.text}</p>
         <p className="hc-hint">
           {formatWhen(parseTime(comment.created))}
+          {comment.planVersion ? ` · plan v${comment.planVersion}` : ''}
+          {comment.actor ? ` · ${comment.actor}${comment.via ? ` (${comment.via})` : ''}` : ''}
           {comment.answer !== null ? ` · answered: ${comment.answer}` : ''}
         </p>
         {comment.options.length > 0 ? (
@@ -1082,6 +1126,18 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
   const [planDraft, setPlanDraft] = useState('')
   const isOutcome = data.outcomes.some((row) => row.key === selected)
   const [reply, setReply] = useState('')
+  const [tagDraft, setTagDraft] = useState('')
+  const [availMode, setAvailMode] = useState<OutcomeAvailability>('active')
+  const [availReason, setAvailReason] = useState('')
+  const [availUntil, setAvailUntil] = useState('')
+  const [editingGoal, setEditingGoal] = useState(false)
+  const [goalTitle, setGoalTitle] = useState('')
+  const [goalBrief, setGoalBrief] = useState('')
+  const [goalRank, setGoalRank] = useState('100')
+  const [goalParent, setGoalParent] = useState('')
+  const [diffPlanVersion, setDiffPlanVersion] = useState<number | null>(null)
+  const [planCommentVersion, setPlanCommentVersion] = useState<number | null>(null)
+  const [planCommentText, setPlanCommentText] = useState('')
 
   const liveRef = useRef(live)
   liveRef.current = live
@@ -1091,9 +1147,30 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
   useEffect(() => {
     setError(null)
     setEditing(false)
+    setEditingGoal(false)
     setTab('contract')
     setDispatchNote(null)
+    setDiffPlanVersion(null)
+    setPlanCommentVersion(null)
+    setPlanCommentText('')
   }, [selected])
+
+  useEffect(() => {
+    if (outcome) {
+      setAvailMode(outcome.availability ?? 'active')
+      setAvailReason(outcome.availabilityReason ?? '')
+      setAvailUntil(outcome.deferredUntil ? outcome.deferredUntil.slice(0, 10) : '')
+    }
+  }, [outcome])
+
+  useEffect(() => {
+    if (goal) {
+      setGoalTitle(goal.title)
+      setGoalBrief(goal.brief)
+      setGoalRank(String(goal.rank))
+      setGoalParent(goal.parentGoalKey ?? '')
+    }
+  }, [goal])
 
   const loadLive = useCallback(async (key: string): Promise<void> => {
     setLiveLoading(true)
@@ -1191,6 +1268,29 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
   const goalOutcomes = useMemo(
     () => (selected === null ? [] : data.outcomes.filter((row) => row.goalKey === selected).slice().sort(sortOutcomes)),
     [data.outcomes, selected],
+  )
+  const linkedFlows = useMemo(
+    () =>
+      selected === null
+        ? []
+        : data.flows
+            .map((flow) => ({
+              flow,
+              frames: flow.frames.filter((f) => f.key === selected),
+            }))
+            .filter((entry) => entry.frames.length > 0),
+    [data.flows, selected],
+  )
+  const linkedFlowProposals = useMemo(
+    () =>
+      selected === null
+        ? []
+        : (data.flowProposals ?? []).filter(
+            (p) =>
+              p.state === 'pending' &&
+              (p.frame?.key === selected || (p.frames ?? []).some((f) => f.key === selected)),
+          ),
+    [data.flowProposals, selected],
   )
 
   if (selected === null) return null
@@ -1304,8 +1404,15 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
               <span className="hc-chip">goal</span>
             )}
             {version !== null ? <span>v{version}</span> : null}
+            {ranked?.sectionNumber ? <span>§{ranked.sectionNumber}</span> : null}
             {ranked !== undefined ? (
               <span>priority #{data.ranked.findIndex((row) => row.key === selected) + 1}</span>
+            ) : null}
+            {outcome && (outcome.availability ?? 'active') !== 'active' ? (
+              <span className="hc-chip hc-chip-warn">
+                {outcome.availability}
+                {outcome.deferredUntil ? ` until ${outcome.deferredUntil.slice(0, 10)}` : ''}
+              </span>
             ) : null}
             {claim !== null ? (
               <span className="hc-claim">
@@ -1382,10 +1489,139 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
                     rank {outcome.rank} · {outcome.dependsOn.length > 0 ? `depends on ${outcome.dependsOn.join(', ')}` : 'no dependencies'} ·{' '}
                     {outcome.recheckDays === null ? 'no recheck' : `recheck every ${outcome.recheckDays} days`}
                   </p>
+
+                  <div className="hc-meta-editor">
+                    <div className="hc-meta-row">
+                      <label htmlFor="hc-avail-select" className="hc-meta-label">
+                        Availability
+                      </label>
+                      <select
+                        id="hc-avail-select"
+                        className="hc-mini-select"
+                        value={availMode}
+                        onChange={(e) => setAvailMode(e.target.value as OutcomeAvailability)}
+                      >
+                        <option value="active">Active (eligible for next)</option>
+                        <option value="blocked">Blocked (paused manually)</option>
+                        <option value="deferred">Deferred (snoozed)</option>
+                      </select>
+                      {availMode !== 'active' ? (
+                        <input
+                          className="hc-mini-input"
+                          value={availReason}
+                          onChange={(e) => setAvailReason(e.target.value)}
+                          placeholder="Reason (optional)"
+                          aria-label="Availability reason"
+                        />
+                      ) : null}
+                      {availMode === 'deferred' ? (
+                        <input
+                          type="date"
+                          className="hc-mini-input"
+                          value={availUntil}
+                          onChange={(e) => setAvailUntil(e.target.value)}
+                          aria-label="Deferred until date"
+                        />
+                      ) : null}
+                      <button
+                        type="button"
+                        className="hc-btn"
+                        onClick={() =>
+                          void run({
+                            op: 'set_outcome_availability',
+                            key: outcome.key,
+                            availability: availMode,
+                            reason: availMode === 'active' ? null : availReason.trim() || null,
+                            deferredUntil: availMode === 'deferred' && availUntil ? `${availUntil}T00:00:00Z` : null,
+                          })
+                        }
+                      >
+                        Apply
+                      </button>
+                    </div>
+
+                    <div className="hc-meta-row">
+                      <span className="hc-meta-label">Tags</span>
+                      <div className="hc-chips">
+                        {(outcome.tags ?? []).map((t) => (
+                          <span key={t} className="hc-chip hc-tag-chip">
+                            #{t}{' '}
+                            <button
+                              type="button"
+                              className="hc-saved-view-del"
+                              aria-label={`Remove tag ${t}`}
+                              onClick={() =>
+                                void run({
+                                  op: 'set_tags',
+                                  key: outcome.key,
+                                  tags: (outcome.tags ?? []).filter((x) => x !== t),
+                                })
+                              }
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                        <form
+                          className="hc-inline-group"
+                          onSubmit={(e) => {
+                            e.preventDefault()
+                            const nextTag = tagDraft.trim().toLowerCase().replace(/^#+/, '')
+                            if (!nextTag) return
+                            const merged = [...new Set([...(outcome.tags ?? []), nextTag])]
+                            void run({ op: 'set_tags', key: outcome.key, tags: merged }, () => setTagDraft(''))
+                          }}
+                        >
+                          <input
+                            className="hc-mini-input"
+                            style={{ width: 96 }}
+                            value={tagDraft}
+                            onChange={(e) => setTagDraft(e.target.value)}
+                            placeholder="+ tag"
+                            aria-label="Add tag"
+                          />
+                          <button type="submit" className="hc-btn">
+                            Add
+                          </button>
+                        </form>
+                      </div>
+                    </div>
+                  </div>
+
                   {editing ? (
                     <EditProposal outcome={outcome} act={act} onError={setError} onDone={() => setEditing(false)} />
                   ) : null}
                 </section>
+
+                {linkedFlows.length > 0 || linkedFlowProposals.length > 0 ? (
+                  <section className="hc-section" aria-label="Linked flows">
+                    <header className="hc-section-head">
+                      <h3>Linked Flows</h3>
+                      <span className="hc-hint">
+                        {linkedFlows.length} flow{linkedFlows.length === 1 ? '' : 's'}
+                        {linkedFlowProposals.length > 0 ? ` · ${linkedFlowProposals.length} pending proposal(s)` : ''}
+                      </span>
+                    </header>
+                    <ul className="hc-key-list">
+                      {linkedFlows.map(({ flow, frames }) => (
+                        <li key={flow.name}>
+                          <button
+                            type="button"
+                            className="hc-link"
+                            onClick={() => props.onOpenFlow?.(flow.name)}
+                          >
+                            {flow.folder ? `${flow.folder} / ` : ''}
+                            <strong>{flow.name}</strong>
+                          </button>
+                          <span className="hc-hint">
+                            {frames.length} frame{frames.length === 1 ? '' : 's'} ·{' '}
+                            {frames.reduce((s, f) => s + f.pins.filter((p) => !p.resolved).length, 0)} open pin(s)
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                ) : null}
 
                 <section className="hc-section" aria-label="Proposals">
                   <header className="hc-section-head">
@@ -1403,11 +1639,112 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
 
             {goal !== undefined ? (
               <section className="hc-section" aria-label="Goal">
-                <h3>Brief</h3>
+                <header className="hc-section-head">
+                  <h3>Brief</h3>
+                  <button type="button" className="hc-btn" onClick={() => setEditingGoal((v) => !v)}>
+                    {editingGoal ? 'Cancel edit' : 'Edit goal'}
+                  </button>
+                </header>
                 <p className="hc-story">{goal.brief}</p>
                 <p className="hc-hint">
                   rank {goal.rank} · parent {goal.parentGoalKey === null ? 'none' : goal.parentGoalKey}
+                  {goal.tags && goal.tags.length > 0 ? ` · tags: ${goal.tags.map((t) => `#${t}`).join(' ')}` : ''}
                 </p>
+                {editingGoal ? (
+                  <form
+                    className="hc-edit"
+                    onSubmit={(e) => {
+                      e.preventDefault()
+                      const rankNum = Number(goalRank)
+                      void run(
+                        {
+                          op: 'update_goal',
+                          key: goal.key,
+                          title: goalTitle.trim(),
+                          brief: goalBrief.trim(),
+                          rank: Number.isInteger(rankNum) && rankNum >= 0 ? rankNum : goal.rank,
+                          parentGoalKey: goalParent === '' ? null : goalParent,
+                        },
+                        () => setEditingGoal(false),
+                      )
+                    }}
+                  >
+                    <div className="hc-field">
+                      <label htmlFor="hc-goal-edit-title">Title</label>
+                      <input id="hc-goal-edit-title" value={goalTitle} onChange={(e) => setGoalTitle(e.target.value)} required />
+                    </div>
+                    <div className="hc-field">
+                      <label htmlFor="hc-goal-edit-brief">Brief</label>
+                      <textarea id="hc-goal-edit-brief" rows={2} value={goalBrief} onChange={(e) => setGoalBrief(e.target.value)} required />
+                    </div>
+                    <div className="hc-field hc-field-row">
+                      <label htmlFor="hc-goal-edit-rank">Rank</label>
+                      <input id="hc-goal-edit-rank" type="number" min={0} value={goalRank} onChange={(e) => setGoalRank(e.target.value)} />
+                      <label htmlFor="hc-goal-edit-parent">Parent</label>
+                      <select id="hc-goal-edit-parent" value={goalParent} onChange={(e) => setGoalParent(e.target.value)}>
+                        <option value="">None (root)</option>
+                        {data.goals
+                          .filter((g) => g.key !== goal.key)
+                          .map((g) => (
+                            <option key={g.key} value={g.key}>
+                              {g.key} · {g.title}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                    <div className="hc-row-actions">
+                      <button type="submit" className="hc-btn hc-btn-primary">
+                        Save goal
+                      </button>
+                      <button type="button" className="hc-btn" onClick={() => setEditingGoal(false)}>
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                ) : null}
+                <div className="hc-meta-row" style={{ marginTop: 8 }}>
+                  <span className="hc-meta-label">Tags</span>
+                  <div className="hc-chips">
+                    {(goal.tags ?? []).map((t) => (
+                      <span key={t} className="hc-chip hc-tag-chip">
+                        #{t}{' '}
+                        <button
+                          type="button"
+                          className="hc-saved-view-del"
+                          aria-label={`Remove tag ${t}`}
+                          onClick={() =>
+                            void run({ op: 'set_tags', key: goal.key, tags: (goal.tags ?? []).filter((x) => x !== t) })
+                          }
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                    <form
+                      className="hc-inline-group"
+                      onSubmit={(e) => {
+                        e.preventDefault()
+                        const nextTag = tagDraft.trim().toLowerCase().replace(/^#+/, '')
+                        if (!nextTag) return
+                        void run({ op: 'set_tags', key: goal.key, tags: [...new Set([...(goal.tags ?? []), nextTag])] }, () =>
+                          setTagDraft(''),
+                        )
+                      }}
+                    >
+                      <input
+                        className="hc-mini-input"
+                        style={{ width: 96 }}
+                        value={tagDraft}
+                        onChange={(e) => setTagDraft(e.target.value)}
+                        placeholder="+ tag"
+                        aria-label="Add goal tag"
+                      />
+                      <button type="submit" className="hc-btn">
+                        Add
+                      </button>
+                    </form>
+                  </div>
+                </div>
                 {childGoals.length > 0 ? (
                   <>
                     <h4>Sub-goals</h4>
@@ -1646,7 +1983,24 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
                         ))}
                       </div>
                       <p>{row.text}</p>
-                      <p className="hc-hint">source: {row.source}</p>
+                      <p className="hc-hint">
+                        source: {row.source}
+                        {row.actor ? ` · by ${row.actor}${row.via ? ` (${row.via})` : ''}` : ''}
+                      </p>
+                      {row.attachments && row.attachments.length > 0 ? (
+                        <div className="hc-attachments">
+                          {row.attachments.map((att, idx) => (
+                            <div key={`${row.id}:att:${idx}`} className="hc-attachment-item">
+                              <span className="hc-chip" title={att.path}>
+                                📎 {att.label}: <code>{att.path.slice(0, 60)}{att.path.length > 60 ? '…' : ''}</code>
+                              </span>
+                              {att.path.startsWith('data:image/') ? (
+                                <img src={att.path} alt={att.label} className="hc-attachment-thumb" />
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
                       {outcome !== undefined && row.version !== outcome.version ? (
                         <p className="hc-warn">Recorded against an earlier version of this outcome.</p>
                       ) : null}
@@ -1665,15 +2019,103 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
               {plans.length === 0 ? (
                 <p className="hc-empty-note">No plan written. Say how you will build this before you start.</p>
               ) : (
-                plans.map((plan: Plan) => (
-                  <article key={plan.key + plan.version} className="hc-plan">
-                    <header className="hc-plan-head">
-                      <strong>v{plan.version}</strong>
-                      <span className="hc-hint">{formatWhen(parseTime(plan.created))}</span>
-                    </header>
-                    <pre className="hc-plan-body">{plan.body}</pre>
-                  </article>
-                ))
+                plans.map((plan: Plan, idx) => {
+                  const prevPlan = plans[idx + 1]
+                  const showingDiff = diffPlanVersion === plan.version && prevPlan !== undefined
+                  const diffLines = showingDiff ? computeLineDiff(prevPlan.body, plan.body) : []
+                  const planComments = comments.filter((c) => c.planVersion === plan.version)
+                  return (
+                    <article key={plan.key + plan.version} className="hc-plan">
+                      <header className="hc-plan-head">
+                        <div className="hc-inline-group">
+                          <strong>v{plan.version}</strong>
+                          <span className="hc-hint">
+                            {formatWhen(parseTime(plan.created))}
+                            {plan.actor ? ` · ${plan.actor}${plan.via ? ` (${plan.via})` : ''}` : ''}
+                          </span>
+                        </div>
+                        <div className="hc-inline-group">
+                          {prevPlan ? (
+                            <button
+                              type="button"
+                              className={`hc-chip${showingDiff ? ' is-active' : ''}`}
+                              onClick={() => setDiffPlanVersion(showingDiff ? null : plan.version)}
+                            >
+                              {showingDiff ? 'Hide diff' : `Diff vs v${prevPlan.version}`}
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            className="hc-chip"
+                            onClick={() =>
+                              setPlanCommentVersion(planCommentVersion === plan.version ? null : plan.version)
+                            }
+                          >
+                            Comment on v{plan.version}
+                            {planComments.length > 0 ? ` (${planComments.length})` : ''}
+                          </button>
+                        </div>
+                      </header>
+                      {showingDiff ? (
+                        <pre className="hc-plan-diff">
+                          {diffLines.map((line, i) => (
+                            <div key={i} className={`hc-diff-line hc-diff-line-${line.kind}`}>
+                              {line.kind === 'add' ? '+ ' : line.kind === 'del' ? '- ' : '  '}
+                              {line.text}
+                            </div>
+                          ))}
+                        </pre>
+                      ) : (
+                        <pre className="hc-plan-body">{plan.body}</pre>
+                      )}
+                      {planComments.length > 0 ? (
+                        <ul className="hc-plan-comments">
+                          {planComments.map((c) => (
+                            <li key={c.id}>
+                              <strong>{c.actor ?? 'note'}:</strong> {c.text}
+                              {c.answer ? <span className="hc-hint"> → {c.answer}</span> : null}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                      {planCommentVersion === plan.version ? (
+                        <form
+                          className="hc-inline-form"
+                          style={{ marginTop: 6 }}
+                          onSubmit={(e) => {
+                            e.preventDefault()
+                            if (!planCommentText.trim()) return
+                            void run(
+                              {
+                                op: 'comment',
+                                key: selected,
+                                text: planCommentText.trim(),
+                                options: [],
+                                parentId: null,
+                                planVersion: plan.version,
+                              },
+                              () => {
+                                setPlanCommentText('')
+                                setPlanCommentVersion(null)
+                              },
+                            )
+                          }}
+                        >
+                          <input
+                            value={planCommentText}
+                            onChange={(e) => setPlanCommentText(e.target.value)}
+                            placeholder={`Review note on plan v${plan.version}…`}
+                            aria-label={`Comment on plan v${plan.version}`}
+                            autoFocus
+                          />
+                          <button type="submit" className="hc-btn hc-btn-primary">
+                            Post
+                          </button>
+                        </form>
+                      ) : null}
+                    </article>
+                  )
+                })
               )}
               <form
                 className="hc-plan-form"
@@ -1683,7 +2125,7 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
                   const action: Action =
                     plans.length === 0
                       ? { op: 'write_plan', key: selected, body: planDraft.trim() }
-                      : { op: 'revise_plan', key: selected, version: (plans[0]?.version ?? 0) + 1, body: planDraft.trim() }
+                      : { op: 'revise_plan', key: selected, version: plans[0]?.version ?? 1, body: planDraft.trim() }
                   void run(action, () => setPlanDraft(''))
                 }}
               >
@@ -1763,6 +2205,8 @@ function EvidenceForm({ outcome, track, act, onError }: EvidenceFormProps): JSX.
   const [text, setText] = useState('')
   const [source, setSource] = useState('')
   const [trackValue, setTrackValue] = useState(track)
+  const [attachLabel, setAttachLabel] = useState('')
+  const [attachPath, setAttachPath] = useState('')
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
@@ -1781,6 +2225,10 @@ function EvidenceForm({ outcome, track, act, onError }: EvidenceFormProps): JSX.
     }
     setBusy(true)
     try {
+      const attachments =
+        attachPath.trim() !== ''
+          ? [{ label: attachLabel.trim() || 'Attachment', path: attachPath.trim() }]
+          : undefined
       await act({
         op: 'add_evidence',
         key: outcome.key,
@@ -1789,10 +2237,13 @@ function EvidenceForm({ outcome, track, act, onError }: EvidenceFormProps): JSX.
         criterionIds,
         text: text.trim(),
         source: source.trim(),
+        ...(attachments ? { attachments } : {}),
         track: trackValue.trim() === '' ? track : trackValue.trim(),
       })
       setText('')
       setSource('')
+      setAttachLabel('')
+      setAttachPath('')
     } catch (thrown) {
       onError(thrown instanceof Error ? thrown.message : String(thrown))
     } finally {
@@ -1854,6 +2305,26 @@ function EvidenceForm({ outcome, track, act, onError }: EvidenceFormProps): JSX.
           placeholder="PR #418 · CI run 2191"
           required
         />
+      </div>
+      <div className="hc-evidence-meta-grid">
+        <div className="hc-field">
+          <label htmlFor="hc-evidence-att-label">Attachment label (optional)</label>
+          <input
+            id="hc-evidence-att-label"
+            value={attachLabel}
+            onChange={(event) => setAttachLabel(event.target.value)}
+            placeholder="Screenshot / trace"
+          />
+        </div>
+        <div className="hc-field">
+          <label htmlFor="hc-evidence-att-path">Attachment path or URL</label>
+          <input
+            id="hc-evidence-att-path"
+            value={attachPath}
+            onChange={(event) => setAttachPath(event.target.value)}
+            placeholder="artifacts/run-42.png"
+          />
+        </div>
       </div>
       <button type="submit" className="hc-btn hc-btn-primary" disabled={busy}>
         {busy ? 'Saving…' : 'Add evidence'}

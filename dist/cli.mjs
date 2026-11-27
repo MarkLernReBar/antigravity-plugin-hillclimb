@@ -7,7 +7,7 @@ var __export = (target, all) => {
 };
 
 // src/cli.ts
-import { realpathSync as realpathSync3 } from "node:fs";
+import { readFileSync as readFileSync7, realpathSync as realpathSync3, writeFileSync as writeFileSync3 } from "node:fs";
 import { resolve as resolve7 } from "node:path";
 import { fileURLToPath as fileURLToPath4 } from "node:url";
 
@@ -1118,8 +1118,8 @@ function safeExtend(schema, shape) {
   }
   return clone(schema, mergeDefs(schema._zod.def, { shape: extended(schema, shape) }));
 }
-function merge(a, b) {
-  if (!b?._zod?.def) {
+function merge(a, b2) {
+  if (!b2?._zod?.def) {
     throw new Error("Invalid input to merge: expected an object schema. To merge a plain shape, use `.extend()`.");
   }
   if (a._zod.def.checks?.length) {
@@ -1127,13 +1127,13 @@ function merge(a, b) {
   }
   const newShape = {};
   mirrorShape(newShape, a, Reflect.ownKeys(sourceShape(a)));
-  mirrorShape(newShape, b, Reflect.ownKeys(sourceShape(b)));
+  mirrorShape(newShape, b2, Reflect.ownKeys(sourceShape(b2)));
   const def = mergeDefs(a._zod.def, {
     shape: newShape,
     get catchall() {
-      return b._zod.def.catchall;
+      return b2._zod.def.catchall;
     },
-    checks: b._zod.def.checks ?? []
+    checks: b2._zod.def.checks ?? []
   });
   return clone(a, def);
 }
@@ -1334,7 +1334,7 @@ function hexToUint8Array(hex3) {
   return bytes;
 }
 function uint8ArrayToHex(bytes) {
-  return Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
+  return Array.from(bytes).map((b2) => b2.toString(16).padStart(2, "0")).join("");
 }
 var Class = class {
   constructor(..._args) {
@@ -1759,7 +1759,7 @@ function toDotPath(_path) {
 }
 function prettifyError(error62) {
   const lines = [];
-  const issues = [...error62.issues].sort((a, b) => (a.path ?? []).length - (b.path ?? []).length);
+  const issues = [...error62.issues].sort((a, b2) => (a.path ?? []).length - (b2.path ?? []).length);
   for (const issue2 of issues) {
     lines.push(`\u2716 ${issue2.message}`);
     if (issue2.path?.length)
@@ -3986,23 +3986,23 @@ var $ZodIntersection = /* @__PURE__ */ $constructor("$ZodIntersection", (inst, d
     return handleIntersectionResults(payload, left, right);
   };
 });
-function mergeValues(a, b) {
-  if (a === b) {
+function mergeValues(a, b2) {
+  if (a === b2) {
     return { valid: true, data: a };
   }
-  if (a instanceof Date && b instanceof Date && +a === +b) {
+  if (a instanceof Date && b2 instanceof Date && +a === +b2) {
     return { valid: true, data: a };
   }
-  if (isPlainObject(a) && isPlainObject(b)) {
-    const bKeys = Object.keys(b);
+  if (isPlainObject(a) && isPlainObject(b2)) {
+    const bKeys = Object.keys(b2);
     const sharedKeys = Object.keys(a).filter((key2) => bKeys.indexOf(key2) !== -1);
-    const newObj = { ...a, ...b };
+    const newObj = { ...a, ...b2 };
     if (Object.prototype.hasOwnProperty.call(newObj, "__proto__"))
       delete newObj.__proto__;
     for (const key2 of sharedKeys) {
       if (key2 === "__proto__")
         continue;
-      const sharedValue = mergeValues(a[key2], b[key2]);
+      const sharedValue = mergeValues(a[key2], b2[key2]);
       if (!sharedValue.valid) {
         return {
           valid: false,
@@ -4013,14 +4013,14 @@ function mergeValues(a, b) {
     }
     return { valid: true, data: newObj };
   }
-  if (Array.isArray(a) && Array.isArray(b)) {
-    if (a.length !== b.length) {
+  if (Array.isArray(a) && Array.isArray(b2)) {
+    if (a.length !== b2.length) {
       return { valid: false, mergeErrorPath: [] };
     }
     const newArray = [];
     for (let index = 0; index < a.length; index++) {
       const itemA = a[index];
-      const itemB = b[index];
+      const itemB = b2[index];
       const sharedValue = mergeValues(itemA, itemB);
       if (!sharedValue.valid) {
         return {
@@ -15925,7 +15925,7 @@ function foldIntersection(json2) {
       return;
     const rest = allOf.filter((m) => m !== union2);
     const branches = union2[keyword].map((branch) => foldObjects([...rest, branch]));
-    if (branches.some((b) => !b))
+    if (branches.some((b2) => !b2))
       return;
     folded = { [keyword]: branches };
   }
@@ -16551,14 +16551,14 @@ var intersectionProcessor = (schema, ctx, json2, params) => {
     ...params,
     path: [...params.path, "allOf", 0]
   });
-  const b = processSchema(def.right, ctx, {
+  const b2 = processSchema(def.right, ctx, {
     ...params,
     path: [...params.path, "allOf", 1]
   });
   const isSimpleIntersection = (val) => "allOf" in val && Object.keys(val).length === 1;
   const allOf = [
     ...isSimpleIntersection(a) ? a.allOf : [a],
-    ...isSimpleIntersection(b) ? b.allOf : [b]
+    ...isSimpleIntersection(b2) ? b2.allOf : [b2]
   ];
   json2.allOf = allOf;
   ctx.intersections.push(allOf);
@@ -19740,6 +19740,8 @@ var key = external_exports.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,95}$/);
 var optionalKey = external_exports.preprocess((v) => v === "" || v === void 0 ? null : v, key.nullable());
 var word = external_exports.string().trim().min(1);
 var optionalWord = external_exports.preprocess((v) => v === "" || v === void 0 ? null : v, word.nullable());
+var tag = external_exports.string().trim().min(1).max(64).regex(/^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,63}$/);
+var tagsList = external_exports.array(tag).max(20);
 var criterion = external_exports.object({ id: key, given: word, when: word, then: word });
 var contract = external_exports.object({
   title: word,
@@ -19747,9 +19749,29 @@ var contract = external_exports.object({
   criteria: external_exports.array(criterion).min(1),
   dependsOn: external_exports.array(key).default([]),
   rank: external_exports.number().int().nonnegative().default(100),
-  recheckDays: external_exports.number().positive().nullable().default(null)
+  recheckDays: external_exports.number().positive().nullable().default(null),
+  tags: tagsList.optional()
 });
 var track = key.default("main");
+var attachment = external_exports.object({
+  label: word.max(160),
+  path: word.max(1024),
+  mimeType: external_exports.string().trim().min(1).max(128).optional()
+});
+var viewport = external_exports.object({
+  width: external_exports.number().int().min(100).max(8e3),
+  height: external_exports.number().int().min(100).max(8e3)
+});
+var frameInput = external_exports.object({
+  title: word,
+  key,
+  criterionId: key,
+  html: external_exports.string().default(""),
+  kind: external_exports.enum(["html", "image"]).optional(),
+  imagePath: optionalWord.optional(),
+  viewport: viewport.nullable().optional(),
+  notes: optionalWord.optional()
+});
 var coreActions = external_exports.discriminatedUnion("op", [
   external_exports.object({
     op: external_exports.literal("create_goal"),
@@ -19757,17 +19779,48 @@ var coreActions = external_exports.discriminatedUnion("op", [
     parentGoalKey: optionalKey,
     title: word,
     brief: word,
-    rank: external_exports.number().int().nonnegative().default(100)
+    rank: external_exports.number().int().nonnegative().default(100),
+    tags: tagsList.optional()
+  }),
+  external_exports.object({
+    op: external_exports.literal("update_goal"),
+    key,
+    title: word.optional(),
+    brief: word.optional(),
+    rank: external_exports.number().int().nonnegative().optional(),
+    parentGoalKey: optionalKey.optional(),
+    tags: tagsList.optional()
   }),
   external_exports.object({ op: external_exports.literal("create_outcome"), key, goalKey: key, contract }),
+  external_exports.object({
+    op: external_exports.literal("propose_outcome"),
+    key,
+    goalKey: key,
+    contract,
+    threadId: optionalWord.optional()
+  }),
   external_exports.object({
     op: external_exports.literal("propose_change"),
     key,
     version: external_exports.number().int().positive(),
-    contract
+    contract,
+    threadId: optionalWord.optional()
   }),
   external_exports.object({ op: external_exports.literal("approve_change"), id: word }),
   external_exports.object({ op: external_exports.literal("reject_change"), id: word }),
+  external_exports.object({
+    op: external_exports.literal("set_outcome_availability"),
+    key,
+    availability: external_exports.enum(["active", "blocked", "deferred"]),
+    reason: optionalWord.optional(),
+    deferredUntil: optionalWord.optional()
+  }),
+  external_exports.object({
+    op: external_exports.literal("set_tags"),
+    key,
+    target: external_exports.enum(["outcome", "goal"]).optional(),
+    tags: tagsList
+  }),
   external_exports.object({
     op: external_exports.literal("claim_outcome"),
     key,
@@ -19784,6 +19837,7 @@ var coreActions = external_exports.discriminatedUnion("op", [
     criterionIds: external_exports.array(key),
     text: word,
     source: word,
+    attachments: external_exports.array(attachment).max(12).optional(),
     track
   })
 ]);
@@ -19800,7 +19854,9 @@ var planningActions = external_exports.discriminatedUnion("op", [
     key,
     text: word,
     options: external_exports.array(word).default([]),
-    parentId: optionalWord
+    parentId: optionalWord,
+    planVersion: external_exports.number().int().positive().nullable().optional(),
+    threadId: optionalWord.optional()
   }),
   external_exports.object({ op: external_exports.literal("answer"), id: word, answer: word }),
   external_exports.object({ op: external_exports.literal("create_track"), name: key, description: word }),
@@ -19817,9 +19873,19 @@ var planningActions = external_exports.discriminatedUnion("op", [
     scenario: word
   }),
   external_exports.object({
+    op: external_exports.literal("revise_release"),
+    name: word,
+    scenario: word,
+    keys: external_exports.array(key).min(1).optional(),
+    date: external_exports.string().date().optional(),
+    newName: word.optional()
+  }),
+  external_exports.object({
     op: external_exports.literal("create_flow"),
     name: word,
-    frames: external_exports.array(external_exports.object({ title: word, key, criterionId: key, html: word })).min(1)
+    folder: optionalWord.optional(),
+    designKit: optionalWord.optional(),
+    frames: external_exports.array(frameInput).min(1)
   }),
   external_exports.object({
     op: external_exports.literal("pin"),
@@ -19827,7 +19893,60 @@ var planningActions = external_exports.discriminatedUnion("op", [
     frame: external_exports.number().int().nonnegative(),
     x: external_exports.number().min(0).max(1),
     y: external_exports.number().min(0).max(1),
-    text: word
+    text: word,
+    kind: external_exports.enum(["point", "rect", "arrow", "path", "step"]).optional(),
+    geometry: external_exports.record(external_exports.string(), external_exports.union([external_exports.number(), external_exports.array(external_exports.number())])).optional(),
+    selector: optionalWord.optional(),
+    forAgents: external_exports.boolean().optional()
+  }),
+  external_exports.object({
+    op: external_exports.literal("resolve_pin"),
+    name: word,
+    frame: external_exports.number().int().nonnegative(),
+    pinId: optionalWord.optional(),
+    pinIndex: external_exports.number().int().nonnegative().optional(),
+    resolved: external_exports.boolean().default(true),
+    resolvedBy: optionalWord.optional()
+  }),
+  external_exports.object({
+    op: external_exports.literal("propose_flow_change"),
+    kind: external_exports.enum(["change", "new_flow", "new_step"]).default("change"),
+    flowName: word,
+    folder: optionalWord.optional(),
+    designKit: optionalWord.optional(),
+    frameIndex: external_exports.number().int().nonnegative().nullable().optional(),
+    basedOnVersion: external_exports.number().int().positive().nullable().optional(),
+    frame: frameInput.nullable().optional(),
+    frames: external_exports.array(frameInput).min(1).nullable().optional(),
+    selfGrade: optionalWord.optional(),
+    ref: optionalWord.optional(),
+    spot: external_exports.object({ x: external_exports.number().min(0).max(1), y: external_exports.number().min(0).max(1) }).nullable().optional(),
+    note: optionalWord.optional(),
+    threadId: optionalWord.optional()
+  }),
+  external_exports.object({
+    op: external_exports.literal("accept_flow_change"),
+    id: word,
+    reviewNote: optionalWord.optional()
+  }),
+  external_exports.object({
+    op: external_exports.literal("reject_flow_change"),
+    id: word,
+    reviewNote: optionalWord.optional()
+  }),
+  external_exports.object({
+    op: external_exports.literal("restore_frame_version"),
+    flowName: word,
+    frameIndex: external_exports.number().int().nonnegative(),
+    version: external_exports.number().int().positive()
+  }),
+  external_exports.object({
+    op: external_exports.literal("set_frame_drift"),
+    flowName: word,
+    frameIndex: external_exports.number().int().nonnegative(),
+    liveImagePath: optionalWord.optional(),
+    driftDetected: external_exports.boolean(),
+    driftNote: optionalWord.optional()
   })
 ]);
 var actionSchema = external_exports.union([coreActions, planningActions]);
@@ -19835,7 +19954,11 @@ var actionSchema = external_exports.union([coreActions, planningActions]);
 // src/tree-schema.ts
 var s = external_exports.string();
 var n = external_exports.number();
+var b = external_exports.boolean();
 var strings = external_exports.array(s);
+var actorVia = external_exports.enum(["ui", "mcp", "cli", "ci", "auto-track", "hook", "rest"]);
+var availability = external_exports.enum(["active", "blocked", "deferred"]);
+var viewport2 = external_exports.object({ width: n, height: n });
 var criterion2 = external_exports.object({ id: s, given: s, when: s, then: s });
 var goal = external_exports.object({
   key: s,
@@ -19843,7 +19966,9 @@ var goal = external_exports.object({
   title: s,
   brief: s,
   rank: n,
-  created: s
+  tags: strings.optional(),
+  created: s,
+  updated: s.optional()
 });
 var contract2 = external_exports.object({
   title: s,
@@ -19851,12 +19976,16 @@ var contract2 = external_exports.object({
   criteria: criterion2.array(),
   dependsOn: strings,
   rank: n,
-  recheckDays: n.nullable()
+  recheckDays: n.nullable(),
+  tags: strings.optional()
 });
 var outcome = contract2.extend({
   key: s,
   goalKey: s,
   version: n,
+  availability: availability.optional(),
+  availabilityReason: s.nullable().optional(),
+  deferredUntil: s.nullable().optional(),
   created: s,
   updated: s
 });
@@ -19865,9 +19994,70 @@ var signal = external_exports.enum(["verified", "unverified", "broken", "stale",
 var change = external_exports.object({
   id: s,
   key: s,
+  kind: external_exports.enum(["edit", "create"]).optional(),
+  goalKey: s.optional(),
   baseVersion: n,
   proposed: contract2,
   state: external_exports.enum(["pending", "approved", "rejected"]),
+  threadId: s.nullable().optional(),
+  actor: s.optional(),
+  via: actorVia.optional(),
+  created: s
+});
+var pin = external_exports.object({
+  id: s.optional(),
+  x: n,
+  y: n,
+  text: s,
+  kind: external_exports.enum(["point", "rect", "arrow", "path", "step"]).optional(),
+  geometry: external_exports.record(s, external_exports.union([n, external_exports.array(n)])).optional(),
+  selector: s.nullable().optional(),
+  forAgents: b.optional(),
+  resolved: b.optional(),
+  resolvedBy: s.nullable().optional(),
+  created: s.optional()
+});
+var frameRevision = external_exports.object({
+  version: n,
+  title: s,
+  html: s,
+  kind: external_exports.enum(["html", "image"]).optional(),
+  imagePath: s.nullable().optional(),
+  viewport: viewport2.nullable().optional(),
+  notes: s.nullable().optional(),
+  at: s,
+  actor: s.nullable().optional(),
+  ref: s.nullable().optional()
+});
+var flowProposalFrame = external_exports.object({
+  title: s,
+  html: s,
+  criterionId: s,
+  key: s,
+  kind: external_exports.enum(["html", "image"]).optional(),
+  imagePath: s.nullable().optional(),
+  viewport: viewport2.nullable().optional(),
+  notes: s.nullable().optional()
+});
+var flowProposal = external_exports.object({
+  id: s,
+  kind: external_exports.enum(["change", "new_flow", "new_step"]),
+  flowName: s,
+  folder: s.nullable().optional(),
+  designKit: s.nullable().optional(),
+  frameIndex: n.nullable(),
+  basedOnVersion: n.nullable(),
+  frame: flowProposalFrame.nullable().optional(),
+  frames: flowProposalFrame.array().nullable().optional(),
+  selfGrade: s.nullable().optional(),
+  ref: s.nullable().optional(),
+  spot: external_exports.object({ x: n, y: n }).nullable().optional(),
+  note: s.nullable().optional(),
+  state: external_exports.enum(["pending", "accepted", "rejected"]),
+  reviewNote: s.nullable().optional(),
+  threadId: s.nullable().optional(),
+  actor: s.nullable().optional(),
+  via: actorVia.optional(),
   created: s
 });
 var treeSchema = external_exports.object({
@@ -19884,36 +20074,57 @@ var treeSchema = external_exports.object({
     track: s,
     text: s,
     source: s,
+    attachments: external_exports.object({ label: s, path: s, mimeType: s.optional() }).array().optional(),
+    actor: s.optional(),
+    via: actorVia.optional(),
     created: s
   }).array(),
-  plans: external_exports.object({ key: s, version: n, body: s, created: s }).array(),
+  plans: external_exports.object({ key: s, version: n, body: s, actor: s.optional(), via: actorVia.optional(), created: s }).array(),
   comments: external_exports.object({
     id: s,
     key: s,
     parentId: s.nullable(),
+    planVersion: n.nullable().optional(),
     text: s,
     options: strings,
     answer: s.nullable(),
+    threadId: s.nullable().optional(),
+    actor: s.optional(),
+    via: actorVia.optional(),
     created: s
   }).array(),
   tracks: external_exports.object({ name: s, description: s }).array(),
   releases: external_exports.object({ name: s, keys: strings, scenario: s, date: s }).array(),
   flows: external_exports.object({
     name: s,
+    folder: s.nullable().optional(),
+    designKit: s.nullable().optional(),
     frames: external_exports.object({
       title: s,
       html: s,
       criterionId: s,
       key: s,
-      pins: external_exports.object({ x: n, y: n, text: s }).array()
+      kind: external_exports.enum(["html", "image"]).optional(),
+      imagePath: s.nullable().optional(),
+      viewport: viewport2.nullable().optional(),
+      notes: s.nullable().optional(),
+      version: n.optional(),
+      history: frameRevision.array().optional(),
+      liveImagePath: s.nullable().optional(),
+      driftDetected: b.optional(),
+      driftNote: s.nullable().optional(),
+      pins: pin.array()
     }).array()
   }).array(),
+  flowProposals: flowProposal.array().optional(),
   activity: external_exports.object({
     track: s.optional(),
     at: s,
     key: s,
     text: s,
-    signal: signal.nullable()
+    signal: signal.nullable(),
+    actor: s.optional(),
+    via: actorVia.optional()
   }).array()
 });
 
@@ -19929,6 +20140,7 @@ var emptyTree = () => ({
   tracks: [{ name: "main", description: "Current contract" }],
   releases: [],
   flows: [],
+  flowProposals: [],
   activity: []
 });
 
@@ -19990,6 +20202,18 @@ function normalizeCriterion(raw, index) {
     then: text(raw?.then, `criterion ${id} then`)
   };
 }
+function normalizeTags(raw) {
+  if (!raw || raw.length === 0) return void 0;
+  const out = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const item of raw) {
+    const t = item.trim();
+    if (!t || seen.has(t)) continue;
+    seen.add(t);
+    out.push(t);
+  }
+  return out.length > 0 ? out : void 0;
+}
 function normalizeContract(tree, raw, selfKey) {
   const title = text(raw?.title, "contract title");
   const story = text(raw?.story, "contract story");
@@ -20022,7 +20246,16 @@ function normalizeContract(tree, raw, selfKey) {
   if (recheckDays !== null && (!Number.isFinite(recheckDays) || recheckDays <= 0)) {
     fail(`recheckDays must be null or positive, got ${String(recheckDays)}`);
   }
-  return { title, story, criteria, dependsOn, rank: rank(raw?.rank), recheckDays };
+  const tags = normalizeTags(raw?.tags);
+  return {
+    title,
+    story,
+    criteria,
+    dependsOn,
+    rank: rank(raw?.rank),
+    recheckDays,
+    ...tags ? { tags } : {}
+  };
 }
 function cycleThrough(tree, selfKey, dependencies) {
   const outcomes = byKey(tree.outcomes);
@@ -20143,8 +20376,8 @@ function comparePaths(left, right) {
   const length = Math.min(left.length, right.length);
   for (let index = 0; index < length; index += 1) {
     const a = left[index];
-    const b = right[index];
-    if (a !== b) return a - b;
+    const b2 = right[index];
+    if (a !== b2) return a - b2;
   }
   return left.length - right.length;
 }
@@ -20200,9 +20433,51 @@ function liveClaim(tree, key2, nowMs) {
 function proven(signal2) {
   return signal2 === "verified" || signal2 === "recheck";
 }
+function effectiveAvailability(outcome2, nowMs) {
+  const avail = outcome2.availability ?? "active";
+  if (avail === "deferred" && outcome2.deferredUntil) {
+    const untilMs = Date.parse(outcome2.deferredUntil);
+    if (Number.isFinite(untilMs) && untilMs <= nowMs) return "active";
+  }
+  return avail;
+}
+function sectionNumbers(tree) {
+  const map2 = /* @__PURE__ */ new Map();
+  const goalsByParent = /* @__PURE__ */ new Map();
+  for (const g of tree.goals) {
+    const list = goalsByParent.get(g.parentGoalKey) ?? [];
+    list.push(g);
+    goalsByParent.set(g.parentGoalKey, list);
+  }
+  const outcomesByGoal = /* @__PURE__ */ new Map();
+  for (const o of tree.outcomes) {
+    const list = outcomesByGoal.get(o.goalKey) ?? [];
+    list.push(o);
+    outcomesByGoal.set(o.goalKey, list);
+  }
+  const sortGoals = (list) => list.slice().sort((a, b2) => a.rank - b2.rank || a.created.localeCompare(b2.created) || a.key.localeCompare(b2.key));
+  const sortOutcomes = (list) => list.slice().sort((a, b2) => a.rank - b2.rank || a.created.localeCompare(b2.created) || a.key.localeCompare(b2.key));
+  const walk = (parentKey, prefix, seen) => {
+    const children = sortGoals(goalsByParent.get(parentKey) ?? []);
+    children.forEach((g, idx) => {
+      if (seen.has(g.key)) return;
+      seen.add(g.key);
+      const num2 = prefix ? `${prefix}.${idx + 1}` : String(idx + 1);
+      map2.set(g.key, num2);
+      const outs = sortOutcomes(outcomesByGoal.get(g.key) ?? []);
+      outs.forEach((o, oIdx) => {
+        map2.set(o.key, `${num2}.${oIdx + 1}`);
+      });
+      walk(g.key, num2, seen);
+    });
+  };
+  walk(null, "", /* @__PURE__ */ new Set());
+  return map2;
+}
 function snapshot(tree, track2 = LIVE_TRACK, now = (/* @__PURE__ */ new Date()).toISOString()) {
   const nowMs = timeMs(now, "now");
   const paths = effectiveRankPaths(tree);
+  const sections = sectionNumbers(tree);
   const base = rankBase(tree);
   const signals = /* @__PURE__ */ new Map();
   for (const outcome2 of tree.outcomes) {
@@ -20215,11 +20490,24 @@ function snapshot(tree, track2 = LIVE_TRACK, now = (/* @__PURE__ */ new Date()).
       const signal2 = signals.get(key2);
       return signal2 === void 0 || !proven(signal2);
     });
+    const avail = effectiveAvailability(outcome2, nowMs);
+    const ancestors = goalAncestors(tree, outcome2.goalKey);
+    const mergedTags = [
+      .../* @__PURE__ */ new Set([
+        ...ancestors.flatMap((g) => g.tags ?? []),
+        ...outcome2.tags ?? []
+      ])
+    ];
     return {
       key: outcome2.key,
       signal: signals.get(outcome2.key) ?? "unverified",
       effectiveRank: encodePath(path, base),
-      ancestors: goalAncestors(tree, outcome2.goalKey),
+      sectionNumber: sections.get(outcome2.key) ?? "",
+      availability: avail,
+      availabilityReason: avail === "active" ? null : outcome2.availabilityReason ?? null,
+      deferredUntil: avail === "deferred" ? outcome2.deferredUntil ?? null : null,
+      tags: mergedTags,
+      ancestors,
       blockedBy,
       claim: liveClaim(tree, outcome2.key, nowMs)
     };
@@ -20237,8 +20525,11 @@ function snapshot(tree, track2 = LIVE_TRACK, now = (/* @__PURE__ */ new Date()).
     if (leftCreated !== rightCreated) return leftCreated - rightCreated;
     return left.key.localeCompare(right.key);
   });
-  const next = ranked.filter((row) => row.signal !== "verified" && row.blockedBy.length === 0 && row.claim === null).map((row) => row.key);
-  const inbox = tree.changes.filter((change2) => change2.state === "pending").length + tree.comments.filter((comment) => comment.answer === null).length;
+  const next = ranked.filter(
+    (row) => row.signal !== "verified" && (row.availability ?? "active") === "active" && row.blockedBy.length === 0 && row.claim === null
+  ).map((row) => row.key);
+  const flowProposals = [...tree.flowProposals ?? []];
+  const inbox = tree.changes.filter((change2) => change2.state === "pending").length + tree.comments.filter((comment) => comment.answer === null).length + flowProposals.filter((proposal) => proposal.state === "pending").length;
   return {
     goals: [...tree.goals],
     outcomes: [...tree.outcomes],
@@ -20250,6 +20541,7 @@ function snapshot(tree, track2 = LIVE_TRACK, now = (/* @__PURE__ */ new Date()).
     tracks: [...tree.tracks],
     releases: [...tree.releases],
     flows: [...tree.flows],
+    flowProposals,
     activity: [...tree.activity],
     ranked,
     next,
@@ -20261,11 +20553,19 @@ function nextId(tree, prefix, used) {
   while (used(`${prefix}${counter}`)) counter += 1;
   return `${prefix}${counter}`;
 }
-function record2(tree, at2, key2, line, signal2, track2 = LIVE_TRACK) {
-  const row = { at: at2, key: key2, text: line, signal: signal2, track: track2 };
+function record2(tree, at2, key2, line, signal2, track2 = LIVE_TRACK, meta3) {
+  const row = {
+    at: at2,
+    key: key2,
+    text: line,
+    signal: signal2,
+    track: track2,
+    ...meta3?.actor ? { actor: meta3.actor } : {},
+    ...meta3?.via ? { via: meta3.via } : {}
+  };
   tree.activity.push(row);
 }
-function applyCore(tree, action, now) {
+function applyCore(tree, action, now, meta3) {
   const nowMs = timeMs(now, "now");
   switch (action.op) {
     case "create_goal": {
@@ -20285,16 +20585,51 @@ function applyCore(tree, action, now) {
           cursor = parent.parentGoalKey;
         }
       }
+      const tags = normalizeTags(action.tags);
       const goal2 = {
         key: key2,
         parentGoalKey,
         title: text(action.title, "goal title"),
         brief: text(action.brief, "goal brief"),
         rank: rank(action.rank),
+        ...tags ? { tags } : {},
         created: now
       };
       tree.goals.push(goal2);
-      record2(tree, now, key2, `create_goal ${key2} "${goal2.title}"`, null);
+      record2(tree, now, key2, `create_goal ${key2} "${goal2.title}"`, null, LIVE_TRACK, meta3);
+      return;
+    }
+    case "update_goal": {
+      const key2 = outcomeKey(action.key);
+      const goal2 = tree.goals.find((g) => g.key === key2);
+      if (!goal2) fail(`unknown goal ${key2}`);
+      if (action.parentGoalKey !== void 0 && action.parentGoalKey !== goal2.parentGoalKey) {
+        const nextParent = action.parentGoalKey;
+        if (nextParent !== null) {
+          const parents = byKey(tree.goals);
+          const seen = /* @__PURE__ */ new Set();
+          let cursor = nextParent;
+          while (cursor !== null) {
+            if (cursor === key2) fail(`goal cycle: ${key2} cannot be nested under ${nextParent}`);
+            if (seen.has(cursor)) fail(`goal hierarchy already loops at ${cursor}`);
+            seen.add(cursor);
+            const parent = parents.get(cursor);
+            if (!parent) fail(`unknown parent goal ${cursor}`);
+            cursor = parent.parentGoalKey;
+          }
+        }
+        goal2.parentGoalKey = nextParent;
+      }
+      if (action.title !== void 0) goal2.title = text(action.title, "goal title");
+      if (action.brief !== void 0) goal2.brief = text(action.brief, "goal brief");
+      if (action.rank !== void 0) goal2.rank = rank(action.rank);
+      if (action.tags !== void 0) {
+        const normalized = normalizeTags(action.tags);
+        if (normalized) goal2.tags = normalized;
+        else delete goal2.tags;
+      }
+      goal2.updated = now;
+      record2(tree, now, key2, `update_goal ${key2} "${goal2.title}"`, null, LIVE_TRACK, meta3);
       return;
     }
     case "create_outcome": {
@@ -20312,7 +20647,33 @@ function applyCore(tree, action, now) {
         updated: now
       };
       tree.outcomes.push(outcome2);
-      record2(tree, now, key2, `create_outcome ${key2} v1 "${outcome2.title}"`, outcomeSignal(tree, key2, LIVE_TRACK, now));
+      record2(tree, now, key2, `create_outcome ${key2} v1 "${outcome2.title}"`, outcomeSignal(tree, key2, LIVE_TRACK, now), LIVE_TRACK, meta3);
+      return;
+    }
+    case "propose_outcome": {
+      const key2 = outcomeKey(action.key);
+      assertKeyFree(tree, key2);
+      if (tree.changes.some((c) => c.state === "pending" && c.kind === "create" && c.key === key2)) {
+        fail(`a pending outcome proposal for ${key2} already exists`);
+      }
+      const goalKey = outcomeKey(action.goalKey, "goalKey");
+      if (!tree.goals.some((goal2) => goal2.key === goalKey)) fail(`unknown goal ${goalKey}`);
+      const proposed = normalizeContract(tree, action.contract, key2);
+      const id = nextId(tree, "chg_", (candidate) => tree.changes.some((change2) => change2.id === candidate));
+      tree.changes.push({
+        id,
+        key: key2,
+        kind: "create",
+        goalKey,
+        baseVersion: 0,
+        proposed,
+        state: "pending",
+        ...action.threadId ? { threadId: action.threadId } : {},
+        ...meta3?.actor ? { actor: meta3.actor } : {},
+        ...meta3?.via ? { via: meta3.via } : {},
+        created: now
+      });
+      record2(tree, now, key2, `propose_outcome ${id} for ${key2} under ${goalKey} "${proposed.title}"`, null, LIVE_TRACK, meta3);
       return;
     }
     case "propose_change": {
@@ -20327,9 +20688,20 @@ function applyCore(tree, action, now) {
       }
       const proposed = normalizeContract(tree, action.contract, key2);
       const id = nextId(tree, "chg_", (candidate) => tree.changes.some((change3) => change3.id === candidate));
-      const change2 = { id, key: key2, baseVersion, proposed, state: "pending", created: now };
+      const change2 = {
+        id,
+        key: key2,
+        kind: "edit",
+        baseVersion,
+        proposed,
+        state: "pending",
+        ...action.threadId ? { threadId: action.threadId } : {},
+        ...meta3?.actor ? { actor: meta3.actor } : {},
+        ...meta3?.via ? { via: meta3.via } : {},
+        created: now
+      };
       tree.changes.push(change2);
-      record2(tree, now, key2, `propose_change ${id} on ${key2} v${baseVersion}`, null);
+      record2(tree, now, key2, `propose_change ${id} on ${key2} v${baseVersion}`, null, LIVE_TRACK, meta3);
       return;
     }
     case "approve_change": {
@@ -20337,6 +20709,34 @@ function applyCore(tree, action, now) {
       const change2 = tree.changes.find((row) => row.id === id);
       if (change2 === void 0) fail(`unknown change ${id}`);
       if (change2.state !== "pending") fail(`change ${id} is ${change2.state}, not pending`);
+      if (change2.kind === "create") {
+        assertKeyFree(tree, change2.key);
+        const goalKey = change2.goalKey;
+        if (!goalKey || !tree.goals.some((goal2) => goal2.key === goalKey)) {
+          fail(`unknown goal ${goalKey ?? "(missing)"} for proposed outcome ${change2.key}`);
+        }
+        const contract4 = normalizeContract(tree, change2.proposed, change2.key);
+        const outcome3 = {
+          key: change2.key,
+          goalKey,
+          ...contract4,
+          version: 1,
+          created: now,
+          updated: now
+        };
+        tree.outcomes.push(outcome3);
+        change2.state = "approved";
+        record2(
+          tree,
+          now,
+          outcome3.key,
+          `approve_outcome ${id} created ${outcome3.key} v1 "${outcome3.title}"`,
+          outcomeSignal(tree, outcome3.key, LIVE_TRACK, now),
+          LIVE_TRACK,
+          meta3
+        );
+        return;
+      }
       const outcome2 = findOutcome(tree, change2.key);
       if (change2.baseVersion !== outcome2.version) {
         fail(
@@ -20346,8 +20746,9 @@ function applyCore(tree, action, now) {
       const contract3 = normalizeContract(tree, change2.proposed, change2.key);
       const version2 = outcome2.version + 1;
       Object.assign(outcome2, contract3, { version: version2, updated: now });
+      if (!contract3.tags) delete outcome2.tags;
       change2.state = "approved";
-      record2(tree, now, outcome2.key, `approve_change ${id} on ${outcome2.key} v${version2}`, outcomeSignal(tree, outcome2.key, LIVE_TRACK, now));
+      record2(tree, now, outcome2.key, `approve_change ${id} on ${outcome2.key} v${version2}`, outcomeSignal(tree, outcome2.key, LIVE_TRACK, now), LIVE_TRACK, meta3);
       return;
     }
     case "reject_change": {
@@ -20356,7 +20757,47 @@ function applyCore(tree, action, now) {
       if (change2 === void 0) fail(`unknown change ${id}`);
       if (change2.state !== "pending") fail(`change ${id} is ${change2.state}, not pending`);
       change2.state = "rejected";
-      record2(tree, now, change2.key, `reject_change ${id} on ${change2.key}`, null);
+      record2(tree, now, change2.key, `reject_change ${id} on ${change2.key}`, null, LIVE_TRACK, meta3);
+      return;
+    }
+    case "set_outcome_availability": {
+      const key2 = outcomeKey(action.key);
+      const outcome2 = findOutcome(tree, key2);
+      const avail = action.availability;
+      const reason = action.reason?.trim() || null;
+      const until = action.deferredUntil?.trim() || null;
+      if (avail === "blocked" && !reason) {
+        fail(`say why ${key2} is blocked: pass reason`);
+      }
+      if (until !== null && !Number.isFinite(Date.parse(until))) {
+        fail(`deferredUntil must be a valid ISO date or timestamp, got "${until}"`);
+      }
+      outcome2.availability = avail;
+      outcome2.availabilityReason = avail === "active" ? null : reason;
+      outcome2.deferredUntil = avail === "deferred" ? until : null;
+      outcome2.updated = now;
+      const suffix = avail === "active" ? "reopened" : `${avail}${reason ? `: ${reason}` : ""}${avail === "deferred" && until ? ` (until ${until})` : ""}`;
+      record2(tree, now, key2, `set_outcome_availability ${key2} -> ${suffix}`, outcomeSignal(tree, key2, LIVE_TRACK, now), LIVE_TRACK, meta3);
+      return;
+    }
+    case "set_tags": {
+      const key2 = outcomeKey(action.key);
+      const tags = normalizeTags(action.tags);
+      const asGoal = action.target === "goal" || action.target === void 0 && tree.goals.some((g) => g.key === key2);
+      if (asGoal) {
+        const goal2 = tree.goals.find((g) => g.key === key2);
+        if (!goal2) fail(`unknown goal ${key2}`);
+        if (tags) goal2.tags = tags;
+        else delete goal2.tags;
+        goal2.updated = now;
+        record2(tree, now, key2, `set_tags goal ${key2}: ${(tags ?? []).join(", ") || "(cleared)"}`, null, LIVE_TRACK, meta3);
+        return;
+      }
+      const outcome2 = findOutcome(tree, key2);
+      if (tags) outcome2.tags = tags;
+      else delete outcome2.tags;
+      outcome2.updated = now;
+      record2(tree, now, key2, `set_tags ${key2}: ${(tags ?? []).join(", ") || "(cleared)"}`, null, LIVE_TRACK, meta3);
       return;
     }
     case "claim_outcome": {
@@ -20371,11 +20812,16 @@ function applyCore(tree, action, now) {
       if (held !== null && held.threadId !== threadId) {
         fail(`outcome ${key2} is claimed by ${held.threadId} until ${held.expires}`);
       }
-      const blockedBy = tree.outcomes.find((outcome2) => outcome2.key === key2).dependsOn.filter((dependency) => !proven(outcomeSignal(tree, dependency, LIVE_TRACK, now)));
+      const outcome2 = findOutcome(tree, key2);
+      const avail = effectiveAvailability(outcome2, nowMs);
+      if (avail !== "active") {
+        fail(`outcome ${key2} is ${avail}${outcome2.availabilityReason ? ` (${outcome2.availabilityReason})` : ""}`);
+      }
+      const blockedBy = outcome2.dependsOn.filter((dependency) => !proven(outcomeSignal(tree, dependency, LIVE_TRACK, now)));
       if (blockedBy.length > 0) fail(`outcome ${key2} is blocked by ${blockedBy.join(", ")}`);
       const claim3 = { key: key2, threadId, expires: iso(nowMs + hours * 36e5) };
       tree.claims = tree.claims.filter((row) => row.key !== key2).concat(claim3);
-      record2(tree, now, key2, `claim_outcome ${key2} by ${threadId} until ${claim3.expires}`, null);
+      record2(tree, now, key2, `claim_outcome ${key2} by ${threadId} until ${claim3.expires}`, null, LIVE_TRACK, meta3);
       return;
     }
     case "release_outcome": {
@@ -20385,7 +20831,7 @@ function applyCore(tree, action, now) {
       if (claim3 === void 0) fail(`outcome ${key2} has no claim to release`);
       if (claim3.threadId !== threadId) fail(`outcome ${key2} is claimed by ${claim3.threadId}, not ${threadId}`);
       tree.claims = tree.claims.filter((row) => row.key !== key2);
-      record2(tree, now, key2, `release_outcome ${key2} by ${threadId}`, null);
+      record2(tree, now, key2, `release_outcome ${key2} by ${threadId}`, null, LIVE_TRACK, meta3);
       return;
     }
     case "add_evidence": {
@@ -20422,10 +20868,13 @@ function applyCore(tree, action, now) {
         track: track2,
         text: text(action.text, "evidence text"),
         source: text(action.source, "evidence source"),
+        ...action.attachments && action.attachments.length > 0 ? { attachments: action.attachments } : {},
+        ...meta3?.actor ? { actor: meta3.actor } : {},
+        ...meta3?.via ? { via: meta3.via } : {},
         created: now
       };
       tree.evidence.push(evidence);
-      record2(tree, now, key2, `add_evidence ${id} ${action.kind} on ${key2} v${version2}`, outcomeSignal(tree, key2, track2, now), track2);
+      record2(tree, now, key2, `add_evidence ${id} ${action.kind} on ${key2} v${version2}`, outcomeSignal(tree, key2, track2, now), track2, meta3);
       return;
     }
     default: {
@@ -20487,8 +20936,15 @@ function nextId2(prefix, hint, taken) {
   while (taken.has(`${base}_${index}`)) index += 1;
   return `${base}_${index}`;
 }
-function log(tree, at2, key2, message2, signal2 = null) {
-  tree.activity.push({ at: at2, key: key2, text: message2, signal: signal2 });
+function log(tree, at2, key2, message2, signal2 = null, meta3) {
+  tree.activity.push({
+    at: at2,
+    key: key2,
+    text: message2,
+    signal: signal2,
+    ...meta3?.actor ? { actor: meta3.actor } : {},
+    ...meta3?.via ? { via: meta3.via } : {}
+  });
 }
 function clip(value, limit = 160) {
   return value.length <= limit ? value : `${value.slice(0, limit - 1)}\u2026`;
@@ -20616,7 +21072,31 @@ function previewPromotion(tree, name, keys, now = (/* @__PURE__ */ new Date()).t
     }
   };
 }
-function applyPlanning(tree, a, now) {
+function normalizeFrameInput(tree, step, label) {
+  const outcome2 = outcomeOf(tree, step.key);
+  if (!outcome2.criteria.some((criterion3) => criterion3.id === step.criterionId)) {
+    fail2(`${label} names criterion "${step.criterionId}", which outcome "${step.key}" does not have at v${outcome2.version}`);
+  }
+  const kind = step.kind ?? (step.imagePath ? "image" : "html");
+  const html = (step.html ?? "").trim();
+  const imagePath = step.imagePath?.trim() || null;
+  if (kind === "html" && html === "") fail2(`${label} html must be non-empty for html frames`);
+  if (kind === "image" && !imagePath) fail2(`${label} imagePath must be non-empty for image frames`);
+  return {
+    title: text2(step.title, `${label} title`),
+    key: outcome2.key,
+    criterionId: step.criterionId,
+    html,
+    kind,
+    ...imagePath ? { imagePath } : {},
+    ...step.viewport ? { viewport: step.viewport } : {},
+    ...step.notes?.trim() ? { notes: step.notes.trim() } : {},
+    version: 1,
+    history: [],
+    pins: []
+  };
+}
+function applyPlanning(tree, a, now, meta3) {
   const at2 = stamp(now);
   switch (a.op) {
     case "write_plan": {
@@ -20625,8 +21105,15 @@ function applyPlanning(tree, a, now) {
       const latest = latestPlanVersion(tree, key2);
       if (latest > 0) fail2(`outcome "${key2}" already has plan v${latest}; use revise_plan`);
       const body = text2(a.body, "plan body");
-      tree.plans.push({ key: outcome2.key, version: 1, body, created: at2 });
-      log(tree, at2, key2, `Plan v1 written for ${key2}`);
+      tree.plans.push({
+        key: outcome2.key,
+        version: 1,
+        body,
+        ...meta3?.actor ? { actor: meta3.actor } : {},
+        ...meta3?.via ? { via: meta3.via } : {},
+        created: at2
+      });
+      log(tree, at2, key2, `Plan v1 written for ${key2}`, null, meta3);
       return;
     }
     case "revise_plan": {
@@ -20637,8 +21124,15 @@ function applyPlanning(tree, a, now) {
       if (a.version !== latest) fail2(`plan for "${key2}" is at v${latest}; revise from that version`);
       const body = text2(a.body, "plan body");
       const version2 = latest + 1;
-      tree.plans.push({ key: key2, version: version2, body, created: at2 });
-      log(tree, at2, key2, `Plan v${version2} written for ${key2}`);
+      tree.plans.push({
+        key: key2,
+        version: version2,
+        body,
+        ...meta3?.actor ? { actor: meta3.actor } : {},
+        ...meta3?.via ? { via: meta3.via } : {},
+        created: at2
+      });
+      log(tree, at2, key2, `Plan v${version2} written for ${key2}`, null, meta3);
       return;
     }
     case "comment": {
@@ -20655,10 +21149,33 @@ function applyPlanning(tree, a, now) {
         if (parent === void 0) fail2(`unknown parent comment "${parentId}"`);
         if (parent.key !== key2) fail2(`parent comment "${parentId}" belongs to "${parent.key}", not "${key2}"`);
       }
+      const planVersion = a.planVersion ?? null;
+      if (planVersion !== null && !tree.plans.some((p) => p.key === key2 && p.version === planVersion)) {
+        fail2(`outcome "${key2}" has no plan v${planVersion}`);
+      }
       const id = nextId2("cm", key2, takenIds(tree, "cm"));
-      const comment = { id, key: key2, parentId, text: body, options, answer: null, created: at2 };
+      const comment = {
+        id,
+        key: key2,
+        parentId,
+        ...planVersion !== null ? { planVersion } : {},
+        text: body,
+        options,
+        answer: null,
+        ...a.threadId ? { threadId: a.threadId } : {},
+        ...meta3?.actor ? { actor: meta3.actor } : {},
+        ...meta3?.via ? { via: meta3.via } : {},
+        created: at2
+      };
       tree.comments.push(comment);
-      log(tree, at2, key2, options.length > 0 ? `Question on ${key2} with ${options.length} options` : `Comment on ${key2}`);
+      log(
+        tree,
+        at2,
+        key2,
+        options.length > 0 ? `Question on ${key2}${planVersion ? ` (plan v${planVersion})` : ""} with ${options.length} options` : `Comment on ${key2}${planVersion ? ` (plan v${planVersion})` : ""}`,
+        null,
+        meta3
+      );
       return;
     }
     case "answer": {
@@ -20671,7 +21188,7 @@ function applyPlanning(tree, a, now) {
         fail2(`answer must be one of: ${comment.options.join(", ")}`);
       }
       comment.answer = answer;
-      log(tree, at2, comment.key, `Answered ${id} on ${comment.key}: ${clip(answer)}`);
+      log(tree, at2, comment.key, `Answered ${id} on ${comment.key}: ${clip(answer)}`, null, meta3);
       return;
     }
     case "create_track": {
@@ -20680,7 +21197,7 @@ function applyPlanning(tree, a, now) {
       if (tree.tracks.some((track2) => track2.name === name)) fail2(`track "${name}" already exists`);
       const description = text2(a.description, "track description");
       tree.tracks.push({ name, description });
-      log(tree, at2, name, `Track "${name}" created`);
+      log(tree, at2, name, `Track "${name}" created`, null, meta3);
       return;
     }
     case "promote_track": {
@@ -20700,14 +21217,16 @@ function applyPlanning(tree, a, now) {
           track: LIVE_TRACK2,
           text: `Cut over from track "${preview.track}": proven there at v${outcome2.version}.`,
           source: `track:${preview.track}`,
+          ...meta3?.actor ? { actor: meta3.actor } : {},
+          ...meta3?.via ? { via: meta3.via } : {},
           created: at2
         };
         evidenceIds.add(evidence.id);
         tree.evidence.push(evidence);
         cut.push(item.key);
-        log(tree, at2, item.key, `Cut over from track "${preview.track}" at v${outcome2.version}`, "verified");
+        log(tree, at2, item.key, `Cut over from track "${preview.track}" at v${outcome2.version}`, "verified", meta3);
       }
-      log(tree, at2, preview.track, `Track "${preview.track}" cut over ${cut.length} outcome(s) to live: ${cut.join(", ")}`);
+      log(tree, at2, preview.track, `Track "${preview.track}" cut over ${cut.length} outcome(s) to live: ${cut.join(", ")}`, null, meta3);
       return;
     }
     case "create_release": {
@@ -20727,7 +21246,38 @@ function applyPlanning(tree, a, now) {
         if (clash !== void 0) fail2(`outcome "${key2}" is already in release "${clash.name}" in scenario "${scenario}"`);
       }
       tree.releases.push({ name, keys: [...keys], scenario, date: a.date });
-      log(tree, at2, name, `Release "${name}" dated ${a.date} in scenario "${scenario}" with ${keys.length} outcome(s)`);
+      log(tree, at2, name, `Release "${name}" dated ${a.date} in scenario "${scenario}" with ${keys.length} outcome(s)`, null, meta3);
+      return;
+    }
+    case "revise_release": {
+      const name = text2(a.name, "release name");
+      const scenario = text2(a.scenario, "release scenario");
+      const release = tree.releases.find((r) => r.name === name && r.scenario === scenario);
+      if (!release) fail2(`unknown release "${name}" in scenario "${scenario}"`);
+      if (a.newName !== void 0) {
+        const nextName = text2(a.newName, "new release name");
+        if (nextName !== release.name && tree.releases.some((r) => r.name === nextName && r.scenario === scenario)) {
+          fail2(`release "${nextName}" already exists in scenario "${scenario}"`);
+        }
+        release.name = nextName;
+      }
+      if (a.date !== void 0) {
+        if (!realDate(a.date)) fail2(`release date must be a real calendar date (YYYY-MM-DD), got "${a.date}"`);
+        release.date = a.date;
+      }
+      if (a.keys !== void 0) {
+        const keys = a.keys.map((k) => k.trim());
+        if (keys.length === 0) fail2("a release needs at least one outcome");
+        const repeated = duplicates(keys);
+        if (repeated.length > 0) fail2(`duplicate key(s): ${repeated.join(", ")}`);
+        for (const k of keys) outcomeOf(tree, k);
+        for (const k of keys) {
+          const clash = tree.releases.find((r) => r !== release && r.scenario === scenario && r.keys.includes(k));
+          if (clash !== void 0) fail2(`outcome "${k}" is already in release "${clash.name}" in scenario "${scenario}"`);
+        }
+        release.keys = [...keys];
+      }
+      log(tree, at2, release.name, `Revised release "${release.name}" (${release.date}, ${release.keys.length} outcome(s)) in "${scenario}"`, null, meta3);
       return;
     }
     case "create_flow": {
@@ -20735,21 +21285,14 @@ function applyPlanning(tree, a, now) {
       if (tree.flows.some((flow) => flow.name === name)) fail2(`flow "${name}" already exists`);
       const steps = Array.isArray(a.frames) ? a.frames : [];
       if (steps.length === 0) fail2("a flow needs at least one frame");
-      const frames = steps.map((step, index) => {
-        const outcome2 = outcomeOf(tree, step.key);
-        if (!outcome2.criteria.some((criterion3) => criterion3.id === step.criterionId)) {
-          fail2(`frame ${index} names criterion "${step.criterionId}", which outcome "${step.key}" does not have at v${outcome2.version}`);
-        }
-        return {
-          title: text2(step.title, `frame ${index} title`),
-          key: outcome2.key,
-          criterionId: step.criterionId,
-          html: text2(step.html, `frame ${index} html`),
-          pins: []
-        };
+      const frames = steps.map((step, index) => normalizeFrameInput(tree, step, `frame ${index}`));
+      tree.flows.push({
+        name,
+        ...a.folder?.trim() ? { folder: a.folder.trim() } : {},
+        ...a.designKit?.trim() ? { designKit: a.designKit.trim() } : {},
+        frames
       });
-      tree.flows.push({ name, frames });
-      log(tree, at2, name, `Flow "${name}" with ${frames.length} frame(s)`);
+      log(tree, at2, name, `Flow "${name}" with ${frames.length} frame(s)`, null, meta3);
       return;
     }
     case "pin": {
@@ -20764,8 +21307,215 @@ function applyPlanning(tree, a, now) {
       const pinText = text2(a.text, "pin text");
       const frame = flow.frames[a.frame];
       if (frame === void 0) fail2(`frame ${a.frame} is out of range for flow "${name}"`);
-      frame.pins.push({ x: a.x, y: a.y, text: pinText });
-      log(tree, at2, name, `Pinned comment on frame ${a.frame} of "${name}": ${clip(pinText)}`);
+      const taken = new Set(frame.pins.map((p) => p.id).filter((id) => Boolean(id)));
+      const pinId = nextId2("pin", `${name}_${a.frame}`, taken);
+      const pin2 = {
+        id: pinId,
+        x: a.x,
+        y: a.y,
+        text: pinText,
+        ...a.kind ? { kind: a.kind } : {},
+        ...a.geometry ? { geometry: a.geometry } : {},
+        ...a.selector ? { selector: a.selector } : {},
+        ...a.forAgents !== void 0 ? { forAgents: a.forAgents } : {},
+        resolved: false,
+        created: at2
+      };
+      frame.pins.push(pin2);
+      log(tree, at2, name, `Pinned comment on frame ${a.frame} of "${name}": ${clip(pinText)}`, null, meta3);
+      return;
+    }
+    case "resolve_pin": {
+      const name = text2(a.name, "flow name");
+      const flow = tree.flows.find((candidate) => candidate.name === name);
+      if (flow === void 0) fail2(`unknown flow "${name}"`);
+      const frame = flow.frames[a.frame];
+      if (frame === void 0) fail2(`frame ${a.frame} is out of range for flow "${name}"`);
+      const pin2 = a.pinId ? frame.pins.find((p) => p.id === a.pinId) : a.pinIndex !== void 0 ? frame.pins[a.pinIndex] : void 0;
+      if (!pin2) fail2(`pin not found on frame ${a.frame} of "${name}"`);
+      pin2.resolved = a.resolved;
+      pin2.resolvedBy = a.resolved ? a.resolvedBy?.trim() || meta3?.actor || "resolved" : null;
+      log(tree, at2, name, `${a.resolved ? "Resolved" : "Reopened"} pin on frame ${a.frame} of "${name}"`, null, meta3);
+      return;
+    }
+    case "propose_flow_change": {
+      const proposals = tree.flowProposals ??= [];
+      const flowName = text2(a.flowName, "flowName");
+      const kind = a.kind ?? "change";
+      if (kind === "new_flow") {
+        if (tree.flows.some((f) => f.name === flowName)) fail2(`flow "${flowName}" already exists`);
+        const list = a.frames ?? (a.frame ? [a.frame] : null);
+        if (!list || list.length === 0) fail2("propose_flow_change (new_flow) requires frames");
+        list.forEach((step, idx) => normalizeFrameInput(tree, step, `proposed frame ${idx}`));
+      } else if (kind === "new_step") {
+        if (!tree.flows.some((f) => f.name === flowName)) fail2(`unknown flow "${flowName}"`);
+        if (!a.frame) fail2("propose_flow_change (new_step) requires frame");
+        normalizeFrameInput(tree, a.frame, "proposed step");
+      } else {
+        const flow = tree.flows.find((f) => f.name === flowName);
+        if (!flow) fail2(`unknown flow "${flowName}"`);
+        const idx = a.frameIndex ?? -1;
+        const target = flow.frames[idx];
+        if (!target) fail2(`frame ${idx} is out of range for flow "${flowName}"`);
+        const curVer = target.version ?? 1;
+        if (a.basedOnVersion !== void 0 && a.basedOnVersion !== null && a.basedOnVersion !== curVer) {
+          fail2(`stale flow proposal: frame ${idx} of "${flowName}" is at v${curVer}, not v${a.basedOnVersion}`);
+        }
+        if (!a.frame) fail2("propose_flow_change (change) requires frame");
+        normalizeFrameInput(tree, a.frame, `proposed frame ${idx}`);
+      }
+      const taken = new Set(proposals.map((p) => p.id));
+      const id = nextId2("fp", flowName, taken);
+      const proposal = {
+        id,
+        kind,
+        flowName,
+        ...a.folder ? { folder: a.folder } : {},
+        ...a.designKit ? { designKit: a.designKit } : {},
+        frameIndex: a.frameIndex ?? null,
+        basedOnVersion: a.basedOnVersion ?? null,
+        frame: a.frame ?? null,
+        frames: a.frames ?? null,
+        selfGrade: a.selfGrade ?? null,
+        ref: a.ref ?? null,
+        spot: a.spot ?? null,
+        note: a.note ?? null,
+        state: "pending",
+        reviewNote: null,
+        threadId: a.threadId ?? null,
+        actor: meta3?.actor ?? null,
+        ...meta3?.via ? { via: meta3.via } : {},
+        created: at2
+      };
+      proposals.push(proposal);
+      log(tree, at2, flowName, `Proposed flow ${kind} ${id} on "${flowName}"${a.ref ? ` (${a.ref})` : ""}`, null, meta3);
+      return;
+    }
+    case "accept_flow_change": {
+      const proposals = tree.flowProposals ??= [];
+      const id = text2(a.id, "flow proposal id");
+      const proposal = proposals.find((p) => p.id === id);
+      if (!proposal) fail2(`unknown flow proposal "${id}"`);
+      if (proposal.state !== "pending") fail2(`flow proposal "${id}" is ${proposal.state}, not pending`);
+      if (proposal.kind === "new_flow") {
+        if (tree.flows.some((f) => f.name === proposal.flowName)) fail2(`flow "${proposal.flowName}" already exists`);
+        const list = proposal.frames ?? (proposal.frame ? [proposal.frame] : []);
+        if (list.length === 0) fail2(`flow proposal "${id}" has no frames`);
+        const frames = list.map((step, idx) => normalizeFrameInput(tree, step, `frame ${idx}`));
+        tree.flows.push({
+          name: proposal.flowName,
+          ...proposal.folder ? { folder: proposal.folder } : {},
+          ...proposal.designKit ? { designKit: proposal.designKit } : {},
+          frames
+        });
+      } else if (proposal.kind === "new_step") {
+        const flow = tree.flows.find((f) => f.name === proposal.flowName);
+        if (!flow) fail2(`unknown flow "${proposal.flowName}"`);
+        if (!proposal.frame) fail2(`flow proposal "${id}" has no frame`);
+        const frame = normalizeFrameInput(tree, proposal.frame, "new step");
+        if (proposal.frameIndex !== null && proposal.frameIndex >= 0 && proposal.frameIndex <= flow.frames.length) {
+          flow.frames.splice(proposal.frameIndex, 0, frame);
+        } else {
+          flow.frames.push(frame);
+        }
+      } else {
+        const flow = tree.flows.find((f) => f.name === proposal.flowName);
+        if (!flow) fail2(`unknown flow "${proposal.flowName}"`);
+        const idx = proposal.frameIndex ?? -1;
+        const current = flow.frames[idx];
+        if (!current) fail2(`frame ${idx} no longer exists in flow "${proposal.flowName}"`);
+        const curVer = current.version ?? 1;
+        if (proposal.basedOnVersion !== null && proposal.basedOnVersion !== curVer) {
+          fail2(`stale flow proposal "${id}": based on v${proposal.basedOnVersion}, now v${curVer}`);
+        }
+        if (!proposal.frame) fail2(`flow proposal "${id}" has no frame`);
+        const nextFrame = normalizeFrameInput(tree, proposal.frame, `frame ${idx}`);
+        const history = [...current.history ?? []];
+        history.push({
+          version: curVer,
+          title: current.title,
+          html: current.html,
+          kind: current.kind,
+          imagePath: current.imagePath ?? null,
+          viewport: current.viewport ?? null,
+          notes: current.notes ?? null,
+          at: at2,
+          actor: proposal.actor ?? null,
+          ref: proposal.ref ?? null
+        });
+        flow.frames[idx] = {
+          ...nextFrame,
+          version: curVer + 1,
+          history,
+          pins: current.pins,
+          driftDetected: false,
+          driftNote: null
+        };
+      }
+      proposal.state = "accepted";
+      proposal.reviewNote = a.reviewNote?.trim() || null;
+      log(tree, at2, proposal.flowName, `Accepted flow ${proposal.kind} ${id} on "${proposal.flowName}"`, null, meta3);
+      return;
+    }
+    case "reject_flow_change": {
+      const proposals = tree.flowProposals ??= [];
+      const id = text2(a.id, "flow proposal id");
+      const proposal = proposals.find((p) => p.id === id);
+      if (!proposal) fail2(`unknown flow proposal "${id}"`);
+      if (proposal.state !== "pending") fail2(`flow proposal "${id}" is ${proposal.state}, not pending`);
+      proposal.state = "rejected";
+      proposal.reviewNote = a.reviewNote?.trim() || null;
+      log(tree, at2, proposal.flowName, `Sent back flow ${proposal.kind} ${id} on "${proposal.flowName}"${proposal.reviewNote ? `: ${clip(proposal.reviewNote)}` : ""}`, null, meta3);
+      return;
+    }
+    case "restore_frame_version": {
+      const flowName = text2(a.flowName, "flowName");
+      const flow = tree.flows.find((f) => f.name === flowName);
+      if (!flow) fail2(`unknown flow "${flowName}"`);
+      const current = flow.frames[a.frameIndex];
+      if (!current) fail2(`frame ${a.frameIndex} is out of range for flow "${flowName}"`);
+      const targetRev = (current.history ?? []).find((rev) => rev.version === a.version);
+      if (!targetRev) fail2(`frame ${a.frameIndex} of "${flowName}" has no saved v${a.version}`);
+      const curVer = current.version ?? 1;
+      const history = [...current.history ?? []];
+      history.push({
+        version: curVer,
+        title: current.title,
+        html: current.html,
+        kind: current.kind,
+        imagePath: current.imagePath ?? null,
+        viewport: current.viewport ?? null,
+        notes: current.notes ?? null,
+        at: at2,
+        actor: meta3?.actor ?? null,
+        ref: `restore:v${a.version}`
+      });
+      flow.frames[a.frameIndex] = {
+        ...current,
+        title: targetRev.title,
+        html: targetRev.html,
+        kind: targetRev.kind ?? current.kind,
+        imagePath: targetRev.imagePath ?? null,
+        viewport: targetRev.viewport ?? null,
+        notes: targetRev.notes ?? null,
+        version: curVer + 1,
+        history,
+        driftDetected: false,
+        driftNote: null
+      };
+      log(tree, at2, flowName, `Restored frame ${a.frameIndex} of "${flowName}" from v${a.version} as v${curVer + 1}`, null, meta3);
+      return;
+    }
+    case "set_frame_drift": {
+      const flowName = text2(a.flowName, "flowName");
+      const flow = tree.flows.find((f) => f.name === flowName);
+      if (!flow) fail2(`unknown flow "${flowName}"`);
+      const frame = flow.frames[a.frameIndex];
+      if (!frame) fail2(`frame ${a.frameIndex} is out of range for flow "${flowName}"`);
+      frame.liveImagePath = a.liveImagePath ?? frame.liveImagePath ?? null;
+      frame.driftDetected = a.driftDetected;
+      frame.driftNote = a.driftNote?.trim() || null;
+      log(tree, at2, flowName, `Frame ${a.frameIndex} of "${flowName}" drift=${a.driftDetected ? "detected" : "cleared"}`, null, meta3);
       return;
     }
     default:
@@ -21071,10 +21821,10 @@ function hasBalancedInnerQuoteAt(line, openQuoteIdx, spanClose, targetQuoteIdx, 
       const q2 = line.indexOf(ch, p);
       if (q2 === -1 || q2 >= spanClose) return false;
       let bs = 0;
-      let b = q2 - 1;
-      while (b >= targetQuoteIdx + 1 && line.charCodeAt(b) === 92) {
+      let b2 = q2 - 1;
+      while (b2 >= targetQuoteIdx + 1 && line.charCodeAt(b2) === 92) {
         bs += 1;
-        b -= 1;
+        b2 -= 1;
       }
       if ((bs & 1) === 1) {
         return q2 + 1 === spanClose || isValidQuoteCloseBoundary(line, q2);
@@ -21092,10 +21842,10 @@ function hasBalancedInnerQuoteAt(line, openQuoteIdx, spanClose, targetQuoteIdx, 
       const q2 = line.indexOf('"', p);
       if (q2 === -1 || q2 >= spanClose) return false;
       let bs = 0;
-      let b = q2 - 1;
-      while (b >= targetQuoteIdx + 1 && line.charCodeAt(b) === 92) {
+      let b2 = q2 - 1;
+      while (b2 >= targetQuoteIdx + 1 && line.charCodeAt(b2) === 92) {
         bs += 1;
-        b -= 1;
+        b2 -= 1;
       }
       if ((bs & 1) === 0) {
         return q2 + 1 === spanClose || isValidQuoteCloseBoundary(line, q2);
@@ -22278,6 +23028,10 @@ function sanitizeTreeSecrets(tree) {
   for (const act of tree.activity) {
     act.text = redactField(act.text);
   }
+  for (const prop of tree.flowProposals ?? []) {
+    if (prop.note) prop.note = redactField(prop.note);
+    if (prop.reviewNote) prop.reviewNote = redactField(prop.reviewNote);
+  }
   return changed;
 }
 function createRepository(db) {
@@ -22307,9 +23061,9 @@ function createRepository(db) {
     }
   }
   const existingTableCount = db.prepare(
-    "SELECT COUNT(*) AS cnt FROM sqlite_master WHERE type = 'table' AND name IN ('hc_trees', 'hc_projects', 'hc_tree_meta')"
+    "SELECT COUNT(*) AS cnt FROM sqlite_master WHERE type = 'table' AND name IN ('hc_trees', 'hc_projects', 'hc_tree_meta', 'hc_views', 'hc_scopes', 'hc_artifacts', 'hc_hooks', 'hc_project_settings')"
   ).get()?.cnt ?? 0;
-  if (existingTableCount < 3) {
+  if (existingTableCount < 8) {
     runInImmediateTx(() => {
       db.exec(`
         CREATE TABLE IF NOT EXISTS hc_trees(
@@ -22332,8 +23086,85 @@ function createRepository(db) {
           has_repo INTEGER NOT NULL DEFAULT 0,
           updated TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS hc_project_settings(
+          project TEXT NOT NULL,
+          key TEXT NOT NULL,
+          value TEXT NOT NULL,
+          updated TEXT NOT NULL,
+          PRIMARY KEY (project, key)
+        );
+        CREATE TABLE IF NOT EXISTS hc_views(
+          project TEXT NOT NULL,
+          id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          filter_json TEXT NOT NULL,
+          created TEXT NOT NULL,
+          updated TEXT NOT NULL,
+          PRIMARY KEY (project, id)
+        );
+        CREATE TABLE IF NOT EXISTS hc_scopes(
+          project TEXT NOT NULL,
+          id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          owner TEXT,
+          release_name TEXT,
+          goal_keys_json TEXT NOT NULL DEFAULT '[]',
+          tags_json TEXT NOT NULL DEFAULT '[]',
+          active INTEGER NOT NULL DEFAULT 0,
+          created TEXT NOT NULL,
+          updated TEXT NOT NULL,
+          PRIMARY KEY (project, id)
+        );
+        CREATE TABLE IF NOT EXISTS hc_artifacts(
+          project TEXT NOT NULL,
+          id TEXT NOT NULL,
+          folder TEXT NOT NULL DEFAULT 'General',
+          title TEXT NOT NULL,
+          template TEXT,
+          body TEXT NOT NULL,
+          locked INTEGER NOT NULL DEFAULT 0,
+          version INTEGER NOT NULL DEFAULT 1,
+          history_json TEXT NOT NULL DEFAULT '[]',
+          citations_json TEXT NOT NULL DEFAULT '[]',
+          actor TEXT,
+          created TEXT NOT NULL,
+          updated TEXT NOT NULL,
+          PRIMARY KEY (project, id)
+        );
+        CREATE TABLE IF NOT EXISTS hc_hooks(
+          project TEXT NOT NULL,
+          id TEXT NOT NULL,
+          event TEXT NOT NULL,
+          target_type TEXT NOT NULL,
+          target TEXT NOT NULL,
+          enabled INTEGER NOT NULL DEFAULT 1,
+          secret TEXT,
+          created TEXT NOT NULL,
+          updated TEXT NOT NULL,
+          PRIMARY KEY (project, id)
+        );
       `);
     });
+  }
+  let ftsAvailable = true;
+  try {
+    const hasFts = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'hc_fts' LIMIT 1").get();
+    if (!hasFts) {
+      runInImmediateTx(() => {
+        db.exec(`
+          CREATE VIRTUAL TABLE IF NOT EXISTS hc_fts USING fts5(
+            project UNINDEXED,
+            entity_type UNINDEXED,
+            entity_id UNINDEXED,
+            title,
+            body,
+            tokenize='unicode61'
+          );
+        `);
+      });
+    }
+  } catch {
+    ftsAvailable = false;
   }
   const readStmt = db.prepare("SELECT body FROM hc_trees WHERE project = ?");
   const writeStmt = db.prepare(
@@ -22370,17 +23201,64 @@ function createRepository(db) {
     return {
       goalCount: tree.goals.length,
       outcomeCount: tree.outcomes.length,
-      inboxCount: tree.changes.filter((c) => c.state === "pending").length + tree.comments.filter((c) => c.answer === null).length,
+      inboxCount: tree.changes.filter((c) => c.state === "pending").length + tree.comments.filter((c) => c.answer === null).length + (tree.flowProposals ?? []).filter((p) => p.state === "pending").length,
       lastActivityAt: tree.activity.length > 0 ? tree.activity[tree.activity.length - 1].at : null,
       hasRepo: projectHasRepo(project),
       updated: stamp2
     };
   }
+  const deleteFtsProjectStmt = ftsAvailable ? db.prepare("DELETE FROM hc_fts WHERE project = ? AND entity_type != 'artifact'") : null;
+  const deleteFtsArtifactStmt = ftsAvailable ? db.prepare("DELETE FROM hc_fts WHERE project = ? AND entity_type = 'artifact' AND entity_id = ?") : null;
+  const insertFtsStmt = ftsAvailable ? db.prepare("INSERT INTO hc_fts(project, entity_type, entity_id, title, body) VALUES(?, ?, ?, ?, ?)") : null;
+  function reindexTreeFts(project, tree) {
+    if (!ftsAvailable || !deleteFtsProjectStmt || !insertFtsStmt) return;
+    deleteFtsProjectStmt.run(project);
+    for (const g of tree.goals) {
+      insertFtsStmt.run(project, "goal", g.key, `${g.key} ${g.title}`, `${g.brief} ${(g.tags ?? []).join(" ")}`);
+    }
+    for (const o of tree.outcomes) {
+      const critText = o.criteria.map((c) => `${c.id} given ${c.given} when ${c.when} then ${c.then}`).join("\n");
+      insertFtsStmt.run(
+        project,
+        "outcome",
+        o.key,
+        `${o.key} ${o.title}`,
+        `${o.story}
+${critText}
+${(o.tags ?? []).join(" ")} ${o.availabilityReason ?? ""}`
+      );
+    }
+    for (const p of tree.plans) {
+      insertFtsStmt.run(project, "plan", `${p.key}@v${p.version}`, `${p.key} plan v${p.version}`, p.body);
+    }
+    for (const e of tree.evidence) {
+      insertFtsStmt.run(project, "evidence", e.id, `${e.key} ${e.kind} ${e.source}`, e.text);
+    }
+    for (const c of tree.comments) {
+      insertFtsStmt.run(
+        project,
+        "comment",
+        c.id,
+        `${c.key} comment`,
+        `${c.text} ${c.options.join(" ")} ${c.answer ?? ""}`
+      );
+    }
+    for (const f of tree.flows) {
+      const fBody = f.frames.map((fr) => `${fr.title} ${fr.key} ${fr.criterionId} ${fr.notes ?? ""} ${fr.pins.map((p) => p.text).join(" ")}`).join("\n");
+      insertFtsStmt.run(project, "flow", f.name, `${f.folder ? `${f.folder} / ` : ""}${f.name}`, fBody);
+    }
+  }
+  function reindexArtifactFts(project, art) {
+    if (!ftsAvailable || !deleteFtsArtifactStmt || !insertFtsStmt) return;
+    deleteFtsArtifactStmt.run(project, art.id);
+    insertFtsStmt.run(project, "artifact", art.id, `${art.folder} / ${art.title}`, `${art.body}
+${art.citations.join(" ")}`);
+  }
   const userVersion = db.prepare("PRAGMA user_version").get()?.user_version ?? 0;
-  if (userVersion < 1) {
+  if (userVersion < 2) {
     runInImmediateTx(() => {
       const currentVersion = db.prepare("PRAGMA user_version").get()?.user_version ?? 0;
-      if (currentVersion >= 1) return;
+      if (currentVersion >= 2) return;
       const rows = db.prepare("SELECT project, body FROM hc_trees").all();
       const stamp2 = (/* @__PURE__ */ new Date()).toISOString();
       for (const row of rows) {
@@ -22398,8 +23276,9 @@ function createRepository(db) {
           meta3.hasRepo ? 1 : 0,
           meta3.updated
         );
+        reindexTreeFts(row.project, tree);
       }
-      db.exec("PRAGMA user_version = 1;");
+      db.exec("PRAGMA user_version = 2;");
     });
   } else {
     const missingCount = db.prepare("SELECT COUNT(*) AS cnt FROM hc_trees t LEFT JOIN hc_tree_meta m ON m.project = t.project WHERE m.project IS NULL").get()?.cnt ?? 0;
@@ -22423,6 +23302,7 @@ function createRepository(db) {
             meta3.hasRepo ? 1 : 0,
             meta3.updated
           );
+          reindexTreeFts(row.project, tree);
         }
       });
     }
@@ -22448,6 +23328,7 @@ function createRepository(db) {
       if (bodyChanged || !metaExists) {
         if (bodyChanged) {
           writeStmt.run(project, nextBody);
+          reindexTreeFts(project, tree);
         }
         const meta3 = computeTreeMeta(project, tree);
         upsertMetaStmt.run(
@@ -22463,24 +23344,45 @@ function createRepository(db) {
       return result;
     });
   }
-  function act(project, action) {
+  const mutationListeners = /* @__PURE__ */ new Set();
+  function onMutation(listener) {
+    mutationListeners.add(listener);
+    return () => mutationListeners.delete(listener);
+  }
+  function emitMutation(event) {
+    for (const listener of mutationListeners) {
+      try {
+        listener(event);
+      } catch {
+      }
+    }
+  }
+  function act(project, action, meta3) {
+    const before = mutationListeners.size > 0 ? view(project) : null;
     modify(project, (tree) => {
       const now = (/* @__PURE__ */ new Date()).toISOString();
       const core = coreActions.safeParse(action);
-      if (core.success) applyCore(tree, core.data, now);
-      else applyPlanning(tree, planningActions.parse(action), now);
+      if (core.success) applyCore(tree, core.data, now, meta3);
+      else applyPlanning(tree, planningActions.parse(action), now, meta3);
     });
+    if (before && mutationListeners.size > 0) {
+      emitMutation({ project, actions: [action], meta: meta3, before, after: view(project) });
+    }
   }
-  function actBatch(project, actions) {
+  function actBatch(project, actions, meta3) {
     if (actions.length === 0) return;
+    const before = mutationListeners.size > 0 ? view(project) : null;
     modify(project, (tree) => {
       const now = (/* @__PURE__ */ new Date()).toISOString();
       for (const action of actions) {
         const core = coreActions.safeParse(action);
-        if (core.success) applyCore(tree, core.data, now);
-        else applyPlanning(tree, planningActions.parse(action), now);
+        if (core.success) applyCore(tree, core.data, now, meta3);
+        else applyPlanning(tree, planningActions.parse(action), now, meta3);
       }
     });
+    if (before && mutationListeners.size > 0) {
+      emitMutation({ project, actions, meta: meta3, before, after: view(project) });
+    }
   }
   function applyEvidenceBatch(project, actions) {
     modify(project, (tree) => {
@@ -22530,7 +23432,7 @@ function createRepository(db) {
         byId.set(id, { id, name: id, directory: null, source: "tree" });
       }
     }
-    return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
+    return [...byId.values()].sort((a, b2) => a.name.localeCompare(b2.name));
   }
   function getProject(idOrDir) {
     const all = listProjects();
@@ -22583,6 +23485,367 @@ function createRepository(db) {
       updated: row.updated
     }));
   }
+  const getSettingStmt = db.prepare("SELECT value FROM hc_project_settings WHERE project = ? AND key = ?");
+  const setSettingStmt = db.prepare(
+    "INSERT INTO hc_project_settings(project, key, value, updated) VALUES(?, ?, ?, ?) ON CONFLICT(project, key) DO UPDATE SET value = excluded.value, updated = excluded.updated"
+  );
+  function getSetting(project, key2) {
+    const row = getSettingStmt.get(project, key2);
+    return row ? row.value : null;
+  }
+  function setSetting(project, key2, value) {
+    setSettingStmt.run(project, key2, value, (/* @__PURE__ */ new Date()).toISOString());
+  }
+  function slugId(prefix, name) {
+    const base = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48);
+    return `${prefix}_${base || "item"}_${Date.now().toString(36).slice(-4)}`;
+  }
+  function listViews(project) {
+    const rows = db.prepare("SELECT id, name, filter_json, created, updated FROM hc_views WHERE project = ? ORDER BY updated DESC").all(project);
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      filter: JSON.parse(r.filter_json),
+      created: r.created,
+      updated: r.updated
+    }));
+  }
+  function saveView(project, input2) {
+    const name = input2.name.trim();
+    if (!name) throw new Error("Saved view name must be non-empty");
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const id = input2.id?.trim() || slugId("vw", name);
+    const existing = db.prepare("SELECT created FROM hc_views WHERE project = ? AND id = ?").get(project, id);
+    const created = existing?.created ?? now;
+    db.prepare(
+      `INSERT INTO hc_views(project, id, name, filter_json, created, updated) VALUES(?, ?, ?, ?, ?, ?)
+       ON CONFLICT(project, id) DO UPDATE SET name = excluded.name, filter_json = excluded.filter_json, updated = excluded.updated`
+    ).run(project, id, name, JSON.stringify(input2.filter ?? {}), created, now);
+    return { id, name, filter: input2.filter ?? {}, created, updated: now };
+  }
+  function deleteView(project, id) {
+    const res = db.prepare("DELETE FROM hc_views WHERE project = ? AND id = ?").run(project, id);
+    return Number(res.changes ?? 0) > 0;
+  }
+  function listScopes(project) {
+    const rows = db.prepare(
+      "SELECT id, name, owner, release_name, goal_keys_json, tags_json, active, created, updated FROM hc_scopes WHERE project = ? ORDER BY active DESC, updated DESC"
+    ).all(project);
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      owner: r.owner,
+      releaseName: r.release_name,
+      goalKeys: JSON.parse(r.goal_keys_json),
+      tags: JSON.parse(r.tags_json),
+      active: r.active !== 0,
+      created: r.created,
+      updated: r.updated
+    }));
+  }
+  function saveScope(project, input2) {
+    const name = input2.name.trim();
+    if (!name) throw new Error("Focus scope name must be non-empty");
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const id = input2.id?.trim() || slugId("sc", name);
+    const existing = db.prepare("SELECT created FROM hc_scopes WHERE project = ? AND id = ?").get(project, id);
+    const created = existing?.created ?? now;
+    const active = Boolean(input2.active);
+    runInImmediateTx(() => {
+      if (active) {
+        db.prepare("UPDATE hc_scopes SET active = 0 WHERE project = ?").run(project);
+      }
+      db.prepare(
+        `INSERT INTO hc_scopes(project, id, name, owner, release_name, goal_keys_json, tags_json, active, created, updated)
+         VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(project, id) DO UPDATE SET
+           name = excluded.name,
+           owner = excluded.owner,
+           release_name = excluded.release_name,
+           goal_keys_json = excluded.goal_keys_json,
+           tags_json = excluded.tags_json,
+           active = excluded.active,
+           updated = excluded.updated`
+      ).run(
+        project,
+        id,
+        name,
+        input2.owner?.trim() || null,
+        input2.releaseName?.trim() || null,
+        JSON.stringify(input2.goalKeys ?? []),
+        JSON.stringify(input2.tags ?? []),
+        active ? 1 : 0,
+        created,
+        now
+      );
+    });
+    return {
+      id,
+      name,
+      owner: input2.owner?.trim() || null,
+      releaseName: input2.releaseName?.trim() || null,
+      goalKeys: input2.goalKeys ?? [],
+      tags: input2.tags ?? [],
+      active,
+      created,
+      updated: now
+    };
+  }
+  function deleteScope(project, id) {
+    const res = db.prepare("DELETE FROM hc_scopes WHERE project = ? AND id = ?").run(project, id);
+    return Number(res.changes ?? 0) > 0;
+  }
+  function resolveScopeOutcomeKeys(project, scopeRef, snap) {
+    const treeSnap = snap ?? view(project);
+    const scopes = listScopes(project);
+    let chosen;
+    if (scopeRef && scopeRef.trim() !== "") {
+      const wanted = scopeRef.trim();
+      chosen = scopes.find((s2) => s2.id === wanted || s2.name.toLowerCase() === wanted.toLowerCase());
+      if (!chosen) {
+        const byRelease = treeSnap.releases.find((r) => r.name.toLowerCase() === wanted.toLowerCase());
+        if (byRelease) return new Set(byRelease.keys);
+        if (treeSnap.goals.some((g) => g.key === wanted)) {
+          return new Set(
+            treeSnap.ranked.filter((r) => r.ancestors.some((g) => g.key === wanted)).map((r) => r.key)
+          );
+        }
+        const tagName = wanted.startsWith("tag:") ? wanted.slice(4) : wanted;
+        const tagged = treeSnap.ranked.filter((r) => (r.tags ?? []).includes(tagName)).map((r) => r.key);
+        if (tagged.length > 0) return new Set(tagged);
+        return /* @__PURE__ */ new Set();
+      }
+    } else {
+      return null;
+    }
+    const allowed = /* @__PURE__ */ new Set();
+    if (chosen.releaseName) {
+      for (const rel of treeSnap.releases) {
+        if (rel.name === chosen.releaseName) rel.keys.forEach((k) => allowed.add(k));
+      }
+    }
+    if (chosen.goalKeys.length > 0) {
+      const gSet = new Set(chosen.goalKeys);
+      for (const r of treeSnap.ranked) {
+        if (r.ancestors.some((g) => gSet.has(g.key))) allowed.add(r.key);
+      }
+    }
+    if (chosen.tags.length > 0) {
+      const tSet = new Set(chosen.tags);
+      for (const r of treeSnap.ranked) {
+        if ((r.tags ?? []).some((t) => tSet.has(t))) allowed.add(r.key);
+      }
+    }
+    return allowed;
+  }
+  function rowToArtifact(r) {
+    return {
+      id: r.id,
+      folder: r.folder,
+      title: r.title,
+      template: r.template,
+      body: r.body,
+      locked: r.locked !== 0,
+      version: r.version,
+      history: JSON.parse(r.history_json),
+      citations: JSON.parse(r.citations_json),
+      actor: r.actor,
+      created: r.created,
+      updated: r.updated
+    };
+  }
+  function listArtifacts(project, folder) {
+    const rows = folder ? db.prepare("SELECT * FROM hc_artifacts WHERE project = ? AND folder = ? ORDER BY updated DESC").all(project, folder) : db.prepare("SELECT * FROM hc_artifacts WHERE project = ? ORDER BY updated DESC").all(project);
+    return rows.map(rowToArtifact);
+  }
+  function getArtifact(project, id) {
+    const row = db.prepare("SELECT * FROM hc_artifacts WHERE project = ? AND id = ?").get(project, id);
+    return row ? rowToArtifact(row) : null;
+  }
+  function saveArtifact(project, input2) {
+    const title = redactSecrets(input2.title.trim());
+    if (!title) throw new Error("Artifact title must be non-empty");
+    const body = redactSecrets(input2.body);
+    const folder = (input2.folder?.trim() || "General").slice(0, 80);
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const id = input2.id?.trim() || slugId("art", title);
+    const existing = getArtifact(project, id);
+    if (existing?.locked && input2.locked !== false) {
+      throw new Error(`Artifact "${existing.title}" (${id}) is locked; unlock it before editing.`);
+    }
+    const history = existing ? [...existing.history] : [];
+    let version2 = existing ? existing.version : 1;
+    if (existing && (existing.body !== body || existing.title !== title)) {
+      history.push({
+        version: existing.version,
+        title: existing.title,
+        body: existing.body,
+        actor: existing.actor,
+        at: existing.updated
+      });
+      version2 = existing.version + 1;
+    }
+    const locked = input2.locked ?? existing?.locked ?? false;
+    const citations = [...new Set(input2.citations ?? existing?.citations ?? [])];
+    const record3 = {
+      id,
+      folder,
+      title,
+      template: input2.template ?? existing?.template ?? null,
+      body,
+      locked,
+      version: version2,
+      history,
+      citations,
+      actor: input2.actor ?? existing?.actor ?? null,
+      created: existing?.created ?? now,
+      updated: now
+    };
+    runInImmediateTx(() => {
+      db.prepare(
+        `INSERT INTO hc_artifacts(project, id, folder, title, template, body, locked, version, history_json, citations_json, actor, created, updated)
+         VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(project, id) DO UPDATE SET
+           folder = excluded.folder,
+           title = excluded.title,
+           template = excluded.template,
+           body = excluded.body,
+           locked = excluded.locked,
+           version = excluded.version,
+           history_json = excluded.history_json,
+           citations_json = excluded.citations_json,
+           actor = excluded.actor,
+           updated = excluded.updated`
+      ).run(
+        project,
+        record3.id,
+        record3.folder,
+        record3.title,
+        record3.template,
+        record3.body,
+        record3.locked ? 1 : 0,
+        record3.version,
+        JSON.stringify(record3.history),
+        JSON.stringify(record3.citations),
+        record3.actor,
+        record3.created,
+        record3.updated
+      );
+      reindexArtifactFts(project, record3);
+    });
+    return record3;
+  }
+  function deleteArtifact(project, id) {
+    const existing = getArtifact(project, id);
+    if (existing?.locked) throw new Error(`Artifact "${id}" is locked; unlock it first.`);
+    const res = db.prepare("DELETE FROM hc_artifacts WHERE project = ? AND id = ?").run(project, id);
+    if (ftsAvailable && deleteFtsArtifactStmt) {
+      deleteFtsArtifactStmt.run(project, id);
+    }
+    return Number(res.changes ?? 0) > 0;
+  }
+  function listHooks(project) {
+    const rows = db.prepare("SELECT * FROM hc_hooks WHERE project = ? ORDER BY updated DESC").all(project);
+    return rows.map((r) => ({
+      id: r.id,
+      event: r.event,
+      targetType: r.target_type,
+      target: r.target,
+      enabled: r.enabled !== 0,
+      secret: r.secret,
+      created: r.created,
+      updated: r.updated
+    }));
+  }
+  function saveHook(project, input2) {
+    const target = input2.target.trim();
+    if (!target) throw new Error("Hook target must be non-empty");
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const id = input2.id?.trim() || slugId("hk", `${input2.event}-${input2.targetType}`);
+    const existing = db.prepare("SELECT created FROM hc_hooks WHERE project = ? AND id = ?").get(project, id);
+    const created = existing?.created ?? now;
+    const enabled = input2.enabled ?? true;
+    db.prepare(
+      `INSERT INTO hc_hooks(project, id, event, target_type, target, enabled, secret, created, updated)
+       VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(project, id) DO UPDATE SET
+         event = excluded.event,
+         target_type = excluded.target_type,
+         target = excluded.target,
+         enabled = excluded.enabled,
+         secret = excluded.secret,
+         updated = excluded.updated`
+    ).run(project, id, input2.event, input2.targetType, target, enabled ? 1 : 0, input2.secret ?? null, created, now);
+    return { id, event: input2.event, targetType: input2.targetType, target, enabled, secret: input2.secret ?? null, created, updated: now };
+  }
+  function deleteHook(project, id) {
+    const res = db.prepare("DELETE FROM hc_hooks WHERE project = ? AND id = ?").run(project, id);
+    return Number(res.changes ?? 0) > 0;
+  }
+  function sanitizeFtsQuery(raw) {
+    const terms = raw.trim().split(/\s+/).map((t) => t.replace(/["'*():^]/g, "").trim()).filter((t) => t.length > 0);
+    if (terms.length === 0) return "";
+    return terms.map((t) => `"${t}"*`).join(" AND ");
+  }
+  function search(project, query, opts) {
+    const q = query.trim();
+    const limit = Math.min(Math.max(opts?.limit ?? 30, 1), 100);
+    if (!q) return [];
+    const typeFilter = opts?.types && opts.types.length > 0 ? new Set(opts.types) : null;
+    if (ftsAvailable) {
+      const ftsQuery = sanitizeFtsQuery(q);
+      if (ftsQuery) {
+        try {
+          const sql = project ? `SELECT project, entity_type, entity_id, title, snippet(hc_fts, 4, '[', ']', '\u2026', 20) AS snippet, bm25(hc_fts) AS score
+               FROM hc_fts WHERE project = ? AND hc_fts MATCH ? ORDER BY score LIMIT ?` : `SELECT project, entity_type, entity_id, title, snippet(hc_fts, 4, '[', ']', '\u2026', 20) AS snippet, bm25(hc_fts) AS score
+               FROM hc_fts WHERE hc_fts MATCH ? ORDER BY score LIMIT ?`;
+          const rows = project ? db.prepare(sql).all(project, ftsQuery, limit * 2) : db.prepare(sql).all(ftsQuery, limit * 2);
+          const filtered = rows.filter((r) => !typeFilter || typeFilter.has(r.entity_type)).slice(0, limit).map((r) => ({
+            project: r.project,
+            entityType: r.entity_type,
+            entityId: r.entity_id,
+            title: r.title,
+            snippet: r.snippet || r.title,
+            rank: Number.isFinite(r.score) ? Number(r.score.toFixed(4)) : 0
+          }));
+          if (filtered.length > 0) return filtered;
+        } catch {
+        }
+      }
+    }
+    const needle = q.toLowerCase();
+    const pids = project ? [project] : treeProjects();
+    const hits = [];
+    const pushIf = (p, type, id, title, body) => {
+      if (typeFilter && !typeFilter.has(type)) return;
+      const hay = `${title}
+${body}`.toLowerCase();
+      const idx = hay.indexOf(needle);
+      if (idx === -1) return;
+      const start = Math.max(0, idx - 40);
+      hits.push({
+        project: p,
+        entityType: type,
+        entityId: id,
+        title,
+        snippet: body.slice(start, start + 140).trim() || title,
+        rank: idx
+      });
+    };
+    for (const p of pids) {
+      const t = read2(p);
+      for (const g of t.goals) pushIf(p, "goal", g.key, `${g.key} ${g.title}`, `${g.brief} ${(g.tags ?? []).join(" ")}`);
+      for (const o of t.outcomes) {
+        pushIf(p, "outcome", o.key, `${o.key} ${o.title}`, `${o.story} ${o.criteria.map((c) => `${c.given} ${c.when} ${c.then}`).join(" ")}`);
+      }
+      for (const pl of t.plans) pushIf(p, "plan", `${pl.key}@v${pl.version}`, `${pl.key} plan v${pl.version}`, pl.body);
+      for (const ev of t.evidence) pushIf(p, "evidence", ev.id, `${ev.key} ${ev.kind}`, `${ev.source} ${ev.text}`);
+      for (const cm of t.comments) pushIf(p, "comment", cm.id, `${cm.key} comment`, `${cm.text} ${cm.answer ?? ""}`);
+      for (const fl of t.flows) pushIf(p, "flow", fl.name, fl.name, fl.frames.map((fr) => `${fr.title} ${fr.notes ?? ""}`).join(" "));
+      for (const art of listArtifacts(p)) pushIf(p, "artifact", art.id, art.title, art.body);
+    }
+    return hits.slice(0, limit);
+  }
   function checkpointWal() {
     try {
       db.exec("PRAGMA wal_checkpoint(TRUNCATE);");
@@ -22602,6 +23865,7 @@ function createRepository(db) {
     modify,
     act,
     actBatch,
+    onMutation,
     applyEvidenceBatch,
     projects: treeProjects,
     listProjects,
@@ -22611,6 +23875,23 @@ function createRepository(db) {
     view,
     inboxCountTotal,
     projectSummaries,
+    getSetting,
+    setSetting,
+    listViews,
+    saveView,
+    deleteView,
+    listScopes,
+    saveScope,
+    deleteScope,
+    resolveScopeOutcomeKeys,
+    listArtifacts,
+    getArtifact,
+    saveArtifact,
+    deleteArtifact,
+    listHooks,
+    saveHook,
+    deleteHook,
+    search,
     checkpointWal,
     close
   };
@@ -22624,6 +23905,7 @@ import { basename as basename3, dirname as dirname4, isAbsolute as isAbsolute2, 
 // src/repo-ops.ts
 import { existsSync, mkdirSync as mkdirSync2, readdirSync as readdirSync3, readFileSync as readFileSync3, realpathSync, statSync as statSync2, writeFileSync } from "node:fs";
 import { basename as basename2, dirname as dirname2, join as join3, resolve as resolve2, sep } from "node:path";
+import { homedir as homedir2 } from "node:os";
 
 // src/errors.ts
 var HillClimbError = class extends Error {
@@ -22713,7 +23995,7 @@ function bundledKitFiles() {
   const root = join2(cachedRoot, "..", "kits");
   function collect(relative2) {
     const entries = readdirSync2(join2(root, relative2), { withFileTypes: true });
-    return entries.sort((a, b) => a.name.localeCompare(b.name)).flatMap((entry) => {
+    return entries.sort((a, b2) => a.name.localeCompare(b2.name)).flatMap((entry) => {
       const path = relative2 ? relative2 + "/" + entry.name : entry.name;
       if (entry.isDirectory() && entry.name !== "__pycache__") return collect(path);
       if (!entry.isFile() || entry.name.startsWith(".") || !/\.(py|md|json|jsonl)$/.test(entry.name)) return [];
@@ -23022,7 +24304,158 @@ function getClimbVerdict(repoPath, name) {
   const line = verdictLine(summary);
   return line === "" ? "CLIMBING" : line;
 }
+function statMtimeMs(path) {
+  try {
+    return statSync2(path).mtimeMs;
+  } catch {
+    return 0;
+  }
+}
+function statSignature(path) {
+  try {
+    const st = statSync2(path);
+    return { mtimeMs: st.mtimeMs, size: st.size };
+  } catch {
+    return null;
+  }
+}
+function isEnoent(error62) {
+  return error62?.code === "ENOENT";
+}
+function collectSampleFiles(dir, limit = 200) {
+  let count = 0;
+  let maxMtimeMs = statMtimeMs(dir);
+  const samples = [];
+  const stack = [{ full: dir, rel: "" }];
+  while (stack.length > 0 && count < limit) {
+    const cur = stack.pop();
+    let entries;
+    try {
+      entries = readdirSync3(cur.full, { withFileTypes: true }).sort((a, b2) => a.name.localeCompare(b2.name));
+    } catch {
+      continue;
+    }
+    for (const e of entries) {
+      if (count >= limit) break;
+      const rel = cur.rel ? `${cur.rel}/${e.name}` : e.name;
+      const fullPath = join3(cur.full, e.name);
+      if (e.isDirectory()) {
+        if (e.name !== "__pycache__") stack.push({ full: fullPath, rel });
+      } else if (e.isFile()) {
+        count += 1;
+        if (samples.length < 8) samples.push(rel);
+        const mtime = statMtimeMs(fullPath);
+        if (mtime > maxMtimeMs) maxMtimeMs = mtime;
+      }
+    }
+  }
+  return { count, samples, maxMtimeMs };
+}
+function classifyOrigin(dir, isMain) {
+  const norm = dir.replaceAll("\\", "/");
+  const base = basename2(dir);
+  if (isMain) return { origin: "checkout", workerLabel: "main checkout" };
+  if (norm.includes("/.gemini/antigravity/worktrees/")) {
+    const cleaned = base.replace(/^swarm-/, "").replace(/-[0-9a-f]{6,10}$/i, "");
+    return { origin: "antigravity", workerLabel: cleaned || base };
+  }
+  if (/\/\.[^/]+\/.*(?:worktree|storage|cache|plugins)/i.test(norm)) {
+    return { origin: "archived", workerLabel: base };
+  }
+  return { origin: "checkout", workerLabel: base };
+}
+function latestMtimeIso(dir) {
+  try {
+    return statSync2(dir).mtime.toISOString();
+  } catch {
+    return null;
+  }
+}
+function readWorktreeBranch(dir) {
+  try {
+    const dotGit = join3(dir, ".git");
+    let headPath = join3(dotGit, "HEAD");
+    if (!existsSync(headPath) && existsSync(dotGit)) {
+      const pointer = readFileSync3(dotGit, "utf8");
+      const m = /^gitdir:\s*(.+)$/m.exec(pointer);
+      if (m?.[1]) headPath = join3(resolvePath(dir, m[1].trim()), "HEAD");
+    }
+    if (!existsSync(headPath)) return null;
+    const head = readFileSync3(headPath, "utf8").trim();
+    const ref = /^ref:\s*refs\/heads\/(.+)$/.exec(head);
+    return ref?.[1] ?? head.slice(0, 10);
+  } catch {
+    return null;
+  }
+}
+function linkedWorktreesOf(repoPath, warnings) {
+  const seen = /* @__PURE__ */ new Set();
+  const normalizedMain = resolve2(repoPath);
+  const expectedGitDir = join3(normalizedMain, ".git").replaceAll("\\", "/");
+  const add = (candidate) => {
+    const abs = resolve2(candidate);
+    if (abs === normalizedMain || seen.has(abs)) return;
+    if (existsSync(abs)) seen.add(abs);
+  };
+  const gitWorktreesDir = join3(normalizedMain, ".git", "worktrees");
+  if (existsSync(gitWorktreesDir)) {
+    try {
+      for (const entry of readdirSync3(gitWorktreesDir, { withFileTypes: true })) {
+        if (!entry.isDirectory()) continue;
+        const gitdirFile = join3(gitWorktreesDir, entry.name, "gitdir");
+        if (!existsSync(gitdirFile)) continue;
+        const targetGitFile = readFileSync3(gitdirFile, "utf8").trim();
+        if (!targetGitFile) continue;
+        const wtDir = dirname2(resolve2(gitWorktreesDir, entry.name, targetGitFile));
+        add(wtDir);
+      }
+    } catch (error62) {
+      if (!isEnoent(error62)) {
+        warnings.push(`Failed to scan git worktrees in ${gitWorktreesDir}: ${error62 instanceof Error ? error62.message : String(error62)}`);
+      }
+    }
+  }
+  const agyWorktreesRoot = join3(homedir2(), ".gemini", "antigravity", "worktrees");
+  if (existsSync(agyWorktreesRoot)) {
+    try {
+      for (const conv of readdirSync3(agyWorktreesRoot, { withFileTypes: true })) {
+        if (!conv.isDirectory()) continue;
+        const convDir = join3(agyWorktreesRoot, conv.name);
+        for (const wt of readdirSync3(convDir, { withFileTypes: true })) {
+          if (!wt.isDirectory()) continue;
+          const wtPath = join3(convDir, wt.name);
+          const absWt = resolve2(wtPath);
+          if (absWt === normalizedMain || seen.has(absWt)) continue;
+          const dotGit = join3(wtPath, ".git");
+          try {
+            const pointer = readFileSync3(dotGit, "utf8").replaceAll("\\", "/");
+            if (pointer.includes(expectedGitDir)) {
+              add(wtPath);
+            }
+          } catch (error62) {
+            const code = error62?.code;
+            if (code !== "ENOENT" && code !== "EISDIR") {
+              warnings.push(`Failed to read worktree pointer ${dotGit}: ${error62 instanceof Error ? error62.message : String(error62)}`);
+            }
+          }
+        }
+      }
+    } catch (error62) {
+      if (!isEnoent(error62)) {
+        warnings.push(`Failed to scan Antigravity worktrees in ${agyWorktreesRoot}: ${error62 instanceof Error ? error62.message : String(error62)}`);
+      }
+    }
+  }
+  return [...seen];
+}
+function conversationIdFromPath(dir) {
+  const norm = dir.replaceAll("\\", "/");
+  const m = /\/\.gemini\/antigravity\/worktrees\/([0-9a-f-]{36})\//i.exec(norm);
+  return m?.[1] ?? null;
+}
+var SCAN_CACHE_TTL_MS = 4e3;
 var LIVE_RECENCY_MS = 15 * 60 * 1e3;
+var CLIMB_STAT_MEMO_MAX = 500;
 var scanCache = /* @__PURE__ */ new Map();
 var climbStatMemo = /* @__PURE__ */ new Map();
 function safeRealpath(path) {
@@ -23106,6 +24539,244 @@ function clearScanCache(repoPath) {
     }
   }
 }
+function scanProjectClimbs(repoPath, opts) {
+  if (!repoPath || !existsSync(repoPath)) {
+    return {
+      projectDirectory: repoPath,
+      engineInstalled: false,
+      worktreesScanned: 0,
+      currentCount: 0,
+      archivedCount: 0,
+      climbs: [],
+      warnings: []
+    };
+  }
+  const normalizedMain = resolve2(repoPath);
+  const bypassCache = Boolean(opts?.bypassCache || opts?.force);
+  const rowLimit = opts?.rowLimit === void 0 ? 50 : Math.max(0, Math.floor(opts.rowLimit));
+  const includeNotes = opts?.includeNotes ?? true;
+  const cacheKey = `${normalizedMain}|${rowLimit}|${includeNotes ? 1 : 0}`;
+  const nowMs = Date.now();
+  if (!bypassCache) {
+    const cached2 = scanCache.get(cacheKey);
+    if (cached2 && nowMs - cached2.at < SCAN_CACHE_TTL_MS) {
+      return cached2.value;
+    }
+  }
+  const warnings = [];
+  const engineInstalled = existsSync(engineFile(normalizedMain, "climb.py"));
+  const worktrees = linkedWorktreesOf(normalizedMain, warnings);
+  const roots = [normalizedMain, ...worktrees];
+  const climbs = [];
+  for (const root of roots) {
+    const isMain = root === normalizedMain;
+    const baseStateDir = stateDir(root);
+    if (!existsSync(baseStateDir)) continue;
+    const found = discoverClimbs(root);
+    if (found.climbs.length === 0 && found.prepared.length === 0) continue;
+    const branch = readWorktreeBranch(root);
+    const worktreeName = basename2(root);
+    const conversationId = conversationIdFromPath(root);
+    const { origin, workerLabel } = classifyOrigin(root, isMain);
+    const parsedEntries = [];
+    for (const dirName of found.climbs) {
+      const climbDir = joinPath(baseStateDir, dirName);
+      try {
+        const cardPath = joinPath(climbDir, "card.json");
+        const logPath = joinPath(climbDir, "log.jsonl");
+        const lastPath = joinPath(climbDir, "last.txt");
+        const cardSig = statSignature(cardPath);
+        if (!cardSig) continue;
+        const logSig = statSignature(logPath);
+        const lastMtimeMs = statMtimeMs(lastPath);
+        const logMtimeMs = logSig?.mtimeMs ?? 0;
+        const logSize = logSig?.size ?? 0;
+        const latestMtimeMs = Math.max(cardSig.mtimeMs, logMtimeMs, lastMtimeMs);
+        const memo2 = !bypassCache ? climbStatMemo.get(climbDir) : void 0;
+        if (memo2 && memo2.cardMtimeMs === cardSig.mtimeMs && memo2.cardSize === cardSig.size && memo2.logMtimeMs === logMtimeMs && memo2.logSize === logSize) {
+          parsedEntries.push({
+            dirName,
+            climbDir,
+            card: memo2.card,
+            rows: memo2.rows,
+            summary: memo2.summary,
+            checks: memo2.checks,
+            latestMtimeMs
+          });
+          continue;
+        }
+        const cardText = readFileSync3(cardPath, "utf8");
+        const card = parseCard(cardText);
+        const logText = logSig ? readFileSync3(logPath, "utf8") : "";
+        const rows = logText === "" ? [] : parseLog(logText);
+        const pendingTree = existsSync(joinPath(climbDir, "pending-tree"));
+        const summary = summarize({ card, rows, notes: null, pendingTree }, 0, nowMs);
+        const checks = Array.isArray(card.check) ? card.check : card.check === void 0 ? [] : [card.check];
+        if (climbStatMemo.size >= CLIMB_STAT_MEMO_MAX) {
+          climbStatMemo.clear();
+        }
+        climbStatMemo.set(climbDir, {
+          cardMtimeMs: cardSig.mtimeMs,
+          cardSize: cardSig.size,
+          logMtimeMs,
+          logSize,
+          card,
+          rows,
+          summary,
+          checks
+        });
+        parsedEntries.push({ dirName, climbDir, card, rows, summary, checks, latestMtimeMs });
+      } catch (error62) {
+        warnings.push(
+          `Failed to read climb ${dirName} in ${root}: ${error62 instanceof Error ? error62.message : String(error62)}`
+        );
+        continue;
+      }
+    }
+    const canonicalNames = new Set(
+      parsedEntries.filter((e) => !e.card.name || e.card.name === e.dirName).map((e) => e.dirName)
+    );
+    const referencedSiblingDirs = /* @__PURE__ */ new Set();
+    const refRegex = /\.hill-climb\/([^/\s"'`]+)/g;
+    for (const entry of parsedEntries) {
+      if (!canonicalNames.has(entry.dirName)) continue;
+      const card = entry.card;
+      const texts = [...entry.checks, ...card.guards ?? [], ...card.lock ?? [], ...card.holdout ? [card.holdout] : []];
+      for (const text3 of texts) {
+        for (const match of text3.matchAll(refRegex)) {
+          const refDir = match[1];
+          if (refDir && refDir !== entry.dirName && refDir !== "engine" && refDir !== "kits" && refDir !== "bridge") {
+            referencedSiblingDirs.add(refDir);
+          }
+        }
+      }
+    }
+    for (const { dirName: name, climbDir, card, rows: allRows, summary, checks, latestMtimeMs } of parsedEntries) {
+      const cardName = card.name?.trim() || name;
+      if (cardName !== name && (canonicalNames.has(cardName) || referencedSiblingDirs.has(name) || allRows.length === 0)) {
+        continue;
+      }
+      const rows = rowLimit === 0 ? [] : allRows.slice(-rowLimit).map((r) => ({
+        kind: r.kind,
+        step: typeof r.step === "number" && Number.isFinite(r.step) ? r.step : null,
+        result: r.result ?? null,
+        score: typeof r.score === "number" ? r.score : null,
+        idea: typeof r.idea === "string" ? redactSecrets(r.idea) : null,
+        why: typeof r.why === "string" ? redactSecrets(r.why) : null,
+        time: r.time ?? null,
+        commit: null
+      }));
+      const rawTargetText = card.target_text ?? null;
+      const targetTextMatches = rawTargetText !== null && (summary.target === null || Number.isFinite(Number(rawTargetText)) && Math.abs(Number(rawTargetText) - summary.target) < 1e-9);
+      const isLive = (summary.verdict === "climbing" || summary.verdict === "plateau") && latestMtimeMs > 0 && nowMs - latestMtimeMs <= LIVE_RECENCY_MS;
+      const rawNotes = includeNotes ? readLocalFile(joinPath(climbDir, "notes.md")).text : null;
+      const notes = rawNotes === null ? null : redactSecrets(rawNotes);
+      const updatedAt = allRows[allRows.length - 1]?.time ?? (latestMtimeMs > 0 ? new Date(latestMtimeMs).toISOString() : latestMtimeIso(climbDir));
+      climbs.push({
+        id: `${root}::${name}`,
+        name,
+        status: "active",
+        origin,
+        isLive,
+        directory: root,
+        worktreeName,
+        workerLabel,
+        isMainCheckout: isMain,
+        conversationId,
+        branch: card.branch ?? branch,
+        goal: typeof card.goal === "string" ? redactSecrets(card.goal) : null,
+        direction: card.direction,
+        baseline: summary.baseline,
+        best: summary.best,
+        target: summary.target,
+        targetText: targetTextMatches ? rawTargetText : null,
+        steps: summary.steps,
+        kept: summary.kept,
+        undone: Math.max(0, summary.steps - summary.kept),
+        sinceGain: summary.sinceGain,
+        verdict: summary.verdict,
+        sparkline: summary.spark,
+        check: checks.map(redactSecrets),
+        guards: (card.guards ?? []).map(redactSecrets),
+        holdout: card.holdout ? redactSecrets(card.holdout) : null,
+        locked: card.lock ?? [],
+        scoreMode: card.score_mode ?? "failure-count",
+        rows,
+        notes,
+        bestCommit: card.best.commit?.trim() || null,
+        preparedFiles: 0,
+        preparedSampleFiles: [],
+        updatedAt
+      });
+    }
+    for (const name of found.prepared) {
+      if (name === "bridge" || referencedSiblingDirs.has(name)) continue;
+      const dir = joinPath(baseStateDir, name);
+      const { count, samples, maxMtimeMs } = collectSampleFiles(dir);
+      const isLive = maxMtimeMs > 0 && nowMs - maxMtimeMs <= LIVE_RECENCY_MS;
+      climbs.push({
+        id: `${root}::${name}`,
+        name,
+        status: "prepared",
+        origin,
+        isLive,
+        directory: root,
+        worktreeName,
+        workerLabel,
+        isMainCheckout: isMain,
+        conversationId,
+        branch,
+        goal: null,
+        direction: null,
+        baseline: null,
+        best: null,
+        target: null,
+        targetText: null,
+        steps: 0,
+        kept: 0,
+        undone: 0,
+        sinceGain: 0,
+        verdict: "preparing",
+        sparkline: "",
+        check: [],
+        guards: [],
+        holdout: null,
+        locked: [],
+        scoreMode: null,
+        rows: [],
+        notes: null,
+        bestCommit: null,
+        preparedFiles: count,
+        preparedSampleFiles: samples,
+        updatedAt: maxMtimeMs > 0 ? new Date(maxMtimeMs).toISOString() : latestMtimeIso(dir)
+      });
+    }
+  }
+  const timeMs2 = (v) => {
+    if (!v) return 0;
+    const ms = Date.parse(v.includes("T") ? v : v.replace(" ", "T"));
+    return Number.isFinite(ms) ? ms : 0;
+  };
+  const originRank = (o) => o === "antigravity" ? 0 : o === "checkout" ? 1 : 2;
+  climbs.sort((a, b2) => {
+    if (originRank(a.origin) !== originRank(b2.origin)) return originRank(a.origin) - originRank(b2.origin);
+    if (a.isLive !== b2.isLive) return a.isLive ? -1 : 1;
+    return timeMs2(b2.updatedAt) - timeMs2(a.updatedAt) || a.name.localeCompare(b2.name);
+  });
+  const currentCount = climbs.filter((c) => c.origin !== "archived" || c.isLive).length;
+  const archivedCount = climbs.length - currentCount;
+  const result = {
+    projectDirectory: normalizedMain,
+    engineInstalled,
+    worktreesScanned: worktrees.length,
+    currentCount,
+    archivedCount,
+    climbs,
+    warnings
+  };
+  scanCache.set(cacheKey, { at: Date.now(), value: result });
+  return result;
+}
 
 // src/search-bridge.ts
 import { createHash } from "node:crypto";
@@ -23162,7 +24833,7 @@ function digestFor(outcome2, engine, criterionIds2, rig) {
 function canonical(value) {
   if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
-  const entries = Object.entries(value).filter(([, item]) => item !== void 0).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
+  const entries = Object.entries(value).filter(([, item]) => item !== void 0).sort(([a], [b2]) => a < b2 ? -1 : a > b2 ? 1 : 0);
   return `{${entries.map(([key2, item]) => `${JSON.stringify(key2)}:${canonical(item)}`).join(",")}}`;
 }
 function criterionIdsFor(outcome2, requested) {
@@ -23206,7 +24877,7 @@ function yamlScalar(value) {
 }
 function median(values) {
   if (values.length === 0) return null;
-  const sorted = [...values].sort((a, b) => a - b);
+  const sorted = [...values].sort((a, b2) => a - b2);
   const middle = Math.floor(sorted.length / 2);
   return sorted.length % 2 === 1 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
 }
@@ -23884,7 +25555,7 @@ async function findMarker(files, root, input2) {
     matches.push(marker);
   }
   if (matches.length === 0) return null;
-  matches.sort((a, b) => a.at < b.at ? 1 : a.at > b.at ? -1 : 0);
+  matches.sort((a, b2) => a.at < b2.at ? 1 : a.at > b2.at ? -1 : 0);
   return matches[0] ?? null;
 }
 function staleness(marker, input2) {
@@ -24055,7 +25726,7 @@ async function readSearch(files, root, marker) {
       reason: `runs/ has no run.yaml whose name is ${marker.runId} (checked ${direct.length} direct entr${direct.length === 1 ? "y" : "ies"})`
     };
   }
-  named.sort((a, b) => a.started === b.started ? a.name < b.name ? 1 : -1 : a.started < b.started ? 1 : -1);
+  named.sort((a, b2) => a.started === b2.started ? a.name < b2.name ? 1 : -1 : a.started < b2.started ? 1 : -1);
   const run = named[0];
   const runName = run.name;
   const picked = await pickSearch(files, run.path, rig);
@@ -24084,7 +25755,7 @@ async function readSearch(files, root, marker) {
   }));
   const baseline = records.find((candidate) => candidate.operator === "baseline" || candidate.operator === "seed");
   const bestRef = object2(status?.best);
-  const bestCandidate = records.find((candidate) => candidate.best) ?? records.filter((candidate) => candidate.val !== null).sort((a, b) => rig.higherIsBetter ? (b.val ?? 0) - (a.val ?? 0) : (a.val ?? 0) - (b.val ?? 0))[0];
+  const bestCandidate = records.find((candidate) => candidate.best) ?? records.filter((candidate) => candidate.val !== null).sort((a, b2) => rig.higherIsBetter ? (b2.val ?? 0) - (a.val ?? 0) : (a.val ?? 0) - (b2.val ?? 0))[0];
   const best = finite(bestRef?.val_score) ?? bestCandidate?.val ?? null;
   const selectedRef = object2(status?.selected);
   const selectedId = typeof selectedRef?.candidate_id === "string" ? selectedRef.candidate_id : bestCandidate?.id;
@@ -24206,13 +25877,13 @@ async function pickSearch(files, runPath, rig) {
   const pool = forProblem;
   const climberName = rig.climber?.name;
   const sameClimber = climberName === void 0 ? pool : pool.filter((entry) => entry.meta.climber === climberName);
-  const order = (a, b) => {
-    if (a.startedAt !== b.startedAt) {
+  const order = (a, b2) => {
+    if (a.startedAt !== b2.startedAt) {
       if (a.startedAt === "") return 1;
-      if (b.startedAt === "") return -1;
-      return a.startedAt < b.startedAt ? -1 : 1;
+      if (b2.startedAt === "") return -1;
+      return a.startedAt < b2.startedAt ? -1 : 1;
     }
-    return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
+    return a.name < b2.name ? -1 : a.name > b2.name ? 1 : 0;
   };
   const candidates2 = sameClimber.slice().sort(order);
   return { chosen: candidates2[0] ?? null, count: pool.length };
@@ -24245,7 +25916,7 @@ function eliteCells(records, higherIsBetter) {
     seen.score = betterScore(seen.score, record3.parentFitness, higherIsBetter);
     if (seen.score === record3.parentFitness && record3.parent !== null) seen.parent = record3.parent;
   }
-  return [...cells.values()].sort((a, b) => a.island - b.island || (a.bins[0] ?? 0) - (b.bins[0] ?? 0) || (a.bins[1] ?? 0) - (b.bins[1] ?? 0));
+  return [...cells.values()].sort((a, b2) => a.island - b2.island || (a.bins[0] ?? 0) - (b2.bins[0] ?? 0) || (a.bins[1] ?? 0) - (b2.bins[1] ?? 0));
 }
 function betterScore(current, candidate, higherIsBetter) {
   if (candidate === null) return current;
@@ -26029,8 +27700,8 @@ function stem(word2) {
   const base = word2.length > 4 && word2.endsWith("s") ? word2.slice(0, -1) : word2;
   return base.length >= 5 ? base.slice(0, 5) : base;
 }
-function overlap(a, b) {
-  const right = new Set(words(b).map(stem));
+function overlap(a, b2) {
+  const right = new Set(words(b2).map(stem));
   const seen = /* @__PURE__ */ new Set();
   const shared = [];
   for (const word2 of words(a)) {
@@ -26612,12 +28283,18 @@ function lintTree(input2, now = /* @__PURE__ */ new Date()) {
 // src/mirror.ts
 import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { basename as basename4, dirname as dirname5, join as join6 } from "node:path";
-async function writeMirror(directory, tree) {
+function safeFileSlug(name) {
+  return name.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "item";
+}
+async function writeMirror(directory, tree, opts) {
   const entries = [];
   const expectedByDir = /* @__PURE__ */ new Map([
     ["goals", /* @__PURE__ */ new Set()],
     ["outcomes", /* @__PURE__ */ new Set()],
-    ["plans", /* @__PURE__ */ new Set()]
+    ["plans", /* @__PURE__ */ new Set()],
+    ["flows", /* @__PURE__ */ new Set()],
+    ["reports", /* @__PURE__ */ new Set()],
+    ["climbs", /* @__PURE__ */ new Set()]
   ]);
   const track2 = (file2) => {
     const slash = file2.indexOf("/");
@@ -26635,17 +28312,19 @@ async function writeMirror(directory, tree) {
       "",
       g.brief,
       "",
+      ...g.tags && g.tags.length > 0 ? ["Tags: " + g.tags.join(", "), ""] : [],
       "Parent: " + (g.parentGoalKey ?? "Charter")
     ]);
   }
   for (const r of tree.ranked) {
     const o = tree.outcomes.find((item) => item.key === r.key);
     add("outcomes/" + o.key + ".md", [
-      "# " + o.title,
+      "# " + (r.sectionNumber ? r.sectionNumber + " " : "") + o.title,
       "",
       o.story,
       "",
-      "Version " + o.version + " \xB7 " + r.signal,
+      "Version " + o.version + " \xB7 " + r.signal + (r.availability && r.availability !== "active" ? " \xB7 " + r.availability : ""),
+      ...r.tags && r.tags.length > 0 ? ["Tags: " + r.tags.join(", ")] : [],
       "",
       ...r.ancestors.map((g) => g.title + " \u2014 " + g.brief),
       "",
@@ -26668,6 +28347,42 @@ async function writeMirror(directory, tree) {
       ]);
     }
   }
+  for (const flow of tree.flows) {
+    const flowLines = [
+      `# ${flow.folder ? `${flow.folder} / ` : ""}${flow.name}`,
+      ...flow.designKit ? ["", `Design Kit: \`${flow.designKit}\``] : [],
+      "",
+      ...flow.frames.flatMap((fr, idx) => [
+        `## Step ${idx + 1}: ${fr.title} (v${fr.version ?? 1})`,
+        `- Outcome: \`${fr.key}\` \xB7 Criterion: \`${fr.criterionId}\` \xB7 Kind: \`${fr.kind ?? "html"}\``,
+        ...fr.imagePath ? [`- Image: \`${fr.imagePath}\``] : [],
+        ...fr.notes ? [`- Notes: ${fr.notes}`] : [],
+        ...fr.driftDetected ? [`- Drift: DETECTED (${fr.driftNote ?? "live differs from approved"})`] : [],
+        ...fr.pins.map(
+          (p) => `  - [${p.resolved ? "x" : " "}]${p.forAgents ? " (for-agents)" : ""} (${Math.round(p.x * 100)}%, ${Math.round(p.y * 100)}%) ${p.text}`
+        ),
+        ""
+      ])
+    ];
+    add(`flows/${safeFileSlug(flow.name)}.md`, flowLines);
+  }
+  for (const art of opts?.artifacts ?? []) {
+    add(`reports/${safeFileSlug(art.id)}.md`, [
+      `<!-- hillclimb-artifact: ${art.id} \xB7 folder: ${art.folder} \xB7 v${art.version}${art.locked ? " \xB7 locked" : ""} -->`,
+      art.body
+    ]);
+  }
+  for (const climb of opts?.scannedClimbs?.climbs ?? []) {
+    const holdoutScore = [...climb.rows].reverse().find((r) => r.kind === "holdout" && typeof r.score === "number")?.score ?? null;
+    add(`climbs/${safeFileSlug(climb.name)}.md`, [
+      `# Climb: ${climb.name}`,
+      "",
+      `- Origin: ${climb.workerLabel} (\`${climb.origin}\`) \xB7 Status: \`${climb.status}\` \xB7 Verdict: \`${climb.verdict}\``,
+      `- Baseline: ${climb.baseline ?? "\u2014"} \xB7 Best: ${climb.best ?? "\u2014"} \xB7 Target: ${climb.target ?? "\u2014"} \xB7 Holdout: ${holdoutScore ?? "\u2014"}`,
+      `- Steps: ${climb.kept}/${climb.steps} kept`,
+      ...climb.notes ? ["", "## Notes", "", climb.notes] : []
+    ]);
+  }
   entries.push(["tree.json", JSON.stringify(tree, null, 2) + "\n"]);
   add("INDEX.md", [
     "# Hill Climb",
@@ -26683,7 +28398,7 @@ async function writeMirror(directory, tree) {
     await writeFile(fullPath, content, "utf8");
   }
   let pruned = 0;
-  for (const subdir of ["outcomes", "plans", "goals"]) {
+  for (const subdir of ["outcomes", "plans", "goals", "flows", "reports", "climbs"]) {
     const expected = expectedByDir.get(subdir);
     const dirPath = join6(root, subdir);
     let dirEntries;
@@ -27064,7 +28779,7 @@ function ingestJunitReport(repo, options) {
     });
   }
   if (frozenAt !== null) {
-    const tagged = results.map((result) => parseTestTag(result.name, { prefixes })).flatMap((tag) => tag !== null && !("error" in tag) ? [tag.key] : []);
+    const tagged = results.map((result) => parseTestTag(result.name, { prefixes })).flatMap((tag2) => tag2 !== null && !("error" in tag2) ? [tag2.key] : []);
     const breaches = frozenBreaches(tree, frozenAt, tagged);
     if (breaches.length > 0) {
       return finishIngest(
@@ -27874,7 +29589,7 @@ function assembleReport(input2) {
     if (!set2.includes(row.repeat)) set2.push(row.repeat);
     repeats[row.experiment] = set2;
   }
-  for (const key2 of Object.keys(repeats)) repeats[key2] = (repeats[key2] ?? []).sort((a, b) => a - b);
+  for (const key2 of Object.keys(repeats)) repeats[key2] = (repeats[key2] ?? []).sort((a, b2) => a - b2);
   const budgetValues = Object.values(budgets);
   const sameBudget = budgetValues.length === 0 ? null : budgetValues.every((value) => value !== null && value === budgetValues[0]);
   const repeatSets = Object.values(repeats);
@@ -28047,9 +29762,9 @@ function renderStudyReport(report) {
     lines.push("| experiment | n | mean | median | spread | wins | min\u2192best | tokens |");
     lines.push("|---|---|---|---|---|---|---|---|");
     for (const stats of summary.experiments) {
-      const tag = stats.control && summary.experiments.length > 1 ? " (control)" : "";
+      const tag2 = stats.control && summary.experiments.length > 1 ? " (control)" : "";
       lines.push(
-        `| ${stats.experiment}${tag} | ${stats.n} | ${fmtNumber(stats.mean)} | ${fmtNumber(stats.median)} | ${fmtNumber(
+        `| ${stats.experiment}${tag2} | ${stats.n} | ${fmtNumber(stats.mean)} | ${fmtNumber(stats.median)} | ${fmtNumber(
           stats.spread,
           3
         )} | ${stats.wins} | ${fmtNumber(stats.minutes_to_best, 3)} | ${fmtTokens(stats.tokens)} |`
@@ -28122,7 +29837,7 @@ function summarizeRows(rows, options = {}) {
   const summaries = [];
   for (const key2 of [...groups.keys()].sort()) {
     const group = [...groups.get(key2) ?? []].sort(
-      (a, b) => a.repeat - b.repeat || a.startedAt.localeCompare(b.startedAt)
+      (a, b2) => a.repeat - b2.repeat || a.startedAt.localeCompare(b2.startedAt)
     );
     const first = group[0];
     if (first === void 0) continue;
@@ -28130,7 +29845,7 @@ function summarizeRows(rows, options = {}) {
     const finished = group.filter((row) => row.state === "done" || scoreOf(row) !== null);
     const unfinished = group.filter((row) => !finished.includes(row));
     const order = [];
-    for (const row of [...group].sort((a, b) => a.startedAt.localeCompare(b.startedAt))) {
+    for (const row of [...group].sort((a, b2) => a.startedAt.localeCompare(b2.startedAt))) {
       if (!order.includes(row.experiment)) order.push(row.experiment);
     }
     const control = options.control ?? order[0] ?? null;
@@ -28248,9 +29963,9 @@ function threshold(floor, ...spreads) {
   if (spreadValue !== null && (floor === null || spreadValue > floor)) return { threshold: spreadValue, source: "repeat spread" };
   return { threshold: floor, source: "noise floor" };
 }
-function better(a, b, higherIsBetter) {
-  if (a === null || b === null) return false;
-  return higherIsBetter ? a > b : a < b;
+function better(a, b2, higherIsBetter) {
+  if (a === null || b2 === null) return false;
+  return higherIsBetter ? a > b2 : a < b2;
 }
 function scoreOf(row) {
   return row.holdout ?? row.val;
@@ -28326,7 +30041,7 @@ async function collectRows(io, root, runs, filter, truncated) {
     }
   }
   rows.sort(
-    (a, b) => a.study.localeCompare(b.study) || a.problemKey.localeCompare(b.problemKey) || a.repeat - b.repeat || a.startedAt.localeCompare(b.startedAt)
+    (a, b2) => a.study.localeCompare(b2.study) || a.problemKey.localeCompare(b2.problemKey) || a.repeat - b2.repeat || a.startedAt.localeCompare(b2.startedAt)
   );
   return { rows, studies, runIds, specByRun, hillclimbDir: runs[0] === void 0 ? "" : resolveRunHillclimbDir(runs[0]) };
 }
@@ -28423,7 +30138,7 @@ function candidateValScore(candidate) {
   return chosen === void 0 ? null : trialValScore(chosen);
 }
 function lastAccepted(candidates2, higherIsBetter) {
-  const ordered = [...candidates2].sort((a, b) => when(a).localeCompare(when(b)));
+  const ordered = [...candidates2].sort((a, b2) => when(a).localeCompare(when(b2)));
   let best = null;
   let accepted = null;
   for (const candidate of ordered) {
@@ -28755,7 +30470,7 @@ function mean(values) {
 }
 function median2(values) {
   if (values.length === 0) return null;
-  const sorted = [...values].sort((a, b) => a - b);
+  const sorted = [...values].sort((a, b2) => a - b2);
   const mid = Math.floor(sorted.length / 2);
   if (sorted.length % 2 === 1) return sorted[mid] ?? null;
   const left = sorted[mid - 1];
@@ -28785,8 +30500,1481 @@ function duration3(seconds) {
   return `${trimNumber(seconds, 3)}s`;
 }
 
+// src/insights.ts
+function dayKey(iso2) {
+  return iso2.slice(0, 10);
+}
+function inferActor(source, explicitActor) {
+  if (explicitActor && explicitActor.trim() !== "") return explicitActor.trim();
+  if (source.startsWith("climb:") || source.startsWith("receipt:")) return "climb-engine";
+  if (source.startsWith("ci://") || source.startsWith("junit:")) return "ci";
+  if (source.startsWith("track:")) return "track-cutover";
+  if (source.startsWith("alert:")) return "monitoring";
+  if (source.startsWith("status:")) return source.split(":")[2] || "agent";
+  return "workspace";
+}
+function inferVia(source, explicitVia) {
+  if (explicitVia) return explicitVia;
+  if (source.startsWith("climb:")) return "auto-track";
+  if (source.startsWith("ci://") || source.startsWith("junit:")) return "ci";
+  if (source.startsWith("alert:")) return "hook";
+  return "mcp";
+}
+function computeInsights(repo, projectId, opts) {
+  const days = Math.min(Math.max(Math.floor(opts?.days ?? 30), 1), 365);
+  const track2 = opts?.track ?? "main";
+  const now = /* @__PURE__ */ new Date();
+  const cutoffMs = now.getTime() - days * 864e5;
+  const snap = repo.view(projectId, track2);
+  const outcomeTitle = new Map(snap.outcomes.map((o) => [o.key, o.title]));
+  const bySignal = {
+    verified: 0,
+    unverified: 0,
+    broken: 0,
+    stale: 0,
+    recheck: 0
+  };
+  let blockedManual = 0;
+  let deferred = 0;
+  let blockedByDependency = 0;
+  for (const r of snap.ranked) {
+    bySignal[r.signal] = (bySignal[r.signal] ?? 0) + 1;
+    if (r.availability === "blocked") blockedManual += 1;
+    else if (r.availability === "deferred") deferred += 1;
+    if (r.blockedBy.length > 0) blockedByDependency += 1;
+  }
+  const dayMap = /* @__PURE__ */ new Map();
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(now.getTime() - i * 864e5).toISOString().slice(0, 10);
+    dayMap.set(d, { verified: /* @__PURE__ */ new Set(), broken: /* @__PURE__ */ new Set(), evidenceCount: 0 });
+  }
+  const actorMap = /* @__PURE__ */ new Map();
+  const touchActor = (actor, via) => {
+    const k = `${actor}\0${via}`;
+    let entry = actorMap.get(k);
+    if (!entry) {
+      entry = { actor, via, confirms: 0, denies: 0, notes: 0, actions: 0, keys: /* @__PURE__ */ new Set() };
+      actorMap.set(k, entry);
+    }
+    return entry;
+  };
+  const recentVerifications = [];
+  for (const ev of snap.evidence) {
+    if (ev.track !== track2) continue;
+    const ms = Date.parse(ev.created);
+    if (!Number.isFinite(ms) || ms < cutoffMs) continue;
+    const d = dayKey(ev.created);
+    const bucket = dayMap.get(d);
+    if (bucket) {
+      bucket.evidenceCount += 1;
+      if (ev.kind === "confirms") bucket.verified.add(ev.key);
+      if (ev.kind === "denies") bucket.broken.add(ev.key);
+    }
+    const actor = inferActor(ev.source, ev.actor);
+    const via = inferVia(ev.source, ev.via);
+    const entry = touchActor(actor, via);
+    if (ev.kind === "confirms") {
+      entry.confirms += 1;
+      entry.keys.add(ev.key);
+      recentVerifications.push({
+        at: ev.created,
+        key: ev.key,
+        title: outcomeTitle.get(ev.key) ?? ev.key,
+        evidenceId: ev.id,
+        source: ev.source,
+        actor,
+        via
+      });
+    } else if (ev.kind === "denies") {
+      entry.denies += 1;
+      entry.keys.add(ev.key);
+    } else {
+      entry.notes += 1;
+    }
+  }
+  for (const act of snap.activity) {
+    const ms = Date.parse(act.at);
+    if (!Number.isFinite(ms) || ms < cutoffMs) continue;
+    const actor = act.actor ?? "workspace";
+    const via = act.via ?? "mcp";
+    touchActor(actor, via).actions += 1;
+  }
+  const byDay = [...dayMap.entries()].map(([date5, b2]) => ({
+    date: date5,
+    verified: b2.verified.size,
+    broken: b2.broken.size,
+    evidenceCount: b2.evidenceCount,
+    outcomeKeys: [...b2.verified]
+  }));
+  let streakDays = 0;
+  for (let i = byDay.length - 1; i >= 0; i--) {
+    const bucket = byDay[i];
+    if (bucket.verified > 0) {
+      streakDays += 1;
+    } else if (i === byDay.length - 1) {
+      continue;
+    } else {
+      break;
+    }
+  }
+  const byActor = [...actorMap.values()].map((e) => ({
+    actor: e.actor,
+    via: e.via,
+    confirms: e.confirms,
+    denies: e.denies,
+    notes: e.notes,
+    actions: e.actions,
+    outcomeKeys: [...e.keys]
+  })).sort((a, b2) => b2.confirms - a.confirms || b2.actions - a.actions);
+  recentVerifications.sort((a, b2) => b2.at.localeCompare(a.at));
+  const climbs = opts?.scannedClimbs?.climbs ?? [];
+  let activeClimbs = 0;
+  let barReachedCount = 0;
+  let totalSteps = 0;
+  let keptSteps = 0;
+  let guardRegressionsCaught = 0;
+  let holdoutChecksRun = 0;
+  let largestHoldoutGap = null;
+  for (const c of climbs) {
+    if (c.status === "active") activeClimbs += 1;
+    if (c.verdict === "bar-reached") barReachedCount += 1;
+    totalSteps += c.steps;
+    keptSteps += c.kept;
+    let lastDevScore = c.baseline;
+    for (const row of c.rows) {
+      if (row.kind === "step" && row.result === "kept" && typeof row.score === "number") {
+        lastDevScore = row.score;
+      } else if (row.kind === "step" && row.result && /guard/i.test(row.result)) {
+        guardRegressionsCaught += 1;
+      } else if (row.kind === "holdout" && typeof row.score === "number") {
+        holdoutChecksRun += 1;
+        if (typeof lastDevScore === "number") {
+          const gap = Number(Math.abs(lastDevScore - row.score).toFixed(4));
+          if (!largestHoldoutGap || gap > largestHoldoutGap.gap) {
+            largestHoldoutGap = {
+              climb: c.name,
+              devScore: lastDevScore,
+              holdoutScore: row.score,
+              gap
+            };
+          }
+        }
+      }
+    }
+  }
+  const discardedSteps = Math.max(0, totalSteps - keptSteps);
+  const keepRatePct = totalSteps > 0 ? Number((keptSteps / totalSteps * 100).toFixed(1)) : null;
+  const verifiedTotal = bySignal.verified + bySignal.recheck;
+  const verifiedRatePct = snap.outcomes.length > 0 ? Number((verifiedTotal / snap.outcomes.length * 100).toFixed(1)) : 0;
+  return {
+    projectId,
+    track: track2,
+    days,
+    generatedAt: now.toISOString(),
+    totals: {
+      goals: snap.goals.length,
+      outcomes: snap.outcomes.length,
+      bySignal,
+      blockedManual,
+      deferred,
+      blockedByDependency,
+      readyNext: snap.next.length,
+      inbox: snap.inbox,
+      verifiedRatePct
+    },
+    streakDays,
+    byDay,
+    byActor,
+    recentVerifications: recentVerifications.slice(0, 30),
+    climbs: {
+      totalClimbs: climbs.length,
+      activeClimbs,
+      barReachedCount,
+      totalSteps,
+      keptSteps,
+      discardedSteps,
+      keepRatePct,
+      guardRegressionsCaught,
+      holdoutChecksRun,
+      largestHoldoutGap
+    }
+  };
+}
+
+// src/artifacts.ts
+var ARTIFACT_TEMPLATES = [
+  {
+    id: "weekly-update",
+    title: "Weekly Progress Update",
+    folder: "Updates",
+    description: "Evidence-backed weekly summary of verified outcomes, blockers, inbox decisions, and live climb gains."
+  },
+  {
+    id: "release-readiness",
+    title: "Release Readiness Brief",
+    folder: "Releases",
+    description: "Per-release verification coverage, unproven gaps, and sign-off provenance."
+  },
+  {
+    id: "climb-experiment-report",
+    title: "Climb & Eval Experiment Report",
+    folder: "Experiments",
+    description: "Inner-loop climb trajectories, baseline-to-best gains, dev vs. unseen holdout checks, and keep rates."
+  },
+  {
+    id: "compliance-audit",
+    title: "Contract & Evidence Audit Pack",
+    folder: "Compliance",
+    description: "Version-scoped contract ledger with confirming evidence IDs, sources, and actor provenance."
+  },
+  {
+    id: "postmortem",
+    title: "Regression Postmortem",
+    folder: "Postmortems",
+    description: "Broken outcomes, denying evidence records, root-cause guardrails, and follow-up outcomes."
+  }
+];
+function escapeHtml(text3) {
+  return text3.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+function generateArtifactFromTemplate(repo, projectId, opts) {
+  const track2 = opts.track ?? "main";
+  const days = opts.days ?? 7;
+  const snap = repo.view(projectId, track2);
+  const insights = computeInsights(repo, projectId, { days, track: track2, scannedClimbs: opts.scannedClimbs });
+  const proj = repo.getProject(projectId);
+  const projName = proj?.name ?? projectId;
+  const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  const citations = /* @__PURE__ */ new Set();
+  const lines = [];
+  const tplMeta = ARTIFACT_TEMPLATES.find((t) => t.id === opts.template);
+  const folder = opts.folder?.trim() || tplMeta?.folder || "General";
+  const title = opts.title?.trim() || `${tplMeta?.title ?? opts.template} \u2014 ${projName} (${today})`;
+  lines.push(`# ${title}`);
+  lines.push("");
+  lines.push(`- **Project:** ${projName} (\`${projectId}\`)`);
+  lines.push(`- **Track:** \`${track2}\` \xB7 **Generated:** ${insights.generatedAt}`);
+  lines.push(
+    `- **Coverage:** ${insights.totals.bySignal.verified + insights.totals.bySignal.recheck}/${insights.totals.outcomes} outcomes verified (${insights.totals.verifiedRatePct}%) \xB7 ${insights.totals.bySignal.broken} broken \xB7 ${insights.totals.inbox} inbox pending`
+  );
+  lines.push("");
+  if (opts.template === "release-readiness") {
+    const releases = opts.releaseName ? snap.releases.filter((r) => r.name.toLowerCase() === opts.releaseName.toLowerCase()) : snap.releases;
+    lines.push("## Release Readiness");
+    lines.push("");
+    if (releases.length === 0) {
+      lines.push("_No releases defined yet. Create a release in Roadmap to track launch readiness._");
+    } else {
+      const rankMap = new Map(snap.ranked.map((r) => [r.key, r]));
+      const outMap = new Map(snap.outcomes.map((o) => [o.key, o]));
+      for (const rel of releases) {
+        const ready = rel.keys.filter((k) => {
+          const sig = rankMap.get(k)?.signal;
+          return sig === "verified" || sig === "recheck";
+        });
+        const pct = rel.keys.length > 0 ? Math.round(ready.length / rel.keys.length * 100) : 0;
+        lines.push(`### ${rel.name} (${rel.scenario}) \u2014 Target ${rel.date} \xB7 ${pct}% ready (${ready.length}/${rel.keys.length})`);
+        lines.push("");
+        for (const k of rel.keys) {
+          const r = rankMap.get(k);
+          const o = outMap.get(k);
+          citations.add(`outcome:${k}@v${o?.version ?? 1}`);
+          lines.push(`- \`${k}\` **${o?.title ?? k}** \u2014 \`${r?.signal ?? "unverified"}\`${r?.blockedBy.length ? ` (blocked by ${r.blockedBy.join(", ")})` : ""}`);
+        }
+        lines.push("");
+      }
+    }
+  } else if (opts.template === "climb-experiment-report") {
+    const climbs = opts.scannedClimbs?.climbs ?? [];
+    lines.push("## Inner-Loop Climb & Eval Summary");
+    lines.push("");
+    lines.push(
+      `- **Climbs scanned:** ${insights.climbs.totalClimbs} (${insights.climbs.activeClimbs} active, ${insights.climbs.barReachedCount} bar reached)`
+    );
+    lines.push(
+      `- **Step efficiency:** ${insights.climbs.keptSteps}/${insights.climbs.totalSteps} kept (${insights.climbs.keepRatePct ?? 0}% keep rate) \xB7 ${insights.climbs.guardRegressionsCaught} guard regressions blocked \xB7 ${insights.climbs.holdoutChecksRun} unseen holdout runs`
+    );
+    if (insights.climbs.largestHoldoutGap) {
+      const g = insights.climbs.largestHoldoutGap;
+      lines.push(`- **Largest dev-vs-holdout catch:** \`${g.climb}\` (dev \`${g.devScore}\` vs. holdout \`${g.holdoutScore}\`, gap \`${g.gap}\`)`);
+    }
+    lines.push("");
+    if (climbs.length > 0) {
+      lines.push("| Climb | Origin | Direction | Baseline | Best | Target | Holdout | Steps (Kept) | Verdict |");
+      lines.push("| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |");
+      for (const c of climbs) {
+        const holdoutScore = [...c.rows].reverse().find((r) => r.kind === "holdout" && typeof r.score === "number")?.score ?? null;
+        citations.add(`climb:${c.name}`);
+        lines.push(
+          `| \`${c.name}\` | ${c.workerLabel} | ${c.direction ?? "\u2014"} | ${c.baseline ?? "\u2014"} | ${c.best ?? "\u2014"} | ${c.target ?? "\u2014"} | ${holdoutScore ?? "\u2014"} | ${c.steps} (${c.kept}) | ${c.verdict} |`
+        );
+      }
+      lines.push("");
+    }
+  } else if (opts.template === "compliance-audit") {
+    lines.push("## Contract & Evidence Ledger");
+    lines.push("");
+    const rankMap = new Map(snap.ranked.map((r) => [r.key, r]));
+    for (const o of snap.outcomes) {
+      const r = rankMap.get(o.key);
+      citations.add(`outcome:${o.key}@v${o.version}`);
+      lines.push(`### ${o.key} v${o.version} \u2014 ${o.title} (\`${r?.signal ?? "unverified"}\`)`);
+      lines.push("");
+      lines.push(`> ${o.story}`);
+      lines.push("");
+      const evs = snap.evidence.filter((e) => e.key === o.key && e.track === track2 && e.version === o.version);
+      if (evs.length === 0) {
+        lines.push("- _No current-version evidence recorded._");
+      } else {
+        for (const e of evs) {
+          citations.add(`evidence:${e.id}`);
+          lines.push(`- \`${e.id}\` **${e.kind}** [${e.criterionIds.join(", ") || "all"}] \u2014 ${e.text} _(source: \`${e.source}\`, ${e.created})_`);
+        }
+      }
+      lines.push("");
+    }
+  } else if (opts.template === "postmortem") {
+    lines.push("## Broken Outcomes & Regressions");
+    lines.push("");
+    const broken = snap.ranked.filter((r) => r.signal === "broken");
+    if (broken.length === 0) {
+      lines.push("_No outcomes are currently broken on this track._");
+    } else {
+      for (const r of broken) {
+        const o = snap.outcomes.find((x) => x.key === r.key);
+        citations.add(`outcome:${r.key}@v${o?.version ?? 1}`);
+        lines.push(`### ${r.key} \u2014 ${o?.title ?? r.key}`);
+        const denies = snap.evidence.filter((e) => e.key === r.key && e.track === track2 && e.kind === "denies");
+        for (const d of denies.slice(-5)) {
+          citations.add(`evidence:${d.id}`);
+          lines.push(`- \`${d.id}\` (${d.created}) [${d.criterionIds.join(", ") || "all"}]: ${d.text} _(source: \`${d.source}\`)_`);
+        }
+        lines.push("");
+      }
+    }
+  } else {
+    lines.push(`## Verified in the Last ${days} Days`);
+    lines.push("");
+    if (insights.recentVerifications.length === 0) {
+      lines.push(`_No outcomes confirmed in the last ${days} days._`);
+    } else {
+      for (const v of insights.recentVerifications.slice(0, 20)) {
+        citations.add(`outcome:${v.key}`);
+        citations.add(`evidence:${v.evidenceId}`);
+        lines.push(`- \`${v.key}\` **${v.title}** \u2014 verified via \`${v.source}\` by \`${v.actor}\` (${v.at.slice(0, 10)})`);
+      }
+    }
+    lines.push("");
+    if (insights.climbs.totalClimbs > 0) {
+      lines.push("## Optimization Climbs");
+      lines.push("");
+      lines.push(
+        `${insights.climbs.totalClimbs} climb(s) scanned \xB7 ${insights.climbs.keptSteps}/${insights.climbs.totalSteps} edits kept (${insights.climbs.keepRatePct ?? 0}%) \xB7 ${insights.climbs.barReachedCount} reached bar \xB7 ${insights.climbs.holdoutChecksRun} unseen holdout check(s).`
+      );
+      lines.push("");
+    }
+    const blockers = snap.ranked.filter(
+      (r) => r.signal === "broken" || r.availability === "blocked" || r.blockedBy.length > 0
+    );
+    if (blockers.length > 0) {
+      lines.push("## Risks & Blockers");
+      lines.push("");
+      for (const b2 of blockers.slice(0, 15)) {
+        const o = snap.outcomes.find((x) => x.key === b2.key);
+        const why = b2.signal === "broken" ? "broken (failing evidence)" : b2.availability === "blocked" ? `blocked: ${b2.availabilityReason ?? "external"}` : `waiting on ${b2.blockedBy.join(", ")}`;
+        lines.push(`- \`${b2.key}\` **${o?.title ?? b2.key}** \u2014 ${why}`);
+      }
+      lines.push("");
+    }
+  }
+  const body = redactSecrets(lines.join("\n").trim() + "\n");
+  const citationList = [...citations];
+  if (opts.save) {
+    const saved = repo.saveArtifact(projectId, {
+      folder,
+      title,
+      template: opts.template,
+      body,
+      citations: citationList,
+      actor: opts.actor ?? null
+    });
+    return { title: saved.title, folder: saved.folder, body: saved.body, citations: saved.citations, saved };
+  }
+  return { title, folder, body, citations: citationList };
+}
+function exportShareableReport(repo, projectId, opts) {
+  const format = opts?.format ?? "html";
+  const track2 = opts?.track ?? "main";
+  const snap = repo.view(projectId, track2);
+  const insights = computeInsights(repo, projectId, { days: 30, track: track2, scannedClimbs: opts?.scannedClimbs });
+  const proj = repo.getProject(projectId);
+  const projName = proj?.name ?? projectId;
+  let allowedKeys = null;
+  if (opts?.releaseName) {
+    const rel = snap.releases.find((r) => r.name.toLowerCase() === opts.releaseName.toLowerCase());
+    allowedKeys = new Set(rel?.keys ?? []);
+  } else if (opts?.goalKey) {
+    allowedKeys = new Set(snap.ranked.filter((r) => r.ancestors.some((g) => g.key === opts.goalKey)).map((r) => r.key));
+  } else if (opts?.scope) {
+    allowedKeys = repo.resolveScopeOutcomeKeys(projectId, opts.scope, snap);
+  }
+  const ranked = allowedKeys ? snap.ranked.filter((r) => allowedKeys.has(r.key)) : snap.ranked;
+  const outByKey = new Map(snap.outcomes.map((o) => [o.key, o]));
+  const slug2 = projName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "hillclimb";
+  const dateTag = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  if (format === "markdown") {
+    const gen = generateArtifactFromTemplate(repo, projectId, {
+      template: opts?.releaseName ? "release-readiness" : "weekly-update",
+      releaseName: opts?.releaseName,
+      track: track2,
+      scannedClimbs: opts?.scannedClimbs,
+      save: false
+    });
+    return {
+      format: "markdown",
+      filename: `${slug2}-report-${dateTag}.md`,
+      content: gen.body,
+      outcomesIncluded: ranked.length
+    };
+  }
+  const verifiedCount = ranked.filter((r) => r.signal === "verified" || r.signal === "recheck").length;
+  const pct = ranked.length > 0 ? Math.round(verifiedCount / ranked.length * 100) : 0;
+  const climbs = opts?.scannedClimbs?.climbs ?? [];
+  const outcomeRows = ranked.map((r, idx) => {
+    const o = outByKey.get(r.key);
+    const tags = (r.tags ?? []).map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join("");
+    const avail = r.availability && r.availability !== "active" ? `<span class="pill pill-warn">${escapeHtml(r.availability)}${r.availabilityReason ? `: ${escapeHtml(r.availabilityReason)}` : ""}</span>` : "";
+    const criteriaHtml = (o?.criteria ?? []).map(
+      (c) => `<li><code>${escapeHtml(c.id)}</code> Given ${escapeHtml(redactSecrets(c.given))}, when ${escapeHtml(redactSecrets(c.when))}, then ${escapeHtml(redactSecrets(c.then))}</li>`
+    ).join("");
+    return `<tr>
+        <td class="mono">#${idx + 1}</td>
+        <td><code class="key">${escapeHtml(r.key)}</code> <strong>${escapeHtml(redactSecrets(o?.title ?? r.key))}</strong><div class="sub">${escapeHtml(redactSecrets(o?.story ?? ""))}</div>${tags}${avail}${criteriaHtml ? `<ul class="crit">${criteriaHtml}</ul>` : ""}</td>
+        <td><span class="sig sig-${escapeHtml(r.signal)}">${escapeHtml(r.signal)}</span></td>
+        <td class="mono">v${o?.version ?? 1}</td>
+      </tr>`;
+  }).join("\n");
+  const climbRows = climbs.map((c) => {
+    const holdoutScore = [...c.rows].reverse().find((r) => r.kind === "holdout" && typeof r.score === "number")?.score ?? null;
+    return `<tr>
+        <td><code>${escapeHtml(c.name)}</code><div class="sub">${escapeHtml(c.workerLabel)}</div></td>
+        <td class="mono">${c.baseline ?? "\u2014"}</td>
+        <td class="mono"><strong>${c.best ?? "\u2014"}</strong></td>
+        <td class="mono">${c.target ?? "\u2014"}</td>
+        <td class="mono">${holdoutScore ?? "\u2014"}</td>
+        <td class="mono">${c.kept}/${c.steps}</td>
+        <td><span class="pill">${escapeHtml(c.verdict)}</span></td>
+      </tr>`;
+  }).join("\n");
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Hill Climb Snapshot \u2014 ${escapeHtml(projName)}</title>
+<style>
+  :root { color-scheme: light dark; --bg: #0f1115; --card: #171a21; --ink: #e8ecf2; --muted: #9aa4b2; --line: #282e3b; --ok: #22c55e; --bad: #ef4444; --warn: #f59e0b; --accent: #3b82f6; }
+  @media (prefers-color-scheme: light) { :root { --bg: #f7f8fa; --card: #ffffff; --ink: #111827; --muted: #5c6573; --line: #e2e6ee; } }
+  body { margin: 0; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); padding: 28px 20px 56px; }
+  main { max-width: 1020px; margin: 0 auto; }
+  header { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; border-bottom: 1px solid var(--line); padding-bottom: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+  h1 { margin: 0; font-size: 24px; }
+  h2 { margin: 28px 0 12px; font-size: 16px; }
+  .meta { color: var(--muted); font-size: 12.5px; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .kpi { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+  .kpi-label { color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .kpi-val { font-size: 24px; font-weight: 700; margin-top: 4px; }
+  table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+  .key { background: color-mix(in srgb, var(--accent) 16%, transparent); padding: 1px 6px; border-radius: 5px; font-size: 12px; }
+  .sub { color: var(--muted); font-size: 12.5px; margin-top: 3px; }
+  .crit { margin: 6px 0 0; padding-left: 18px; color: var(--muted); font-size: 12px; }
+  .sig, .pill, .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; margin-right: 4px; margin-top: 4px; }
+  .sig-verified { background: color-mix(in srgb, var(--ok) 20%, transparent); color: var(--ok); }
+  .sig-broken { background: color-mix(in srgb, var(--bad) 20%, transparent); color: var(--bad); }
+  .sig-stale, .sig-recheck, .pill-warn { background: color-mix(in srgb, var(--warn) 20%, transparent); color: var(--warn); }
+  .sig-unverified, .pill, .tag { background: color-mix(in srgb, var(--muted) 20%, transparent); color: var(--ink); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>Hill Climb \xB7 ${escapeHtml(projName)}</h1>
+      <div class="meta">Track <code>${escapeHtml(track2)}</code>${opts?.releaseName ? ` \xB7 Release <strong>${escapeHtml(opts.releaseName)}</strong>` : ""}${opts?.scope ? ` \xB7 Scope <strong>${escapeHtml(opts.scope)}</strong>` : ""} \xB7 Snapshot generated ${escapeHtml(insights.generatedAt)}</div>
+    </div>
+    <div class="meta">Self-contained local snapshot \xB7 zero external requests</div>
+  </header>
+  <section class="kpis">
+    <div class="kpi"><div class="kpi-label">Verified</div><div class="kpi-val">${pct}%</div><div class="sub">${verifiedCount} of ${ranked.length} outcomes</div></div>
+    <div class="kpi"><div class="kpi-label">Broken</div><div class="kpi-val">${insights.totals.bySignal.broken}</div><div class="sub">Failing current evidence</div></div>
+    <div class="kpi"><div class="kpi-label">Ready Next</div><div class="kpi-val">${insights.totals.readyNext}</div><div class="sub">Unblocked &amp; unclaimed</div></div>
+    <div class="kpi"><div class="kpi-label">Climbs Kept</div><div class="kpi-val">${insights.climbs.keptSteps}/${insights.climbs.totalSteps}</div><div class="sub">${insights.climbs.holdoutChecksRun} unseen holdout check(s)</div></div>
+  </section>
+  <h2>Outcomes (${ranked.length})</h2>
+  <table>
+    <thead><tr><th>Rank</th><th>Outcome</th><th>Signal</th><th>Ver</th></tr></thead>
+    <tbody>${outcomeRows || '<tr><td colspan="4" class="sub">No outcomes in scope.</td></tr>'}</tbody>
+  </table>
+  ${climbs.length > 0 ? `<h2>Repo Climbs (${climbs.length})</h2>
+  <table>
+    <thead><tr><th>Climb</th><th>Baseline</th><th>Best</th><th>Target</th><th>Holdout</th><th>Kept</th><th>Verdict</th></tr></thead>
+    <tbody>${climbRows}</tbody>
+  </table>` : ""}
+</main>
+</body>
+</html>
+`;
+  return {
+    format: "html",
+    filename: `${slug2}-snapshot-${dateTag}.html`,
+    content: redactSecrets(html),
+    outcomesIncluded: ranked.length
+  };
+}
+
+// src/templates.ts
+var BLUEPRINTS = [
+  {
+    id: "saas-api",
+    name: "Reliable Web API",
+    description: "Contract tree for latency, error handling, idempotency, and schema stability on a backend API.",
+    tags: ["api", "backend", "reliability"],
+    goals: [
+      {
+        key: "G-API",
+        parentGoalKey: null,
+        title: "API responses stay fast, valid, and idempotent",
+        brief: "Callers receive deterministic schemas, bounded tail latency, and safe retries across every public endpoint.",
+        rank: 10,
+        tags: ["api"]
+      }
+    ],
+    outcomes: [
+      {
+        key: "API-IDEMPOTENCY",
+        goalKey: "G-API",
+        contract: {
+          title: "Repeated write requests execute at most once",
+          story: "As an API integrator, I want retried POST requests with the same Idempotency-Key to replay the original result, so that network retries never create duplicate records.",
+          criteria: [
+            {
+              id: "ac1",
+              given: "a write request with an Idempotency-Key that already succeeded",
+              when: "the client sends the same request body again",
+              then: "the server returns the original status and body without creating a duplicate resource"
+            },
+            {
+              id: "ac2",
+              given: "an Idempotency-Key previously used with a different payload",
+              when: "a caller reuses that key with conflicting fields",
+              then: "the server rejects the request with HTTP 409 Conflict"
+            }
+          ],
+          dependsOn: [],
+          rank: 10,
+          recheckDays: 30,
+          tags: ["api", "safety"]
+        }
+      },
+      {
+        key: "API-VALIDATION",
+        goalKey: "G-API",
+        contract: {
+          title: "Invalid payloads return actionable structured errors",
+          story: "As an API consumer, I want malformed inputs rejected with field-level error codes, so that callers can correct requests without guessing.",
+          criteria: [
+            {
+              id: "ac1",
+              given: "a JSON request missing required fields or violating value bounds",
+              when: "the endpoint validates the input",
+              then: "the response returns HTTP 400 with field names and machine-readable error codes"
+            }
+          ],
+          dependsOn: [],
+          rank: 20,
+          recheckDays: null,
+          tags: ["api"]
+        }
+      }
+    ]
+  },
+  {
+    id: "auth-and-sessions",
+    name: "Authentication & Session Security",
+    description: "Outcomes covering login, session revocation, password reset safety, and permission boundaries.",
+    tags: ["auth", "security"],
+    goals: [
+      {
+        key: "G-AUTH",
+        parentGoalKey: null,
+        title: "Only authorized accounts access protected data",
+        brief: "Credentials, sessions, and revocation hold under concurrent access and hostile requests.",
+        rank: 10,
+        tags: ["auth", "security"]
+      }
+    ],
+    outcomes: [
+      {
+        key: "AUTH-REVOKE",
+        goalKey: "G-AUTH",
+        contract: {
+          title: "Revoked sessions lose access immediately",
+          story: "As an account owner, I want signing out or revoking a session to invalidate its token right away, so that a lost device cannot keep reading private data.",
+          criteria: [
+            {
+              id: "ac1",
+              given: "an active authenticated session",
+              when: "the user revokes the session and replays its cookie or token",
+              then: "every protected request returns HTTP 401 Unauthorized"
+            }
+          ],
+          dependsOn: [],
+          rank: 10,
+          recheckDays: 14,
+          tags: ["auth", "security"]
+        }
+      }
+    ]
+  },
+  {
+    id: "billing-and-proration",
+    name: "Billing & Subscription Proration",
+    description: "Invoice reconciliation, mid-cycle proration, and failed payment recovery outcomes.",
+    tags: ["billing", "finance"],
+    goals: [
+      {
+        key: "G-BILLING",
+        parentGoalKey: null,
+        title: "Customer invoices reconcile to the cent",
+        brief: "Plan changes, seat additions, and taxes produce exact invoices with zero manual credit adjustments.",
+        rank: 10,
+        tags: ["billing"]
+      }
+    ],
+    outcomes: [
+      {
+        key: "BILL-PRORATE",
+        goalKey: "G-BILLING",
+        contract: {
+          title: "Mid-cycle plan changes prorate by remaining days",
+          story: "As a workspace admin, I want seats added mid-month charged only for remaining days, so that teams never overpay for partial cycles.",
+          criteria: [
+            {
+              id: "ac1",
+              given: "an active monthly subscription halfway through its billing period",
+              when: "the admin adds a paid seat",
+              then: "the prorated charge equals the daily rate times remaining days rounded to the nearest cent"
+            }
+          ],
+          dependsOn: [],
+          rank: 10,
+          recheckDays: 30,
+          tags: ["billing"]
+        }
+      }
+    ]
+  },
+  {
+    id: "search-and-retrieval",
+    name: "Search & Retrieval Quality",
+    description: "Ranking NDCG, recall on held-out queries, and zero-result recovery for search & RAG pipelines.",
+    tags: ["search", "retrieval", "eval"],
+    goals: [
+      {
+        key: "G-SEARCH",
+        parentGoalKey: null,
+        title: "Search surfaces the right answer on unseen queries",
+        brief: "Ranking quality and recall improve on held-out query splits without regressing latency or precision.",
+        rank: 10,
+        tags: ["search", "retrieval"]
+      }
+    ],
+    outcomes: [
+      {
+        key: "SEARCH-RECALL",
+        goalKey: "G-SEARCH",
+        contract: {
+          title: "Held-out queries retrieve relevant documents in top results",
+          story: "As a user searching documentation, I want relevant passages ranked in the top results on unseen phrasings, so that answers are found on the first query.",
+          criteria: [
+            {
+              id: "ac1",
+              given: "the locked evaluation benchmark and disjoint holdout query split",
+              when: "the retrieval pipeline scores both splits",
+              then: "visible and held-out recall meet the target bar with zero guard regressions"
+            }
+          ],
+          dependsOn: [],
+          rank: 10,
+          recheckDays: 14,
+          tags: ["search", "eval"]
+        }
+      }
+    ]
+  },
+  {
+    id: "agent-eval-pipeline",
+    name: "Coding Agent & Eval Harness",
+    description: "Outcomes for task completion, cost budget caps, zero unintended side effects, and holdout generalization.",
+    tags: ["agents", "eval"],
+    goals: [
+      {
+        key: "G-EVAL",
+        parentGoalKey: null,
+        title: "Agent tasks complete accurately within budget",
+        brief: "Autonomous runs verify real outcomes on unseen cases without exceeding cost limits or touching forbidden state.",
+        rank: 10,
+        tags: ["agents", "eval"]
+      }
+    ],
+    outcomes: [
+      {
+        key: "EVAL-BUDGET",
+        goalKey: "G-EVAL",
+        contract: {
+          title: "Agent eval runs complete within declared cost budgets",
+          story: "As an engineer running automated evals, I want runs to finish within the suite cost cap without side effects, so that overnight sweeps stay predictable.",
+          criteria: [
+            {
+              id: "ac1",
+              given: "the locked agent-outcomes benchmark suite with cost_budget_usd set",
+              when: "the candidate agent executes all cases",
+              then: "total cost stays within budget and every side-effect and claim guard passes"
+            }
+          ],
+          dependsOn: [],
+          rank: 10,
+          recheckDays: 14,
+          tags: ["agents", "eval"]
+        }
+      }
+    ]
+  }
+];
+function listBlueprints() {
+  return BLUEPRINTS.map((b2) => ({
+    id: b2.id,
+    name: b2.name,
+    description: b2.description,
+    tags: b2.tags,
+    goalCount: b2.goals.length,
+    outcomeCount: b2.outcomes.length
+  }));
+}
+function blueprintActions(blueprintId, opts) {
+  const bp = BLUEPRINTS.find((b2) => b2.id === blueprintId);
+  if (!bp) {
+    throw new Error(`Unknown blueprint "${blueprintId}". Available: ${BLUEPRINTS.map((b2) => b2.id).join(", ")}`);
+  }
+  const existing = opts?.existingKeys ?? /* @__PURE__ */ new Set();
+  const prefix = opts?.keyPrefix?.trim() || "";
+  const mapKey = (k) => prefix ? `${prefix}-${k}` : k;
+  const actions = [];
+  for (const g of bp.goals) {
+    const gk = mapKey(g.key);
+    if (!existing.has(gk)) {
+      actions.push({
+        op: "create_goal",
+        key: gk,
+        parentGoalKey: g.parentGoalKey ? mapKey(g.parentGoalKey) : null,
+        title: g.title,
+        brief: g.brief,
+        rank: g.rank,
+        ...g.tags ? { tags: g.tags } : {}
+      });
+    }
+  }
+  for (const o of bp.outcomes) {
+    const ok = mapKey(o.key);
+    if (existing.has(ok)) continue;
+    const contract3 = {
+      ...o.contract,
+      dependsOn: o.contract.dependsOn.map(mapKey)
+    };
+    if (opts?.asProposals) {
+      actions.push({ op: "propose_outcome", key: ok, goalKey: mapKey(o.goalKey), contract: contract3 });
+    } else {
+      actions.push({ op: "create_outcome", key: ok, goalKey: mapKey(o.goalKey), contract: contract3 });
+    }
+  }
+  const lint = lintTree({
+    goals: bp.goals.map((g) => ({ key: mapKey(g.key), parentGoalKey: g.parentGoalKey ? mapKey(g.parentGoalKey) : null, title: g.title, brief: g.brief })),
+    outcomes: bp.outcomes.map((o) => ({
+      key: mapKey(o.key),
+      goalKey: mapKey(o.goalKey),
+      title: o.contract.title,
+      story: o.contract.story,
+      criteria: o.contract.criteria,
+      dependsOn: o.contract.dependsOn.map(mapKey),
+      rank: o.contract.rank,
+      recheckDays: o.contract.recheckDays
+    }))
+  });
+  return { blueprint: bp, actions, lint };
+}
+function makeKey(prefix, title, taken) {
+  const words2 = title.toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-+|-+$/g, "").split("-").filter(Boolean).slice(0, 3).join("-");
+  const base = `${prefix}-${words2 || "ITEM"}`.slice(0, 40);
+  if (!taken.has(base)) {
+    taken.add(base);
+    return base;
+  }
+  let n2 = 2;
+  while (taken.has(`${base}-${n2}`)) n2++;
+  const k = `${base}-${n2}`;
+  taken.add(k);
+  return k;
+}
+function parseMarkdownImport(markdown, opts) {
+  const lines = markdown.split(/\r?\n/);
+  const taken = new Set(opts?.existingKeys ?? []);
+  const prefix = (opts?.prefix?.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "") || "HC").slice(0, 12);
+  let currentGoalKey = opts?.goalKey?.trim() || "";
+  const goals = [];
+  const outcomes = [];
+  const ensureGoal = (title, brief2) => {
+    if (currentGoalKey) return currentGoalKey;
+    const gTitle = title?.trim() || opts?.goalTitle?.trim() || "Imported product requirements";
+    const gKey = makeKey("G", gTitle, taken);
+    currentGoalKey = gKey;
+    goals.push({
+      key: gKey,
+      parentGoalKey: null,
+      title: gTitle,
+      brief: brief2?.trim() || `Outcomes imported for ${gTitle}.`,
+      rank: (goals.length + 1) * 10
+    });
+    return gKey;
+  };
+  let current = null;
+  let pendingGiven = "";
+  let pendingWhen = "";
+  const flush = () => {
+    if (!current) return;
+    if (current.criteria.length === 0) {
+      current.criteria.push({
+        id: "ac1",
+        given: "the relevant user context is ready",
+        when: "the behavior is exercised",
+        then: current.title
+      });
+    }
+    const story = current.story || `As a user, I want ${current.title.charAt(0).toLowerCase() + current.title.slice(1)}, so that the workflow works reliably.`;
+    outcomes.push({
+      key: makeKey(prefix, current.title, taken),
+      goalKey: current.goalKey,
+      contract: {
+        title: current.title,
+        story,
+        criteria: current.criteria,
+        dependsOn: [],
+        rank: (outcomes.length + 1) * 10,
+        recheckDays: null,
+        ...opts?.tags && opts.tags.length > 0 ? { tags: opts.tags } : {}
+      }
+    });
+    current = null;
+    pendingGiven = "";
+    pendingWhen = "";
+  };
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const h2 = /^#{1,2}\s+(.+)$/.exec(line);
+    if (h2) {
+      flush();
+      const title = h2[1].trim();
+      if (!opts?.goalKey) {
+        currentGoalKey = "";
+        ensureGoal(title);
+      }
+      continue;
+    }
+    const h3 = /^###+\s+(.+)$/.exec(line);
+    if (h3) {
+      flush();
+      const gKey = ensureGoal();
+      current = { title: h3[1].trim(), story: "", criteria: [], goalKey: gKey };
+      continue;
+    }
+    const bullet = /^(?:[-*]|\d+\.)\s+(?:\[[ xX]\]\s+)?(.+)$/.exec(line);
+    if (bullet) {
+      const body = bullet[1].trim();
+      if (/^(?:given|when|then)\b/i.test(body)) {
+      } else if (/^as\s+(?:a|an|the)\s+/i.test(body)) {
+        if (current && !current.story) {
+          current.story = body;
+        } else {
+          flush();
+          const gKey = ensureGoal();
+          const wantMatch = /i\s+want\s+([^,]+)/i.exec(body);
+          const derivedTitle = wantMatch ? wantMatch[1].trim() : body.slice(0, 80);
+          current = {
+            title: derivedTitle.charAt(0).toUpperCase() + derivedTitle.slice(1),
+            story: body,
+            criteria: [],
+            goalKey: gKey
+          };
+        }
+        continue;
+      } else {
+        flush();
+        const gKey = ensureGoal();
+        current = { title: body.replace(/\.$/, ""), story: "", criteria: [], goalKey: gKey };
+        continue;
+      }
+    }
+    const clean = line.replace(/^[-*]\s+/, "");
+    const inlineGwt = /^given\s+(.+?),?\s+when\s+(.+?),?\s+then\s+(.+)$/i.exec(clean);
+    if (inlineGwt) {
+      if (!current) {
+        const gKey = ensureGoal();
+        current = { title: inlineGwt[3].trim().replace(/\.$/, ""), story: "", criteria: [], goalKey: gKey };
+      }
+      current.criteria.push({
+        id: `ac${current.criteria.length + 1}`,
+        given: inlineGwt[1].trim(),
+        when: inlineGwt[2].trim(),
+        then: inlineGwt[3].trim()
+      });
+      pendingGiven = "";
+      pendingWhen = "";
+      continue;
+    }
+    const givenM = /^given\s+(.+)$/i.exec(clean);
+    if (givenM) {
+      pendingGiven = givenM[1].trim();
+      continue;
+    }
+    const whenM = /^when\s+(.+)$/i.exec(clean);
+    if (whenM) {
+      pendingWhen = whenM[1].trim();
+      continue;
+    }
+    const thenM = /^then\s+(.+)$/i.exec(clean);
+    if (thenM) {
+      if (!current) {
+        const gKey = ensureGoal();
+        current = { title: thenM[1].trim().replace(/\.$/, ""), story: "", criteria: [], goalKey: gKey };
+      }
+      current.criteria.push({
+        id: `ac${current.criteria.length + 1}`,
+        given: pendingGiven || "the precondition holds",
+        when: pendingWhen || "the user performs the action",
+        then: thenM[1].trim()
+      });
+      pendingGiven = "";
+      pendingWhen = "";
+      continue;
+    }
+    if (/^as\s+(?:a|an|the)\s+/i.test(clean)) {
+      if (current && !current.story) {
+        current.story = clean;
+      } else {
+        flush();
+        const gKey = ensureGoal();
+        const wantMatch = /i\s+want\s+([^,]+)/i.exec(clean);
+        const derivedTitle = wantMatch ? wantMatch[1].trim() : clean.slice(0, 80);
+        current = {
+          title: derivedTitle.charAt(0).toUpperCase() + derivedTitle.slice(1),
+          story: clean,
+          criteria: [],
+          goalKey: gKey
+        };
+      }
+    }
+  }
+  flush();
+  const actions = [];
+  for (const g of goals) {
+    actions.push({
+      op: "create_goal",
+      key: g.key,
+      parentGoalKey: g.parentGoalKey,
+      title: g.title,
+      brief: g.brief,
+      rank: g.rank,
+      ...opts?.tags && opts.tags.length > 0 ? { tags: opts.tags } : {}
+    });
+  }
+  for (const o of outcomes) {
+    if (opts?.asProposals) {
+      actions.push({ op: "propose_outcome", key: o.key, goalKey: o.goalKey, contract: o.contract });
+    } else {
+      actions.push({ op: "create_outcome", key: o.key, goalKey: o.goalKey, contract: o.contract });
+    }
+  }
+  const lint = lintTree({
+    goals,
+    outcomes: outcomes.map((o) => ({
+      key: o.key,
+      goalKey: o.goalKey,
+      title: o.contract.title,
+      story: o.contract.story,
+      criteria: o.contract.criteria,
+      dependsOn: o.contract.dependsOn,
+      rank: o.contract.rank,
+      recheckDays: o.contract.recheckDays
+    }))
+  });
+  return { actions, goalsCreated: goals.length, outcomesParsed: outcomes.length, lint };
+}
+
+// src/hooks.ts
+import { createHmac } from "node:crypto";
+import { execFile } from "node:child_process";
+function runShellHook(command2, payload) {
+  return new Promise((resolve8, reject) => {
+    execFile(
+      "/bin/sh",
+      ["-c", command2],
+      {
+        timeout: 15e3,
+        env: {
+          ...process.env,
+          HILLCLIMB_EVENT: payload.event,
+          HILLCLIMB_PROJECT_ID: payload.projectId,
+          HILLCLIMB_EVENT_KEY: payload.key,
+          HILLCLIMB_EVENT_JSON: JSON.stringify(payload)
+        }
+      },
+      (err) => err ? reject(err) : resolve8()
+    );
+  });
+}
+function runMacNotify(title, message2) {
+  if (process.platform !== "darwin") return Promise.resolve();
+  const safeTitle = title.replace(/["\\]/g, " ").slice(0, 80);
+  const safeMsg = message2.replace(/["\\]/g, " ").slice(0, 180);
+  return new Promise((resolve8) => {
+    execFile(
+      "osascript",
+      ["-e", `display notification "${safeMsg}" with title "${safeTitle}"`],
+      { timeout: 5e3 },
+      () => resolve8()
+    );
+  });
+}
+async function postWebhookWithRetry(hook, payload) {
+  const body = JSON.stringify(payload);
+  const headers = {
+    "Content-Type": "application/json",
+    "User-Agent": "antigravity-plugin-hillclimb/0.5.0",
+    "X-Hillclimb-Event": payload.event
+  };
+  if (hook.secret) {
+    const sig = createHmac("sha256", hook.secret).update(body).digest("hex");
+    headers["X-Hillclimb-Signature"] = `sha256=${sig}`;
+  }
+  let lastError;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8e3);
+      const res = await fetch(hook.target, { method: "POST", headers, body, signal: controller.signal });
+      clearTimeout(timer);
+      if (res.ok) return;
+      lastError = new Error(`HTTP ${res.status}`);
+    } catch (err) {
+      lastError = err;
+    }
+    if (attempt < 2) {
+      await new Promise((r) => setTimeout(r, 250 * 2 ** attempt));
+    }
+  }
+  throw lastError;
+}
+async function wakeAntigravityConversation(conversationId, directory, note) {
+  const reason = conversationServiceGuardReason({ directory: directory ?? void 0 });
+  if (reason !== null) return false;
+  const addr = process.env.ANTIGRAVITY_LS_ADDRESS;
+  const csrf = process.env.ANTIGRAVITY_CSRF_TOKEN;
+  if (!addr || !csrf) return false;
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5e3);
+    const res = await fetch(`http://${addr}/product.v1.ConversationService/CreateConversation`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Connect-Protocol-Version": "1",
+        "x-antigravity-csrf-token": csrf
+      },
+      body: JSON.stringify({
+        title: `Hill Climb follow-up (${conversationId.slice(0, 8)})`,
+        tags: ["hillclimb", "wake-on-answer", `origin:${conversationId}`],
+        prompt: [{ text: redactSecrets(note) }]
+      }),
+      signal: controller.signal
+    });
+    clearTimeout(timer);
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+function createAutomationEngine(repo) {
+  const mirrorTimers = /* @__PURE__ */ new Map();
+  function scheduleMirror(projectId) {
+    if (repo.getSetting(projectId, "autoSyncMirror") !== "true") return;
+    const dir = repo.getProject(projectId)?.directory;
+    if (!dir) return;
+    const prev = mirrorTimers.get(projectId);
+    if (prev) clearTimeout(prev);
+    const timer = setTimeout(() => {
+      mirrorTimers.delete(projectId);
+      void writeMirror(dir, repo.view(projectId), {
+        artifacts: repo.listArtifacts(projectId)
+      }).catch(() => void 0);
+    }, 500);
+    timer.unref?.();
+    mirrorTimers.set(projectId, timer);
+  }
+  async function dispatchEvents(projectId, payloads) {
+    if (payloads.length === 0) return { dispatched: 0, failed: 0, wokeConversations: [] };
+    const hooks = repo.listHooks(projectId).filter((h) => h.enabled);
+    let dispatched = 0;
+    let failed = 0;
+    const wokeConversations = [];
+    for (const payload of payloads) {
+      for (const hook of hooks) {
+        if (hook.event !== "*" && hook.event !== payload.event) continue;
+        try {
+          if (hook.targetType === "shell") await runShellHook(hook.target, payload);
+          else if (hook.targetType === "webhook") await postWebhookWithRetry(hook, payload);
+          else if (hook.targetType === "notify") await runMacNotify(`Hill Climb \xB7 ${payload.event}`, payload.summary);
+          dispatched += 1;
+        } catch {
+          failed += 1;
+        }
+      }
+      if (repo.getSetting(projectId, "wakeOnAnswer") === "true" && (payload.event === "question.answered" || payload.event === "change.approved" || payload.event === "flow.accepted")) {
+        const threadId = typeof payload.details.threadId === "string" ? payload.details.threadId : null;
+        if (threadId && !threadId.startsWith("local:") && !threadId.startsWith("client:")) {
+          const dir = repo.getProject(projectId)?.directory ?? null;
+          const woke = await wakeAntigravityConversation(
+            threadId,
+            dir,
+            `Hill Climb update for ${payload.key}: ${payload.summary}
+Resume work on outcome ${payload.key} in ${dir ?? "this project"}.`
+          );
+          if (woke) wokeConversations.push(threadId);
+        }
+      }
+    }
+    return { dispatched, failed, wokeConversations };
+  }
+  function handleMutation(event) {
+    scheduleMirror(event.project);
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const beforeSignals = new Map(event.before.ranked.map((r) => [r.key, r.signal]));
+    const payloads = [];
+    for (const afterRow of event.after.ranked) {
+      const prev = beforeSignals.get(afterRow.key);
+      if (prev !== afterRow.signal) {
+        if (afterRow.signal === "broken") {
+          payloads.push({
+            event: "outcome.broken",
+            projectId: event.project,
+            at: now,
+            key: afterRow.key,
+            summary: `${afterRow.key} flipped to broken (was ${prev ?? "new"})`,
+            details: { previous: prev ?? null, signal: afterRow.signal }
+          });
+        } else if (afterRow.signal === "verified") {
+          payloads.push({
+            event: "outcome.verified",
+            projectId: event.project,
+            at: now,
+            key: afterRow.key,
+            summary: `${afterRow.key} is now verified`,
+            details: { previous: prev ?? null, signal: afterRow.signal }
+          });
+        }
+      }
+    }
+    for (const action of event.actions) {
+      if (action.op === "answer") {
+        const comment = event.after.comments.find((c) => c.id === action.id);
+        if (comment) {
+          payloads.push({
+            event: "question.answered",
+            projectId: event.project,
+            at: now,
+            key: comment.key,
+            summary: `Answered "${comment.text.slice(0, 60)}" -> "${action.answer}"`,
+            details: { commentId: comment.id, answer: action.answer, threadId: comment.threadId ?? null }
+          });
+        }
+      } else if (action.op === "approve_change") {
+        const change2 = event.after.changes.find((c) => c.id === action.id);
+        if (change2) {
+          payloads.push({
+            event: "change.approved",
+            projectId: event.project,
+            at: now,
+            key: change2.key,
+            summary: `Approved ${change2.kind === "create" ? "new outcome" : "contract change"} ${change2.key}`,
+            details: { changeId: change2.id, kind: change2.kind ?? "edit", threadId: change2.threadId ?? null }
+          });
+        }
+      } else if (action.op === "accept_flow_change") {
+        const prop = event.after.flowProposals.find((p) => p.id === action.id);
+        if (prop) {
+          payloads.push({
+            event: "flow.accepted",
+            projectId: event.project,
+            at: now,
+            key: prop.flowName,
+            summary: `Accepted flow ${prop.kind} on "${prop.flowName}"`,
+            details: { proposalId: prop.id, flowName: prop.flowName, threadId: prop.threadId ?? null }
+          });
+        }
+      }
+    }
+    if (payloads.length > 0) {
+      void dispatchEvents(event.project, payloads).catch(() => void 0);
+    }
+  }
+  const unsubscribe = repo.onMutation(handleMutation);
+  function stop() {
+    unsubscribe();
+    for (const timer of mirrorTimers.values()) clearTimeout(timer);
+    mirrorTimers.clear();
+  }
+  return {
+    dispatchEvents,
+    stop
+  };
+}
+function ingestAlert(repo, input2) {
+  const tree = repo.read(input2.project);
+  const outcome2 = tree.outcomes.find((o) => o.key === input2.key);
+  if (!outcome2) {
+    throw new Error(`Unknown outcome "${input2.key}" in project "${input2.project}"`);
+  }
+  const sev = input2.severity ?? "error";
+  const kind = sev === "critical" || sev === "error" ? "denies" : "note";
+  const criterionIds2 = input2.criterionIds && input2.criterionIds.length > 0 ? input2.criterionIds : kind === "denies" ? outcome2.criteria.map((c) => c.id) : [];
+  const track2 = input2.track ?? "main";
+  repo.act(
+    input2.project,
+    {
+      op: "add_evidence",
+      key: input2.key,
+      version: outcome2.version,
+      kind,
+      criterionIds: criterionIds2,
+      text: `[alert:${sev}] ${input2.message.trim()}`,
+      source: input2.source.startsWith("alert:") ? input2.source : `alert:${input2.source}`,
+      track: track2
+    },
+    { actor: input2.actor ?? "monitoring", via: "hook" }
+  );
+  const after = repo.view(input2.project, track2);
+  const signal2 = after.ranked.find((r) => r.key === input2.key)?.signal ?? "unverified";
+  return { projectId: input2.project, key: input2.key, kind, signal: signal2 };
+}
+
+// src/http-server.ts
+import { createServer } from "node:http";
+import { randomBytes, timingSafeEqual } from "node:crypto";
+function isHumanDecision(action) {
+  return action.op === "approve_change" || action.op === "reject_change" || action.op === "promote_track" || action.op === "accept_flow_change" || action.op === "reject_flow_change";
+}
+function sendJson(res, status, body) {
+  const text3 = JSON.stringify(body, null, 2);
+  res.writeHead(status, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store"
+  });
+  res.end(text3);
+}
+async function readJsonBody(req, maxBytes = 1048576) {
+  const chunks = [];
+  let total = 0;
+  for await (const chunk of req) {
+    const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    total += buf.length;
+    if (total > maxBytes) throw new Error("Request body too large");
+    chunks.push(buf);
+  }
+  const raw = Buffer.concat(chunks).toString("utf8").trim();
+  if (!raw) return {};
+  return JSON.parse(raw);
+}
+function tokenMatches(provided, expected) {
+  const a = Buffer.from(provided, "utf8");
+  const b2 = Buffer.from(expected, "utf8");
+  if (a.length !== b2.length) return false;
+  return timingSafeEqual(a, b2);
+}
+function startLoopbackServer(repo, opts) {
+  const port = opts?.port ?? 4318;
+  const token = opts?.token?.trim() || randomBytes(24).toString("hex");
+  const server = createServer(async (req, res) => {
+    try {
+      const url2 = new URL(req.url ?? "/", `http://127.0.0.1:${port}`);
+      const pathname = url2.pathname;
+      const method = (req.method ?? "GET").toUpperCase();
+      if (method === "GET" && pathname === "/api/v1/health") {
+        sendJson(res, 200, { ok: true, service: "hillclimb", bind: "127.0.0.1" });
+        return;
+      }
+      const authHeader = req.headers.authorization ?? "";
+      const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+      if (!bearer || !tokenMatches(bearer, token)) {
+        sendJson(res, 401, { error: "Unauthorized: valid Bearer token required" });
+        return;
+      }
+      if (method === "GET" && pathname === "/api/v1/projects") {
+        sendJson(res, 200, { projects: repo.listProjects(), inboxCount: repo.inboxCountTotal() });
+        return;
+      }
+      const match = /^\/api\/v1\/projects\/([^/]+)\/([a-z-]+)$/.exec(pathname);
+      if (!match) {
+        sendJson(res, 404, { error: `Unknown endpoint ${method} ${pathname}` });
+        return;
+      }
+      const projectId = repo.resolveProjectId(decodeURIComponent(match[1]));
+      const resource = match[2];
+      if (method === "GET" && resource === "tree") {
+        const track2 = url2.searchParams.get("track") ?? "main";
+        sendJson(res, 200, { projectId, track: track2, snapshot: repo.view(projectId, track2) });
+        return;
+      }
+      if (method === "GET" && resource === "next") {
+        const track2 = url2.searchParams.get("track") ?? "main";
+        const scope = url2.searchParams.get("scope");
+        const snap = repo.view(projectId, track2);
+        const allowed = scope ? repo.resolveScopeOutcomeKeys(projectId, scope, snap) : null;
+        const nextKeys = allowed ? snap.next.filter((k) => allowed.has(k)) : snap.next;
+        sendJson(res, 200, { projectId, track: track2, next: nextKeys, inbox: snap.inbox });
+        return;
+      }
+      if (method === "GET" && resource === "search") {
+        const q = url2.searchParams.get("q") ?? "";
+        const limit = Number(url2.searchParams.get("limit") ?? "30");
+        sendJson(res, 200, { projectId, query: q, hits: repo.search(projectId, q, { limit }) });
+        return;
+      }
+      if (method === "GET" && resource === "insights") {
+        const days = Number(url2.searchParams.get("days") ?? "30");
+        const track2 = url2.searchParams.get("track") ?? "main";
+        const dir = repo.getProject(projectId)?.directory ?? null;
+        const scanned = dir ? scanProjectClimbs(dir) : null;
+        sendJson(res, 200, computeInsights(repo, projectId, { days, track: track2, scannedClimbs: scanned }));
+        return;
+      }
+      if (method === "GET" && resource === "artifacts") {
+        const folder = url2.searchParams.get("folder") ?? void 0;
+        sendJson(res, 200, { projectId, artifacts: repo.listArtifacts(projectId, folder) });
+        return;
+      }
+      if (method === "POST" && resource === "artifacts") {
+        const body = await readJsonBody(req);
+        if (typeof body.template === "string") {
+          const dir = repo.getProject(projectId)?.directory ?? null;
+          const scanned = dir ? scanProjectClimbs(dir) : null;
+          const gen = generateArtifactFromTemplate(repo, projectId, {
+            template: body.template,
+            title: typeof body.title === "string" ? body.title : void 0,
+            folder: typeof body.folder === "string" ? body.folder : void 0,
+            releaseName: typeof body.releaseName === "string" ? body.releaseName : void 0,
+            scannedClimbs: scanned,
+            actor: "rest-api",
+            save: true
+          });
+          sendJson(res, 201, { artifact: gen.saved });
+          return;
+        }
+        const saved = repo.saveArtifact(projectId, {
+          id: typeof body.id === "string" ? body.id : void 0,
+          folder: typeof body.folder === "string" ? body.folder : void 0,
+          title: String(body.title ?? ""),
+          body: String(body.body ?? ""),
+          citations: Array.isArray(body.citations) ? body.citations.map(String) : void 0,
+          locked: typeof body.locked === "boolean" ? body.locked : void 0,
+          actor: "rest-api"
+        });
+        sendJson(res, 201, { artifact: saved });
+        return;
+      }
+      if (method === "GET" && resource === "export") {
+        const format = url2.searchParams.get("format") === "markdown" ? "markdown" : "html";
+        const dir = repo.getProject(projectId)?.directory ?? null;
+        const scanned = dir ? scanProjectClimbs(dir) : null;
+        const out = exportShareableReport(repo, projectId, {
+          format,
+          track: url2.searchParams.get("track") ?? "main",
+          scope: url2.searchParams.get("scope") ?? void 0,
+          releaseName: url2.searchParams.get("release") ?? void 0,
+          goalKey: url2.searchParams.get("goal") ?? void 0,
+          scannedClimbs: scanned
+        });
+        res.writeHead(200, {
+          "Content-Type": format === "html" ? "text/html; charset=utf-8" : "text/markdown; charset=utf-8",
+          "Content-Disposition": `inline; filename="${out.filename}"`,
+          "Cache-Control": "no-store"
+        });
+        res.end(out.content);
+        return;
+      }
+      if (method === "POST" && resource === "act") {
+        const body = await readJsonBody(req);
+        const parsed = actionSchema.parse(body.action ?? body);
+        const humanConfirmed = req.headers["x-hillclimb-human-confirmed"] === "true";
+        if (isHumanDecision(parsed) && !humanConfirmed) {
+          sendJson(res, 403, { error: "Human confirmation header required for contract/flow/track approval decisions" });
+          return;
+        }
+        repo.act(projectId, parsed, { actor: String(body.actor ?? "rest-api"), via: "rest" });
+        sendJson(res, 200, { ok: true, projectId, inbox: repo.view(projectId).inbox });
+        return;
+      }
+      if (method === "POST" && resource === "alerts") {
+        const body = await readJsonBody(req);
+        const result = ingestAlert(repo, {
+          project: projectId,
+          key: String(body.key ?? ""),
+          message: String(body.message ?? ""),
+          source: String(body.source ?? "webhook"),
+          severity: body.severity === "critical" || body.severity === "error" || body.severity === "warning" || body.severity === "info" ? body.severity : "error",
+          criterionIds: Array.isArray(body.criterionIds) ? body.criterionIds.map(String) : void 0,
+          track: typeof body.track === "string" ? body.track : "main",
+          actor: "rest-alert"
+        });
+        sendJson(res, 200, result);
+        return;
+      }
+      sendJson(res, 404, { error: `Unknown endpoint ${method} ${pathname}` });
+    } catch (error62) {
+      sendJson(res, 400, { error: error62 instanceof Error ? error62.message : String(error62) });
+    }
+  });
+  return new Promise((resolve8, reject) => {
+    server.once("error", reject);
+    server.listen(port, "127.0.0.1", () => {
+      const addr = server.address();
+      const boundPort = typeof addr === "object" && addr ? addr.port : port;
+      resolve8({
+        url: `http://127.0.0.1:${boundPort}`,
+        port: boundPort,
+        token,
+        close: () => new Promise((done, fail3) => {
+          server.close((err) => err ? fail3(err) : done());
+        })
+      });
+    });
+  });
+}
+
 // src/cli.ts
-var BOOLEAN_FLAGS = /* @__PURE__ */ new Set(["json", "apply", "help"]);
+var BOOLEAN_FLAGS = /* @__PURE__ */ new Set(["json", "apply", "help", "watch", "propose"]);
 function parseArgs(argv) {
   const positionals = [];
   const options = {};
@@ -28851,7 +32039,13 @@ Contract tree commands:
   hillclimb tree [--project <id>] [--track <name>] [--outcome <key>] [--json]
   hillclimb act '<json>' [--project <id>]
   hillclimb lint [--project <id>]
-  hillclimb sync [--project <id>] [--dir <repo>]
+  hillclimb sync [--project <id>] [--dir <repo>] [--watch]
+  hillclimb search <query> [--project <id>] [--limit N] [--json]
+  hillclimb insights [--project <id>] [--days 30] [--track main] [--json]
+  hillclimb export [--project <id>] [--format html|markdown] [--release <name>] [--out <file>]
+  hillclimb import [--blueprint <id> | --file <md>] [--project <id>] [--propose] [--apply]
+  hillclimb ingest-alert --key <K> --message <msg> --source <src> [--severity error|warning|info] [--project <id>]
+  hillclimb serve [--port 4318] [--token <secret>] [--data-dir <dir>]
 
 CI evidence & equal-budget studies:
   hillclimb ingest-junit --report <file> [--project <id>] [--dir <repo>] [--format auto|junit|json|text] [--source <url>] [--track <name>] [--prefixes HC] [--contract-frozen-at <iso>] [--apply]
@@ -28995,14 +32189,14 @@ async function main() {
         const rawAction = positionals[0];
         if (!rawAction) throw new HillClimbError("Pass a JSON action object as the positional argument.", { code: "missing_action" });
         const action = actionSchema.parse(JSON.parse(rawAction));
-        if (action.op === "approve_change" || action.op === "reject_change" || action.op === "promote_track") {
+        if (action.op === "approve_change" || action.op === "reject_change" || action.op === "promote_track" || action.op === "accept_flow_change" || action.op === "reject_flow_change") {
           throw new HillClimbError("Review this decision in the Hill Climb UI inbox (human confirmation required).", {
             code: "human_decision_required"
           });
         }
         const activeRepo = ensureRepo();
         const project = activeRepo.resolveProjectId(str(options.project), str(options.dir));
-        activeRepo.act(project, action);
+        activeRepo.act(project, action, { actor: "cli", via: "cli" });
         const view = activeRepo.view(project);
         console.log(
           JSON.stringify(
@@ -29035,8 +32229,197 @@ async function main() {
             code: "missing_directory"
           });
         }
-        const res = await writeMirror(dir, activeRepo.view(project));
+        const runSync = async () => writeMirror(dir, activeRepo.view(project), {
+          artifacts: activeRepo.listArtifacts(project),
+          scannedClimbs: scanProjectClimbs(dir, { rowLimit: 10, includeNotes: true })
+        });
+        const res = await runSync();
         console.log(JSON.stringify(res, null, 2));
+        if (bool(options.watch)) {
+          const intervalSec = Math.max(5, num(options.interval) ?? 30);
+          console.error(`Watching ${project} -> ${res.root} every ${intervalSec}s (Ctrl-C to stop)...`);
+          await new Promise((resolveWatch) => {
+            const timer = setInterval(() => void runSync().catch(() => void 0), intervalSec * 1e3);
+            const stop = () => {
+              clearInterval(timer);
+              resolveWatch();
+            };
+            process.once("SIGINT", stop);
+            process.once("SIGTERM", stop);
+          });
+        }
+        return 0;
+      }
+      case "search": {
+        const query = positionals.join(" ").trim() || str(options.query) || "";
+        if (!query) throw new HillClimbError("Pass a search query: hillclimb search <query>", { code: "missing_query" });
+        const activeRepo = ensureRepo();
+        const pid = str(options.project) || str(options.dir) ? activeRepo.resolveProjectId(str(options.project), str(options.dir)) : null;
+        const hits = activeRepo.search(pid, query, { limit: num(options.limit) ?? 25 });
+        if (bool(options.json)) {
+          console.log(JSON.stringify({ query, project: pid, hits }, null, 2));
+        } else if (hits.length === 0) {
+          console.log(`No matches for "${query}".`);
+        } else {
+          for (const h of hits) {
+            console.log(`[${h.entityType}] ${h.entityId} (${h.project}) \u2014 ${h.title}
+  ${h.snippet}`);
+          }
+        }
+        return 0;
+      }
+      case "insights": {
+        const activeRepo = ensureRepo();
+        const project = activeRepo.resolveProjectId(str(options.project), str(options.dir));
+        const dir = str(options.dir) ?? activeRepo.getProject(project)?.directory ?? null;
+        const scanned = dir ? scanProjectClimbs(dir, { rowLimit: 50, includeNotes: false }) : null;
+        const ins = computeInsights(activeRepo, project, {
+          days: num(options.days) ?? 30,
+          track: str(options.track) ?? "main",
+          scannedClimbs: scanned
+        });
+        console.log(JSON.stringify(ins, null, 2));
+        return 0;
+      }
+      case "export": {
+        const activeRepo = ensureRepo();
+        const project = activeRepo.resolveProjectId(str(options.project), str(options.dir));
+        const dir = str(options.dir) ?? activeRepo.getProject(project)?.directory ?? null;
+        const scanned = dir ? scanProjectClimbs(dir, { rowLimit: 25, includeNotes: false }) : null;
+        const format = str(options.format) === "markdown" ? "markdown" : "html";
+        const out = exportShareableReport(activeRepo, project, {
+          format,
+          track: str(options.track) ?? "main",
+          releaseName: str(options.release),
+          scope: str(options.scope),
+          goalKey: str(options.goal),
+          scannedClimbs: scanned
+        });
+        const outPath = str(options.out);
+        if (outPath) {
+          writeFileSync3(resolve7(outPath), out.content, "utf8");
+          console.log(JSON.stringify({ written: resolve7(outPath), format: out.format, outcomes: out.outcomesIncluded }, null, 2));
+        } else {
+          process.stdout.write(out.content);
+        }
+        return 0;
+      }
+      case "import": {
+        const bpId = str(options.blueprint);
+        const filePath = str(options.file);
+        if (!bpId && !filePath) {
+          console.log(JSON.stringify({ blueprints: listBlueprints() }, null, 2));
+          return 0;
+        }
+        const activeRepo = ensureRepo();
+        const project = activeRepo.resolveProjectId(str(options.project), str(options.dir));
+        const existingTree = activeRepo.read(project);
+        const existingKeys = /* @__PURE__ */ new Set([
+          ...existingTree.goals.map((g) => g.key),
+          ...existingTree.outcomes.map((o) => o.key)
+        ]);
+        const asProposals = bool(options.propose);
+        const built = bpId ? blueprintActions(bpId, { asProposals, keyPrefix: str(options.prefix), existingKeys }) : parseMarkdownImport(readFileSync7(resolve7(filePath), "utf8"), {
+          goalKey: str(options.goal),
+          prefix: str(options.prefix),
+          asProposals,
+          existingKeys
+        });
+        if (bool(options.apply) && built.actions.length > 0) {
+          activeRepo.actBatch(project, built.actions, { actor: "cli", via: "cli" });
+        }
+        console.log(
+          JSON.stringify(
+            {
+              project,
+              applied: bool(options.apply) ? built.actions.length : 0,
+              actionCount: built.actions.length,
+              lint: { passed: built.lint.passed, errors: built.lint.errorCount, warnings: built.lint.warningCount }
+            },
+            null,
+            2
+          )
+        );
+        return 0;
+      }
+      case "artifact": {
+        const activeRepo = ensureRepo();
+        const project = activeRepo.resolveProjectId(str(options.project), str(options.dir));
+        const template = str(options.template) ?? "weekly-update";
+        const dir = str(options.dir) ?? activeRepo.getProject(project)?.directory ?? null;
+        const scanned = dir ? scanProjectClimbs(dir, { rowLimit: 25, includeNotes: false }) : null;
+        const gen = generateArtifactFromTemplate(activeRepo, project, {
+          template,
+          title: str(options.title),
+          folder: str(options.folder),
+          releaseName: str(options.release),
+          scannedClimbs: scanned,
+          actor: "cli",
+          save: bool(options.apply)
+        });
+        console.log(bool(options.json) ? JSON.stringify(gen, null, 2) : gen.body);
+        return 0;
+      }
+      case "ingest-alert": {
+        const key2 = str(options.key);
+        const msg = str(options.message);
+        const src = str(options.source) ?? "monitoring";
+        if (!key2 || !msg) throw new HillClimbError("Pass --key <outcome> and --message <text>.", { code: "missing_alert_args" });
+        const activeRepo = ensureRepo();
+        const project = activeRepo.resolveProjectId(str(options.project), str(options.dir));
+        const sev = str(options.severity) ?? "error";
+        const res = ingestAlert(activeRepo, {
+          project,
+          key: key2,
+          message: msg,
+          source: src,
+          severity: sev,
+          track: str(options.track) ?? "main",
+          actor: "cli-alert"
+        });
+        console.log(JSON.stringify(res, null, 2));
+        return 0;
+      }
+      case "serve": {
+        const activeRepo = ensureRepo();
+        const automation = createAutomationEngine(activeRepo);
+        const srv = await startLoopbackServer(activeRepo, {
+          port: num(options.port) ?? 4318,
+          token: str(options.token)
+        });
+        console.log(
+          JSON.stringify(
+            {
+              url: srv.url,
+              bind: "127.0.0.1",
+              port: srv.port,
+              token: srv.token,
+              endpoints: [
+                "GET /api/v1/health",
+                "GET /api/v1/projects",
+                "GET /api/v1/projects/:id/tree",
+                "GET /api/v1/projects/:id/next",
+                "GET /api/v1/projects/:id/search?q=...",
+                "GET /api/v1/projects/:id/insights",
+                "GET /api/v1/projects/:id/artifacts",
+                "GET /api/v1/projects/:id/export?format=html|markdown",
+                "POST /api/v1/projects/:id/act",
+                "POST /api/v1/projects/:id/alerts",
+                "POST /api/v1/projects/:id/artifacts"
+              ]
+            },
+            null,
+            2
+          )
+        );
+        await new Promise((done) => {
+          const stop = () => {
+            automation.stop();
+            void srv.close().finally(done);
+          };
+          process.once("SIGINT", stop);
+          process.once("SIGTERM", stop);
+        });
         return 0;
       }
       case "ingest-junit": {

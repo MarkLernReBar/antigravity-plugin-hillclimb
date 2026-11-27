@@ -17,9 +17,9 @@
 // evidence that cites the track's own confirming evidence for the current
 // version; it never copies a green status from an older version.
 
-import type { Comment, Evidence, Frame, Outcome, Plan, Signal, Tree } from './model.js'
+import type { Comment, Evidence, FlowProposal, FlowProposalFrameInput, Frame, Outcome, Pin, Signal, Tree } from './model.js'
 import type { PlanningAction } from './actions.js'
-import { snapshot } from './tree.js'
+import { snapshot, type ActionMeta } from './tree.js'
 
 /** The evidence namespace live status is computed from. */
 export const LIVE_TRACK = 'main'
@@ -133,8 +133,15 @@ function nextId(prefix: string, hint: string, taken: Set<string>): string {
   return `${base}_${index}`
 }
 
-function log(tree: Tree, at: string, key: string, message: string, signal: Signal|null = null): void {
-  tree.activity.push({ at, key, text: message, signal })
+function log(tree: Tree, at: string, key: string, message: string, signal: Signal | null = null, meta?: ActionMeta): void {
+  tree.activity.push({
+    at,
+    key,
+    text: message,
+    signal,
+    ...(meta?.actor ? { actor: meta.actor } : {}),
+    ...(meta?.via ? { via: meta.via } : {}),
+  })
 }
 
 function clip(value: string, limit = 160): string {
@@ -298,13 +305,38 @@ export function previewPromotion(tree: Tree, name: string, keys: string[], now =
 // applyPlanning
 // ---------------------------------------------------------------------------
 
+function normalizeFrameInput(tree: Tree, step: FlowProposalFrameInput, label: string): Frame {
+  const outcome = outcomeOf(tree, step.key)
+  if (!outcome.criteria.some((criterion) => criterion.id === step.criterionId)) {
+    fail(`${label} names criterion "${step.criterionId}", which outcome "${step.key}" does not have at v${outcome.version}`)
+  }
+  const kind = step.kind ?? (step.imagePath ? 'image' : 'html')
+  const html = (step.html ?? '').trim()
+  const imagePath = step.imagePath?.trim() || null
+  if (kind === 'html' && html === '') fail(`${label} html must be non-empty for html frames`)
+  if (kind === 'image' && !imagePath) fail(`${label} imagePath must be non-empty for image frames`)
+  return {
+    title: text(step.title, `${label} title`),
+    key: outcome.key,
+    criterionId: step.criterionId,
+    html,
+    kind,
+    ...(imagePath ? { imagePath } : {}),
+    ...(step.viewport ? { viewport: step.viewport } : {}),
+    ...(step.notes?.trim() ? { notes: step.notes.trim() } : {}),
+    version: 1,
+    history: [],
+    pins: [],
+  }
+}
+
 /**
  * Apply one planning action to `tree` in place.
  *
  * Refused actions throw and leave the tree untouched; accepted actions append
  * and record one activity row. `now` is the recorded time (an ISO date-time).
  */
-export function applyPlanning(tree: Tree, a: PlanningAction, now: string): void {
+export function applyPlanning(tree: Tree, a: PlanningAction, now: string, meta?: ActionMeta): void {
   const at = stamp(now)
 
   switch (a.op) {
@@ -314,8 +346,15 @@ export function applyPlanning(tree: Tree, a: PlanningAction, now: string): void 
       const latest = latestPlanVersion(tree, key)
       if (latest > 0) fail(`outcome "${key}" already has plan v${latest}; use revise_plan`)
       const body = text(a.body, 'plan body')
-      tree.plans.push({ key: outcome.key, version: 1, body, created: at })
-      log(tree, at, key, `Plan v1 written for ${key}`)
+      tree.plans.push({
+        key: outcome.key,
+        version: 1,
+        body,
+        ...(meta?.actor ? { actor: meta.actor } : {}),
+        ...(meta?.via ? { via: meta.via } : {}),
+        created: at,
+      })
+      log(tree, at, key, `Plan v1 written for ${key}`, null, meta)
       return
     }
 
@@ -327,8 +366,15 @@ export function applyPlanning(tree: Tree, a: PlanningAction, now: string): void 
       if (a.version !== latest) fail(`plan for "${key}" is at v${latest}; revise from that version`)
       const body = text(a.body, 'plan body')
       const version = latest + 1
-      tree.plans.push({ key, version, body, created: at })
-      log(tree, at, key, `Plan v${version} written for ${key}`)
+      tree.plans.push({
+        key,
+        version,
+        body,
+        ...(meta?.actor ? { actor: meta.actor } : {}),
+        ...(meta?.via ? { via: meta.via } : {}),
+        created: at,
+      })
+      log(tree, at, key, `Plan v${version} written for ${key}`, null, meta)
       return
     }
 
@@ -346,10 +392,35 @@ export function applyPlanning(tree: Tree, a: PlanningAction, now: string): void 
         if (parent === undefined) fail(`unknown parent comment "${parentId}"`)
         if (parent.key !== key) fail(`parent comment "${parentId}" belongs to "${parent.key}", not "${key}"`)
       }
+      const planVersion = a.planVersion ?? null
+      if (planVersion !== null && !tree.plans.some((p) => p.key === key && p.version === planVersion)) {
+        fail(`outcome "${key}" has no plan v${planVersion}`)
+      }
       const id = nextId('cm', key, takenIds(tree, 'cm'))
-      const comment: Comment = { id, key, parentId, text: body, options, answer: null, created: at }
+      const comment: Comment = {
+        id,
+        key,
+        parentId,
+        ...(planVersion !== null ? { planVersion } : {}),
+        text: body,
+        options,
+        answer: null,
+        ...(a.threadId ? { threadId: a.threadId } : {}),
+        ...(meta?.actor ? { actor: meta.actor } : {}),
+        ...(meta?.via ? { via: meta.via } : {}),
+        created: at,
+      }
       tree.comments.push(comment)
-      log(tree, at, key, options.length > 0 ? `Question on ${key} with ${options.length} options` : `Comment on ${key}`)
+      log(
+        tree,
+        at,
+        key,
+        options.length > 0
+          ? `Question on ${key}${planVersion ? ` (plan v${planVersion})` : ''} with ${options.length} options`
+          : `Comment on ${key}${planVersion ? ` (plan v${planVersion})` : ''}`,
+        null,
+        meta,
+      )
       return
     }
 
@@ -363,7 +434,7 @@ export function applyPlanning(tree: Tree, a: PlanningAction, now: string): void 
         fail(`answer must be one of: ${comment.options.join(', ')}`)
       }
       comment.answer = answer
-      log(tree, at, comment.key, `Answered ${id} on ${comment.key}: ${clip(answer)}`)
+      log(tree, at, comment.key, `Answered ${id} on ${comment.key}: ${clip(answer)}`, null, meta)
       return
     }
 
@@ -373,7 +444,7 @@ export function applyPlanning(tree: Tree, a: PlanningAction, now: string): void 
       if (tree.tracks.some((track) => track.name === name)) fail(`track "${name}" already exists`)
       const description = text(a.description, 'track description')
       tree.tracks.push({ name, description })
-      log(tree, at, name, `Track "${name}" created`)
+      log(tree, at, name, `Track "${name}" created`, null, meta)
       return
     }
 
@@ -394,22 +465,22 @@ export function applyPlanning(tree: Tree, a: PlanningAction, now: string): void 
           track: LIVE_TRACK,
           text: `Cut over from track "${preview.track}": proven there at v${outcome.version}.`,
           source: `track:${preview.track}`,
+          ...(meta?.actor ? { actor: meta.actor } : {}),
+          ...(meta?.via ? { via: meta.via } : {}),
           created: at,
         }
         evidenceIds.add(evidence.id)
         tree.evidence.push(evidence)
         cut.push(item.key)
-        log(tree, at, item.key, `Cut over from track "${preview.track}" at v${outcome.version}`, "verified")
+        log(tree, at, item.key, `Cut over from track "${preview.track}" at v${outcome.version}`, 'verified', meta)
       }
-      log(tree, at, preview.track, `Track "${preview.track}" cut over ${cut.length} outcome(s) to live: ${cut.join(', ')}`)
+      log(tree, at, preview.track, `Track "${preview.track}" cut over ${cut.length} outcome(s) to live: ${cut.join(', ')}`, null, meta)
       return
     }
 
     case 'create_release': {
       const name = text(a.name, 'release name')
       const scenario = text(a.scenario, 'release scenario')
-      // A launch is identified by its name inside one scenario: scenarios are
-      // compared, so the same launch appears in each with its own window.
       if (tree.releases.some((release) => release.name === name && release.scenario === scenario)) {
         fail(`release "${name}" already exists in scenario "${scenario}"`)
       }
@@ -424,7 +495,39 @@ export function applyPlanning(tree: Tree, a: PlanningAction, now: string): void 
         if (clash !== undefined) fail(`outcome "${key}" is already in release "${clash.name}" in scenario "${scenario}"`)
       }
       tree.releases.push({ name, keys: [...keys], scenario, date: a.date })
-      log(tree, at, name, `Release "${name}" dated ${a.date} in scenario "${scenario}" with ${keys.length} outcome(s)`)
+      log(tree, at, name, `Release "${name}" dated ${a.date} in scenario "${scenario}" with ${keys.length} outcome(s)`, null, meta)
+      return
+    }
+
+    case 'revise_release': {
+      const name = text(a.name, 'release name')
+      const scenario = text(a.scenario, 'release scenario')
+      const release = tree.releases.find((r) => r.name === name && r.scenario === scenario)
+      if (!release) fail(`unknown release "${name}" in scenario "${scenario}"`)
+      if (a.newName !== undefined) {
+        const nextName = text(a.newName, 'new release name')
+        if (nextName !== release.name && tree.releases.some((r) => r.name === nextName && r.scenario === scenario)) {
+          fail(`release "${nextName}" already exists in scenario "${scenario}"`)
+        }
+        release.name = nextName
+      }
+      if (a.date !== undefined) {
+        if (!realDate(a.date)) fail(`release date must be a real calendar date (YYYY-MM-DD), got "${a.date}"`)
+        release.date = a.date
+      }
+      if (a.keys !== undefined) {
+        const keys = a.keys.map((k) => k.trim())
+        if (keys.length === 0) fail('a release needs at least one outcome')
+        const repeated = duplicates(keys)
+        if (repeated.length > 0) fail(`duplicate key(s): ${repeated.join(', ')}`)
+        for (const k of keys) outcomeOf(tree, k)
+        for (const k of keys) {
+          const clash = tree.releases.find((r) => r !== release && r.scenario === scenario && r.keys.includes(k))
+          if (clash !== undefined) fail(`outcome "${k}" is already in release "${clash.name}" in scenario "${scenario}"`)
+        }
+        release.keys = [...keys]
+      }
+      log(tree, at, release.name, `Revised release "${release.name}" (${release.date}, ${release.keys.length} outcome(s)) in "${scenario}"`, null, meta)
       return
     }
 
@@ -433,21 +536,14 @@ export function applyPlanning(tree: Tree, a: PlanningAction, now: string): void 
       if (tree.flows.some((flow) => flow.name === name)) fail(`flow "${name}" already exists`)
       const steps = Array.isArray(a.frames) ? a.frames : []
       if (steps.length === 0) fail('a flow needs at least one frame')
-      const frames: Frame[] = steps.map((step, index) => {
-        const outcome = outcomeOf(tree, step.key)
-        if (!outcome.criteria.some((criterion) => criterion.id === step.criterionId)) {
-          fail(`frame ${index} names criterion "${step.criterionId}", which outcome "${step.key}" does not have at v${outcome.version}`)
-        }
-        return {
-          title: text(step.title, `frame ${index} title`),
-          key: outcome.key,
-          criterionId: step.criterionId,
-          html: text(step.html, `frame ${index} html`),
-          pins: [],
-        }
+      const frames: Frame[] = steps.map((step, index) => normalizeFrameInput(tree, step, `frame ${index}`))
+      tree.flows.push({
+        name,
+        ...(a.folder?.trim() ? { folder: a.folder.trim() } : {}),
+        ...(a.designKit?.trim() ? { designKit: a.designKit.trim() } : {}),
+        frames,
       })
-      tree.flows.push({ name, frames })
-      log(tree, at, name, `Flow "${name}" with ${frames.length} frame(s)`)
+      log(tree, at, name, `Flow "${name}" with ${frames.length} frame(s)`, null, meta)
       return
     }
 
@@ -463,13 +559,229 @@ export function applyPlanning(tree: Tree, a: PlanningAction, now: string): void 
       const pinText = text(a.text, 'pin text')
       const frame = flow.frames[a.frame]
       if (frame === undefined) fail(`frame ${a.frame} is out of range for flow "${name}"`)
-      frame.pins.push({ x: a.x, y: a.y, text: pinText })
-      log(tree, at, name, `Pinned comment on frame ${a.frame} of "${name}": ${clip(pinText)}`)
+      const taken = new Set(frame.pins.map((p) => p.id).filter((id): id is string => Boolean(id)))
+      const pinId = nextId('pin', `${name}_${a.frame}`, taken)
+      const pin: Pin = {
+        id: pinId,
+        x: a.x,
+        y: a.y,
+        text: pinText,
+        ...(a.kind ? { kind: a.kind } : {}),
+        ...(a.geometry ? { geometry: a.geometry } : {}),
+        ...(a.selector ? { selector: a.selector } : {}),
+        ...(a.forAgents !== undefined ? { forAgents: a.forAgents } : {}),
+        resolved: false,
+        created: at,
+      }
+      frame.pins.push(pin)
+      log(tree, at, name, `Pinned comment on frame ${a.frame} of "${name}": ${clip(pinText)}`, null, meta)
+      return
+    }
+
+    case 'resolve_pin': {
+      const name = text(a.name, 'flow name')
+      const flow = tree.flows.find((candidate) => candidate.name === name)
+      if (flow === undefined) fail(`unknown flow "${name}"`)
+      const frame = flow.frames[a.frame]
+      if (frame === undefined) fail(`frame ${a.frame} is out of range for flow "${name}"`)
+      const pin = a.pinId
+        ? frame.pins.find((p) => p.id === a.pinId)
+        : a.pinIndex !== undefined
+          ? frame.pins[a.pinIndex]
+          : undefined
+      if (!pin) fail(`pin not found on frame ${a.frame} of "${name}"`)
+      pin.resolved = a.resolved
+      pin.resolvedBy = a.resolved ? (a.resolvedBy?.trim() || meta?.actor || 'resolved') : null
+      log(tree, at, name, `${a.resolved ? 'Resolved' : 'Reopened'} pin on frame ${a.frame} of "${name}"`, null, meta)
+      return
+    }
+
+    case 'propose_flow_change': {
+      const proposals = (tree.flowProposals ??= [])
+      const flowName = text(a.flowName, 'flowName')
+      const kind = a.kind ?? 'change'
+      if (kind === 'new_flow') {
+        if (tree.flows.some((f) => f.name === flowName)) fail(`flow "${flowName}" already exists`)
+        const list = a.frames ?? (a.frame ? [a.frame] : null)
+        if (!list || list.length === 0) fail('propose_flow_change (new_flow) requires frames')
+        list.forEach((step, idx) => normalizeFrameInput(tree, step, `proposed frame ${idx}`))
+      } else if (kind === 'new_step') {
+        if (!tree.flows.some((f) => f.name === flowName)) fail(`unknown flow "${flowName}"`)
+        if (!a.frame) fail('propose_flow_change (new_step) requires frame')
+        normalizeFrameInput(tree, a.frame, 'proposed step')
+      } else {
+        const flow = tree.flows.find((f) => f.name === flowName)
+        if (!flow) fail(`unknown flow "${flowName}"`)
+        const idx = a.frameIndex ?? -1
+        const target = flow.frames[idx]
+        if (!target) fail(`frame ${idx} is out of range for flow "${flowName}"`)
+        const curVer = target.version ?? 1
+        if (a.basedOnVersion !== undefined && a.basedOnVersion !== null && a.basedOnVersion !== curVer) {
+          fail(`stale flow proposal: frame ${idx} of "${flowName}" is at v${curVer}, not v${a.basedOnVersion}`)
+        }
+        if (!a.frame) fail('propose_flow_change (change) requires frame')
+        normalizeFrameInput(tree, a.frame, `proposed frame ${idx}`)
+      }
+      const taken = new Set(proposals.map((p) => p.id))
+      const id = nextId('fp', flowName, taken)
+      const proposal: FlowProposal = {
+        id,
+        kind,
+        flowName,
+        ...(a.folder ? { folder: a.folder } : {}),
+        ...(a.designKit ? { designKit: a.designKit } : {}),
+        frameIndex: a.frameIndex ?? null,
+        basedOnVersion: a.basedOnVersion ?? null,
+        frame: a.frame ?? null,
+        frames: a.frames ?? null,
+        selfGrade: a.selfGrade ?? null,
+        ref: a.ref ?? null,
+        spot: a.spot ?? null,
+        note: a.note ?? null,
+        state: 'pending',
+        reviewNote: null,
+        threadId: a.threadId ?? null,
+        actor: meta?.actor ?? null,
+        ...(meta?.via ? { via: meta.via } : {}),
+        created: at,
+      }
+      proposals.push(proposal)
+      log(tree, at, flowName, `Proposed flow ${kind} ${id} on "${flowName}"${a.ref ? ` (${a.ref})` : ''}`, null, meta)
+      return
+    }
+
+    case 'accept_flow_change': {
+      const proposals = (tree.flowProposals ??= [])
+      const id = text(a.id, 'flow proposal id')
+      const proposal = proposals.find((p) => p.id === id)
+      if (!proposal) fail(`unknown flow proposal "${id}"`)
+      if (proposal.state !== 'pending') fail(`flow proposal "${id}" is ${proposal.state}, not pending`)
+      if (proposal.kind === 'new_flow') {
+        if (tree.flows.some((f) => f.name === proposal.flowName)) fail(`flow "${proposal.flowName}" already exists`)
+        const list = proposal.frames ?? (proposal.frame ? [proposal.frame] : [])
+        if (list.length === 0) fail(`flow proposal "${id}" has no frames`)
+        const frames = list.map((step, idx) => normalizeFrameInput(tree, step, `frame ${idx}`))
+        tree.flows.push({
+          name: proposal.flowName,
+          ...(proposal.folder ? { folder: proposal.folder } : {}),
+          ...(proposal.designKit ? { designKit: proposal.designKit } : {}),
+          frames,
+        })
+      } else if (proposal.kind === 'new_step') {
+        const flow = tree.flows.find((f) => f.name === proposal.flowName)
+        if (!flow) fail(`unknown flow "${proposal.flowName}"`)
+        if (!proposal.frame) fail(`flow proposal "${id}" has no frame`)
+        const frame = normalizeFrameInput(tree, proposal.frame, 'new step')
+        if (proposal.frameIndex !== null && proposal.frameIndex >= 0 && proposal.frameIndex <= flow.frames.length) {
+          flow.frames.splice(proposal.frameIndex, 0, frame)
+        } else {
+          flow.frames.push(frame)
+        }
+      } else {
+        const flow = tree.flows.find((f) => f.name === proposal.flowName)
+        if (!flow) fail(`unknown flow "${proposal.flowName}"`)
+        const idx = proposal.frameIndex ?? -1
+        const current = flow.frames[idx]
+        if (!current) fail(`frame ${idx} no longer exists in flow "${proposal.flowName}"`)
+        const curVer = current.version ?? 1
+        if (proposal.basedOnVersion !== null && proposal.basedOnVersion !== curVer) {
+          fail(`stale flow proposal "${id}": based on v${proposal.basedOnVersion}, now v${curVer}`)
+        }
+        if (!proposal.frame) fail(`flow proposal "${id}" has no frame`)
+        const nextFrame = normalizeFrameInput(tree, proposal.frame, `frame ${idx}`)
+        const history = [...(current.history ?? [])]
+        history.push({
+          version: curVer,
+          title: current.title,
+          html: current.html,
+          kind: current.kind,
+          imagePath: current.imagePath ?? null,
+          viewport: current.viewport ?? null,
+          notes: current.notes ?? null,
+          at,
+          actor: proposal.actor ?? null,
+          ref: proposal.ref ?? null,
+        })
+        flow.frames[idx] = {
+          ...nextFrame,
+          version: curVer + 1,
+          history,
+          pins: current.pins,
+          driftDetected: false,
+          driftNote: null,
+        }
+      }
+      proposal.state = 'accepted'
+      proposal.reviewNote = a.reviewNote?.trim() || null
+      log(tree, at, proposal.flowName, `Accepted flow ${proposal.kind} ${id} on "${proposal.flowName}"`, null, meta)
+      return
+    }
+
+    case 'reject_flow_change': {
+      const proposals = (tree.flowProposals ??= [])
+      const id = text(a.id, 'flow proposal id')
+      const proposal = proposals.find((p) => p.id === id)
+      if (!proposal) fail(`unknown flow proposal "${id}"`)
+      if (proposal.state !== 'pending') fail(`flow proposal "${id}" is ${proposal.state}, not pending`)
+      proposal.state = 'rejected'
+      proposal.reviewNote = a.reviewNote?.trim() || null
+      log(tree, at, proposal.flowName, `Sent back flow ${proposal.kind} ${id} on "${proposal.flowName}"${proposal.reviewNote ? `: ${clip(proposal.reviewNote)}` : ''}`, null, meta)
+      return
+    }
+
+    case 'restore_frame_version': {
+      const flowName = text(a.flowName, 'flowName')
+      const flow = tree.flows.find((f) => f.name === flowName)
+      if (!flow) fail(`unknown flow "${flowName}"`)
+      const current = flow.frames[a.frameIndex]
+      if (!current) fail(`frame ${a.frameIndex} is out of range for flow "${flowName}"`)
+      const targetRev = (current.history ?? []).find((rev) => rev.version === a.version)
+      if (!targetRev) fail(`frame ${a.frameIndex} of "${flowName}" has no saved v${a.version}`)
+      const curVer = current.version ?? 1
+      const history = [...(current.history ?? [])]
+      history.push({
+        version: curVer,
+        title: current.title,
+        html: current.html,
+        kind: current.kind,
+        imagePath: current.imagePath ?? null,
+        viewport: current.viewport ?? null,
+        notes: current.notes ?? null,
+        at,
+        actor: meta?.actor ?? null,
+        ref: `restore:v${a.version}`,
+      })
+      flow.frames[a.frameIndex] = {
+        ...current,
+        title: targetRev.title,
+        html: targetRev.html,
+        kind: targetRev.kind ?? current.kind,
+        imagePath: targetRev.imagePath ?? null,
+        viewport: targetRev.viewport ?? null,
+        notes: targetRev.notes ?? null,
+        version: curVer + 1,
+        history,
+        driftDetected: false,
+        driftNote: null,
+      }
+      log(tree, at, flowName, `Restored frame ${a.frameIndex} of "${flowName}" from v${a.version} as v${curVer + 1}`, null, meta)
+      return
+    }
+
+    case 'set_frame_drift': {
+      const flowName = text(a.flowName, 'flowName')
+      const flow = tree.flows.find((f) => f.name === flowName)
+      if (!flow) fail(`unknown flow "${flowName}"`)
+      const frame = flow.frames[a.frameIndex]
+      if (!frame) fail(`frame ${a.frameIndex} is out of range for flow "${flowName}"`)
+      frame.liveImagePath = a.liveImagePath ?? frame.liveImagePath ?? null
+      frame.driftDetected = a.driftDetected
+      frame.driftNote = a.driftNote?.trim() || null
+      log(tree, at, flowName, `Frame ${a.frameIndex} of "${flowName}" drift=${a.driftDetected ? 'detected' : 'cleared'}`, null, meta)
       return
     }
 
     default:
-      // A JS caller can still hand us an unknown op; refuse instead of no-op.
       fail(`unknown planning action "${(a as { op?: string }).op ?? ''}"`)
   }
 }

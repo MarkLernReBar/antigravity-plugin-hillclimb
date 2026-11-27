@@ -21,12 +21,14 @@
 
 import type {
   Activity,
+  ActorVia,
   Claim,
   Contract,
   Criterion,
   Evidence,
   Goal,
   Outcome,
+  OutcomeAvailability,
   Ranked,
   Signal,
   Snapshot,
@@ -34,6 +36,11 @@ import type {
 } from "./model.js";
 import { emptyTree } from "./model.js";
 import type { CoreAction } from "./actions.js";
+
+export interface ActionMeta {
+  actor?: string;
+  via?: ActorVia;
+}
 
 export const LIVE_TRACK = "main";
 export const MAX_DEPENDENCIES = 20;
@@ -110,6 +117,19 @@ function normalizeCriterion(raw: Criterion, index: number): Criterion {
   };
 }
 
+function normalizeTags(raw?: string[]): string[] | undefined {
+  if (!raw || raw.length === 0) return undefined;
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    const t = item.trim();
+    if (!t || seen.has(t)) continue;
+    seen.add(t);
+    out.push(t);
+  }
+  return out.length > 0 ? out : undefined;
+}
+
 /** Every contract entering the tree passes through here. */
 function normalizeContract(tree: Tree, raw: Contract, selfKey: string | null): Contract {
   const title = text(raw?.title, "contract title");
@@ -143,7 +163,16 @@ function normalizeContract(tree: Tree, raw: Contract, selfKey: string | null): C
   if (recheckDays !== null && (!Number.isFinite(recheckDays) || recheckDays <= 0)) {
     fail(`recheckDays must be null or positive, got ${String(recheckDays)}`);
   }
-  return { title, story, criteria, dependsOn, rank: rank(raw?.rank), recheckDays };
+  const tags = normalizeTags(raw?.tags);
+  return {
+    title,
+    story,
+    criteria,
+    dependsOn,
+    rank: rank(raw?.rank),
+    recheckDays,
+    ...(tags ? { tags } : {}),
+  };
 }
 
 /** The loop a new dependency edge would close, named from `selfKey` round to itself. */
@@ -422,6 +451,53 @@ function proven(signal: Signal): boolean {
   return signal === "verified" || signal === "recheck";
 }
 
+function effectiveAvailability(outcome: Outcome, nowMs: number): OutcomeAvailability {
+  const avail = outcome.availability ?? "active";
+  if (avail === "deferred" && outcome.deferredUntil) {
+    const untilMs = Date.parse(outcome.deferredUntil);
+    if (Number.isFinite(untilMs) && untilMs <= nowMs) return "active";
+  }
+  return avail;
+}
+
+/** Hierarchical section numbers ("1", "1.1", "1.1.2") computed from goal and outcome ranks. */
+export function sectionNumbers(tree: Tree): Map<string, string> {
+  const map = new Map<string, string>();
+  const goalsByParent = new Map<string | null, Goal[]>();
+  for (const g of tree.goals) {
+    const list = goalsByParent.get(g.parentGoalKey) ?? [];
+    list.push(g);
+    goalsByParent.set(g.parentGoalKey, list);
+  }
+  const outcomesByGoal = new Map<string, Outcome[]>();
+  for (const o of tree.outcomes) {
+    const list = outcomesByGoal.get(o.goalKey) ?? [];
+    list.push(o);
+    outcomesByGoal.set(o.goalKey, list);
+  }
+  const sortGoals = (list: Goal[]) =>
+    list.slice().sort((a, b) => a.rank - b.rank || a.created.localeCompare(b.created) || a.key.localeCompare(b.key));
+  const sortOutcomes = (list: Outcome[]) =>
+    list.slice().sort((a, b) => a.rank - b.rank || a.created.localeCompare(b.created) || a.key.localeCompare(b.key));
+
+  const walk = (parentKey: string | null, prefix: string, seen: Set<string>) => {
+    const children = sortGoals(goalsByParent.get(parentKey) ?? []);
+    children.forEach((g, idx) => {
+      if (seen.has(g.key)) return;
+      seen.add(g.key);
+      const num = prefix ? `${prefix}.${idx + 1}` : String(idx + 1);
+      map.set(g.key, num);
+      const outs = sortOutcomes(outcomesByGoal.get(g.key) ?? []);
+      outs.forEach((o, oIdx) => {
+        map.set(o.key, `${num}.${oIdx + 1}`);
+      });
+      walk(g.key, num, seen);
+    });
+  };
+  walk(null, "", new Set());
+  return map;
+}
+
 /** What the tree says at `now`: signals, promoted ranks, next work, inbox. */
 export function snapshot(
   tree: Tree,
@@ -430,6 +506,7 @@ export function snapshot(
 ): Snapshot {
   const nowMs = timeMs(now, "now");
   const paths = effectiveRankPaths(tree);
+  const sections = sectionNumbers(tree);
   const base = rankBase(tree);
   const signals = new Map<string, Signal>();
   for (const outcome of tree.outcomes) {
@@ -442,11 +519,24 @@ export function snapshot(
       const signal = signals.get(key);
       return signal === undefined || !proven(signal);
     });
+    const avail = effectiveAvailability(outcome, nowMs);
+    const ancestors = goalAncestors(tree, outcome.goalKey);
+    const mergedTags = [
+      ...new Set([
+        ...ancestors.flatMap((g) => g.tags ?? []),
+        ...(outcome.tags ?? []),
+      ]),
+    ];
     return {
       key: outcome.key,
       signal: signals.get(outcome.key) ?? "unverified",
       effectiveRank: encodePath(path, base),
-      ancestors: goalAncestors(tree, outcome.goalKey),
+      sectionNumber: sections.get(outcome.key) ?? "",
+      availability: avail,
+      availabilityReason: avail === "active" ? null : (outcome.availabilityReason ?? null),
+      deferredUntil: avail === "deferred" ? (outcome.deferredUntil ?? null) : null,
+      tags: mergedTags,
+      ancestors,
       blockedBy,
       claim: liveClaim(tree, outcome.key, nowMs),
     };
@@ -464,13 +554,21 @@ export function snapshot(
     if (leftCreated !== rightCreated) return leftCreated - rightCreated;
     return left.key.localeCompare(right.key);
   });
-  // Next work: unproven or due, unblocked, unclaimed. `recheck` is still work.
+  // Next work: unproven or due, active (not manually blocked/deferred), unblocked by deps, unclaimed.
   const next = ranked
-    .filter((row) => row.signal !== "verified" && row.blockedBy.length === 0 && row.claim === null)
+    .filter(
+      (row) =>
+        row.signal !== "verified" &&
+        (row.availability ?? "active") === "active" &&
+        row.blockedBy.length === 0 &&
+        row.claim === null,
+    )
     .map((row) => row.key);
+  const flowProposals = [...(tree.flowProposals ?? [])];
   const inbox =
     tree.changes.filter((change) => change.state === "pending").length +
-    tree.comments.filter((comment) => comment.answer === null).length;
+    tree.comments.filter((comment) => comment.answer === null).length +
+    flowProposals.filter((proposal) => proposal.state === "pending").length;
   return {
     goals: [...tree.goals],
     outcomes: [...tree.outcomes],
@@ -482,6 +580,7 @@ export function snapshot(
     tracks: [...tree.tracks],
     releases: [...tree.releases],
     flows: [...tree.flows],
+    flowProposals,
     activity: [...tree.activity],
     ranked,
     next,
@@ -516,8 +615,24 @@ function nextId(tree: Tree, prefix: string, used: (id: string) => boolean): stri
   return `${prefix}${counter}`;
 }
 
-function record(tree: Tree, at: string, key: string, line: string, signal: Signal | null, track: string = LIVE_TRACK): void {
-  const row: Activity = { at, key, text: line, signal, track };
+function record(
+  tree: Tree,
+  at: string,
+  key: string,
+  line: string,
+  signal: Signal | null,
+  track: string = LIVE_TRACK,
+  meta?: ActionMeta,
+): void {
+  const row: Activity = {
+    at,
+    key,
+    text: line,
+    signal,
+    track,
+    ...(meta?.actor ? { actor: meta.actor } : {}),
+    ...(meta?.via ? { via: meta.via } : {}),
+  };
   tree.activity.push(row);
 }
 
@@ -525,7 +640,7 @@ function record(tree: Tree, at: string, key: string, line: string, signal: Signa
  * Apply one core action in place. Every invariant is enforced before anything
  * is written, so a refusal leaves `tree` exactly as it was.
  */
-export function applyCore(tree: Tree, action: CoreAction, now: string): void {
+export function applyCore(tree: Tree, action: CoreAction, now: string, meta?: ActionMeta): void {
   const nowMs = timeMs(now, "now");
   switch (action.op) {
     case "create_goal": {
@@ -545,16 +660,52 @@ export function applyCore(tree: Tree, action: CoreAction, now: string): void {
           cursor = parent.parentGoalKey;
         }
       }
+      const tags = normalizeTags(action.tags);
       const goal: Goal = {
         key,
         parentGoalKey,
         title: text(action.title, "goal title"),
         brief: text(action.brief, "goal brief"),
         rank: rank(action.rank),
+        ...(tags ? { tags } : {}),
         created: now,
       };
       tree.goals.push(goal);
-      record(tree, now, key, `create_goal ${key} "${goal.title}"`, null);
+      record(tree, now, key, `create_goal ${key} "${goal.title}"`, null, LIVE_TRACK, meta);
+      return;
+    }
+
+    case "update_goal": {
+      const key = outcomeKey(action.key);
+      const goal = tree.goals.find((g) => g.key === key);
+      if (!goal) fail(`unknown goal ${key}`);
+      if (action.parentGoalKey !== undefined && action.parentGoalKey !== goal.parentGoalKey) {
+        const nextParent = action.parentGoalKey;
+        if (nextParent !== null) {
+          const parents = byKey(tree.goals);
+          const seen = new Set<string>();
+          let cursor: string | null = nextParent;
+          while (cursor !== null) {
+            if (cursor === key) fail(`goal cycle: ${key} cannot be nested under ${nextParent}`);
+            if (seen.has(cursor)) fail(`goal hierarchy already loops at ${cursor}`);
+            seen.add(cursor);
+            const parent = parents.get(cursor);
+            if (!parent) fail(`unknown parent goal ${cursor}`);
+            cursor = parent.parentGoalKey;
+          }
+        }
+        goal.parentGoalKey = nextParent;
+      }
+      if (action.title !== undefined) goal.title = text(action.title, "goal title");
+      if (action.brief !== undefined) goal.brief = text(action.brief, "goal brief");
+      if (action.rank !== undefined) goal.rank = rank(action.rank);
+      if (action.tags !== undefined) {
+        const normalized = normalizeTags(action.tags);
+        if (normalized) goal.tags = normalized;
+        else delete goal.tags;
+      }
+      goal.updated = now;
+      record(tree, now, key, `update_goal ${key} "${goal.title}"`, null, LIVE_TRACK, meta);
       return;
     }
 
@@ -573,7 +724,34 @@ export function applyCore(tree: Tree, action: CoreAction, now: string): void {
         updated: now,
       };
       tree.outcomes.push(outcome);
-      record(tree, now, key, `create_outcome ${key} v1 "${outcome.title}"`, outcomeSignal(tree, key, LIVE_TRACK, now));
+      record(tree, now, key, `create_outcome ${key} v1 "${outcome.title}"`, outcomeSignal(tree, key, LIVE_TRACK, now), LIVE_TRACK, meta);
+      return;
+    }
+
+    case "propose_outcome": {
+      const key = outcomeKey(action.key);
+      assertKeyFree(tree, key);
+      if (tree.changes.some((c) => c.state === "pending" && c.kind === "create" && c.key === key)) {
+        fail(`a pending outcome proposal for ${key} already exists`);
+      }
+      const goalKey = outcomeKey(action.goalKey, "goalKey");
+      if (!tree.goals.some((goal) => goal.key === goalKey)) fail(`unknown goal ${goalKey}`);
+      const proposed = normalizeContract(tree, action.contract, key);
+      const id = nextId(tree, "chg_", (candidate) => tree.changes.some((change) => change.id === candidate));
+      tree.changes.push({
+        id,
+        key,
+        kind: "create",
+        goalKey,
+        baseVersion: 0,
+        proposed,
+        state: "pending",
+        ...(action.threadId ? { threadId: action.threadId } : {}),
+        ...(meta?.actor ? { actor: meta.actor } : {}),
+        ...(meta?.via ? { via: meta.via } : {}),
+        created: now,
+      });
+      record(tree, now, key, `propose_outcome ${id} for ${key} under ${goalKey} "${proposed.title}"`, null, LIVE_TRACK, meta);
       return;
     }
 
@@ -589,9 +767,20 @@ export function applyCore(tree: Tree, action: CoreAction, now: string): void {
       }
       const proposed = normalizeContract(tree, action.contract, key);
       const id = nextId(tree, "chg_", (candidate) => tree.changes.some((change) => change.id === candidate));
-      const change = { id, key, baseVersion, proposed, state: "pending" as const, created: now };
+      const change = {
+        id,
+        key,
+        kind: "edit" as const,
+        baseVersion,
+        proposed,
+        state: "pending" as const,
+        ...(action.threadId ? { threadId: action.threadId } : {}),
+        ...(meta?.actor ? { actor: meta.actor } : {}),
+        ...(meta?.via ? { via: meta.via } : {}),
+        created: now,
+      };
       tree.changes.push(change);
-      record(tree, now, key, `propose_change ${id} on ${key} v${baseVersion}`, null);
+      record(tree, now, key, `propose_change ${id} on ${key} v${baseVersion}`, null, LIVE_TRACK, meta);
       return;
     }
 
@@ -600,6 +789,34 @@ export function applyCore(tree: Tree, action: CoreAction, now: string): void {
       const change = tree.changes.find((row) => row.id === id);
       if (change === undefined) fail(`unknown change ${id}`);
       if (change.state !== "pending") fail(`change ${id} is ${change.state}, not pending`);
+      if (change.kind === "create") {
+        assertKeyFree(tree, change.key);
+        const goalKey = change.goalKey;
+        if (!goalKey || !tree.goals.some((goal) => goal.key === goalKey)) {
+          fail(`unknown goal ${goalKey ?? "(missing)"} for proposed outcome ${change.key}`);
+        }
+        const contract = normalizeContract(tree, change.proposed, change.key);
+        const outcome: Outcome = {
+          key: change.key,
+          goalKey,
+          ...contract,
+          version: 1,
+          created: now,
+          updated: now,
+        };
+        tree.outcomes.push(outcome);
+        change.state = "approved";
+        record(
+          tree,
+          now,
+          outcome.key,
+          `approve_outcome ${id} created ${outcome.key} v1 "${outcome.title}"`,
+          outcomeSignal(tree, outcome.key, LIVE_TRACK, now),
+          LIVE_TRACK,
+          meta,
+        );
+        return;
+      }
       const outcome = findOutcome(tree, change.key);
       // Optimistic gate: the proposer edited the version it read. If anything
       // landed since, this proposal would silently overwrite it.
@@ -611,8 +828,9 @@ export function applyCore(tree: Tree, action: CoreAction, now: string): void {
       const contract = normalizeContract(tree, change.proposed, change.key);
       const version = outcome.version + 1;
       Object.assign(outcome, contract, { version, updated: now });
+      if (!contract.tags) delete outcome.tags;
       change.state = "approved";
-      record(tree, now, outcome.key, `approve_change ${id} on ${outcome.key} v${version}`, outcomeSignal(tree, outcome.key, LIVE_TRACK, now));
+      record(tree, now, outcome.key, `approve_change ${id} on ${outcome.key} v${version}`, outcomeSignal(tree, outcome.key, LIVE_TRACK, now), LIVE_TRACK, meta);
       return;
     }
 
@@ -622,7 +840,52 @@ export function applyCore(tree: Tree, action: CoreAction, now: string): void {
       if (change === undefined) fail(`unknown change ${id}`);
       if (change.state !== "pending") fail(`change ${id} is ${change.state}, not pending`);
       change.state = "rejected";
-      record(tree, now, change.key, `reject_change ${id} on ${change.key}`, null);
+      record(tree, now, change.key, `reject_change ${id} on ${change.key}`, null, LIVE_TRACK, meta);
+      return;
+    }
+
+    case "set_outcome_availability": {
+      const key = outcomeKey(action.key);
+      const outcome = findOutcome(tree, key);
+      const avail = action.availability;
+      const reason = action.reason?.trim() || null;
+      const until = action.deferredUntil?.trim() || null;
+      if (avail === "blocked" && !reason) {
+        fail(`say why ${key} is blocked: pass reason`);
+      }
+      if (until !== null && !Number.isFinite(Date.parse(until))) {
+        fail(`deferredUntil must be a valid ISO date or timestamp, got "${until}"`);
+      }
+      outcome.availability = avail;
+      outcome.availabilityReason = avail === "active" ? null : reason;
+      outcome.deferredUntil = avail === "deferred" ? until : null;
+      outcome.updated = now;
+      const suffix =
+        avail === "active"
+          ? "reopened"
+          : `${avail}${reason ? `: ${reason}` : ""}${avail === "deferred" && until ? ` (until ${until})` : ""}`;
+      record(tree, now, key, `set_outcome_availability ${key} -> ${suffix}`, outcomeSignal(tree, key, LIVE_TRACK, now), LIVE_TRACK, meta);
+      return;
+    }
+
+    case "set_tags": {
+      const key = outcomeKey(action.key);
+      const tags = normalizeTags(action.tags);
+      const asGoal = action.target === "goal" || (action.target === undefined && tree.goals.some((g) => g.key === key));
+      if (asGoal) {
+        const goal = tree.goals.find((g) => g.key === key);
+        if (!goal) fail(`unknown goal ${key}`);
+        if (tags) goal.tags = tags;
+        else delete goal.tags;
+        goal.updated = now;
+        record(tree, now, key, `set_tags goal ${key}: ${(tags ?? []).join(", ") || "(cleared)"}`, null, LIVE_TRACK, meta);
+        return;
+      }
+      const outcome = findOutcome(tree, key);
+      if (tags) outcome.tags = tags;
+      else delete outcome.tags;
+      outcome.updated = now;
+      record(tree, now, key, `set_tags ${key}: ${(tags ?? []).join(", ") || "(cleared)"}`, null, LIVE_TRACK, meta);
       return;
     }
 
@@ -638,13 +901,16 @@ export function applyCore(tree: Tree, action: CoreAction, now: string): void {
       if (held !== null && held.threadId !== threadId) {
         fail(`outcome ${key} is claimed by ${held.threadId} until ${held.expires}`);
       }
-      const blockedBy = tree.outcomes
-        .find((outcome) => outcome.key === key)!
-        .dependsOn.filter((dependency) => !proven(outcomeSignal(tree, dependency, LIVE_TRACK, now)));
+      const outcome = findOutcome(tree, key);
+      const avail = effectiveAvailability(outcome, nowMs);
+      if (avail !== "active") {
+        fail(`outcome ${key} is ${avail}${outcome.availabilityReason ? ` (${outcome.availabilityReason})` : ""}`);
+      }
+      const blockedBy = outcome.dependsOn.filter((dependency) => !proven(outcomeSignal(tree, dependency, LIVE_TRACK, now)));
       if (blockedBy.length > 0) fail(`outcome ${key} is blocked by ${blockedBy.join(", ")}`);
       const claim: Claim = { key, threadId, expires: iso(nowMs + hours * 3_600_000) };
       tree.claims = tree.claims.filter((row) => row.key !== key).concat(claim);
-      record(tree, now, key, `claim_outcome ${key} by ${threadId} until ${claim.expires}`, null);
+      record(tree, now, key, `claim_outcome ${key} by ${threadId} until ${claim.expires}`, null, LIVE_TRACK, meta);
       return;
     }
 
@@ -655,7 +921,7 @@ export function applyCore(tree: Tree, action: CoreAction, now: string): void {
       if (claim === undefined) fail(`outcome ${key} has no claim to release`);
       if (claim.threadId !== threadId) fail(`outcome ${key} is claimed by ${claim.threadId}, not ${threadId}`);
       tree.claims = tree.claims.filter((row) => row.key !== key);
-      record(tree, now, key, `release_outcome ${key} by ${threadId}`, null);
+      record(tree, now, key, `release_outcome ${key} by ${threadId}`, null, LIVE_TRACK, meta);
       return;
     }
 
@@ -695,10 +961,13 @@ export function applyCore(tree: Tree, action: CoreAction, now: string): void {
         track,
         text: text(action.text, "evidence text"),
         source: text(action.source, "evidence source"),
+        ...(action.attachments && action.attachments.length > 0 ? { attachments: action.attachments } : {}),
+        ...(meta?.actor ? { actor: meta.actor } : {}),
+        ...(meta?.via ? { via: meta.via } : {}),
         created: now,
       };
       tree.evidence.push(evidence);
-      record(tree, now, key, `add_evidence ${id} ${action.kind} on ${key} v${version}`, outcomeSignal(tree, key, track, now), track);
+      record(tree, now, key, `add_evidence ${id} ${action.kind} on ${key} v${version}`, outcomeSignal(tree, key, track, now), track, meta);
       return;
     }
 

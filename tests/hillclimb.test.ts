@@ -16,6 +16,11 @@ import { lintTree } from "../src/linter.js";
 import { writeMirror } from "../src/mirror.js";
 import { ingestJunitReport } from "../src/ci-ingest.js";
 import { runStudyPreview } from "../src/studies.js";
+import { computeInsights } from "../src/insights.js";
+import { exportShareableReport, generateArtifactFromTemplate } from "../src/artifacts.js";
+import { blueprintActions, listBlueprints, parseMarkdownImport } from "../src/templates.js";
+import { createAutomationEngine, ingestAlert } from "../src/hooks.js";
+import { startLoopbackServer } from "../src/http-server.js";
 import { buildRig, draftForKit, emptyDraft, kitById, seedDraft, validateDraft } from "../src/ui/RigEditor.js";
 import type { Outcome } from "../src/model.js";
 
@@ -973,6 +978,403 @@ experiments:
       assert.doesNotMatch(ciScript, /\bBB_PROJECT_ID\b/, "CI script must use HILLCLIMB_PROJECT_ID");
     } finally {
       rmSync(repoDir, { recursive: true, force: true });
+    }
+  });
+
+  it("v0.5.0 Phase 1 & 2: SQLite v2 migration, availability, tags, saved views/scopes, proposals, Flows v2, FTS5 search, insights, artifacts & mirror", async () => {
+    const workDir = tempDir("hc-v05-work-");
+    const dataDir = tempDir("hc-v05-data-");
+    try {
+      const db = openDatabase(dataDir);
+      const repo = createRepository(db);
+      const userVer = (db.prepare("PRAGMA user_version").get() as { user_version: number }).user_version;
+      assert.equal(userVer, 2, "SQLite schema must migrate to user_version = 2");
+      repo.registerProject({ id: "v05", name: "V05 App", directory: workDir });
+
+      // 1. Goals (update_goal + cycle rejection), sectionNumber, tags, propose_outcome -> approve_change
+      repo.act(
+        "v05",
+        {
+          op: "create_goal",
+          key: "G-ROOT",
+          parentGoalKey: null,
+          title: "Checkout works reliably",
+          brief: "Buyers complete purchases without retries failing.",
+          rank: 10,
+          tags: ["checkout"],
+        },
+        { actor: "human", via: "ui" },
+      );
+      repo.act(
+        "v05",
+        {
+          op: "create_goal",
+          key: "G-SUB",
+          parentGoalKey: "G-ROOT",
+          title: "Payments stay idempotent",
+          brief: "Duplicate submissions never double charge.",
+          rank: 20,
+        },
+        { actor: "human", via: "ui" },
+      );
+      repo.act("v05", { op: "update_goal", key: "G-SUB", title: "Payments stay strictly idempotent", rank: 15 });
+      assert.throws(
+        () => repo.act("v05", { op: "update_goal", key: "G-ROOT", parentGoalKey: "G-SUB" }),
+        /cycle/i,
+      );
+
+      // Propose new outcome (kind: "create") -> inbox -> approve creates outcome v1
+      repo.act(
+        "v05",
+        {
+          op: "propose_outcome",
+          key: "PAY-1",
+          goalKey: "G-SUB",
+          contract: {
+            title: "Retried charge executes once",
+            story: "Buyers who double-click submit are charged once.",
+            criteria: [
+              { id: "c1", given: "same idempotency key", when: "POST repeats", then: "returns original charge id" },
+            ],
+            dependsOn: [],
+            rank: 10,
+            recheckDays: 14,
+            tags: ["billing", "p0"],
+          },
+        },
+        { actor: "agent-a", via: "mcp" },
+      );
+      let snap = repo.view("v05");
+      assert.equal(snap.outcomes.length, 0, "proposed outcome must not exist until approved");
+      assert.equal(snap.inbox, 1);
+      const createProposalId = snap.changes[0]!.id;
+      assert.equal(snap.changes[0]!.kind, "create");
+      repo.act("v05", { op: "approve_change", id: createProposalId }, { actor: "human", via: "ui" });
+      snap = repo.view("v05");
+      assert.equal(snap.outcomes.length, 1);
+      assert.equal(snap.ranked[0]?.sectionNumber, "1.1.1");
+      assert.deepEqual(snap.outcomes[0]?.tags, ["billing", "p0"]);
+
+      // 2. Availability: blocked & deferred excluded from next and refused by claim_outcome; expired deferred auto-reopens
+      repo.act("v05", {
+        op: "set_outcome_availability",
+        key: "PAY-1",
+        availability: "blocked",
+        reason: "Waiting on Stripe test keys",
+      });
+      snap = repo.view("v05");
+      assert.deepEqual(snap.next, []);
+      assert.throws(() => repo.act("v05", { op: "claim_outcome", key: "PAY-1", threadId: "t1", hours: 2 }), /blocked/i);
+
+      repo.act("v05", {
+        op: "set_outcome_availability",
+        key: "PAY-1",
+        availability: "deferred",
+        reason: "Wait for Q4",
+        deferredUntil: "2099-01-01T00:00:00Z",
+      });
+      assert.deepEqual(repo.view("v05").next, []);
+
+      // Expired deferredUntil automatically reopens in next
+      repo.act("v05", {
+        op: "set_outcome_availability",
+        key: "PAY-1",
+        availability: "deferred",
+        deferredUntil: "2020-01-01T00:00:00Z",
+      });
+      assert.deepEqual(repo.view("v05").next, ["PAY-1"]);
+      repo.act("v05", { op: "set_outcome_availability", key: "PAY-1", availability: "active" });
+
+      // 3. Tags, Saved Views, Focus Scopes, Plan-version comments, Evidence attachments, Revise release
+      repo.act("v05", { op: "set_tags", key: "PAY-1", tags: ["billing", "stripe"] });
+      const savedView = repo.saveView("v05", { name: "Billing P0", filter: { tags: ["billing"], signals: ["unverified"] } });
+      assert.equal(repo.listViews("v05").length, 1);
+      assert.equal(savedView.name, "Billing P0");
+
+      repo.act("v05", { op: "create_release", name: "R1", scenario: "baseline", date: "2026-12-01", keys: ["PAY-1"] });
+      repo.act("v05", { op: "revise_release", name: "R1", scenario: "baseline", date: "2026-12-15", keys: ["PAY-1"] });
+      assert.equal(repo.read("v05").releases[0]?.date, "2026-12-15");
+
+      const scope = repo.saveScope("v05", {
+        name: "R1 Focus",
+        releaseName: "R1",
+        goalKeys: [],
+        tags: [],
+        active: true,
+      });
+      const scopeKeys = repo.resolveScopeOutcomeKeys("v05", scope.name);
+      assert.ok(scopeKeys?.has("PAY-1"));
+
+      repo.act("v05", { op: "write_plan", key: "PAY-1", body: "Step 1: Add key check" }, { actor: "agent-a", via: "mcp" });
+      repo.act("v05", { op: "revise_plan", key: "PAY-1", version: 1, body: "Step 1: Add key check\nStep 2: Add DB unique index" });
+      repo.act("v05", { op: "comment", key: "PAY-1", text: "Looks great on v2", options: [], parentId: null, planVersion: 2 });
+      assert.equal(repo.read("v05").comments[0]?.planVersion, 2);
+
+      repo.act(
+        "v05",
+        {
+          op: "add_evidence",
+          key: "PAY-1",
+          version: 1,
+          kind: "confirms",
+          criterionIds: ["c1"],
+          text: "Stripe idempotency suite passed 12/12",
+          source: "ci://run/88",
+          attachments: [{ label: "trace", path: "artifacts/trace.json", mimeType: "application/json" }],
+          track: "main",
+        },
+        { actor: "ci-bot", via: "ci" },
+      );
+      assert.equal(repo.view("v05").ranked[0]?.signal, "verified");
+      assert.equal(repo.read("v05").evidence[0]?.attachments?.[0]?.label, "trace");
+      assert.equal(repo.read("v05").evidence[0]?.actor, "ci-bot");
+
+      // 4. Flows v2: folders, designKit, pins (forAgents/rect/resolve_pin), propose_flow_change -> accept -> version history -> restore -> drift
+      repo.act("v05", {
+        op: "create_flow",
+        name: "Checkout Flow",
+        folder: "Payments",
+        designKit: "Clean SaaS",
+        frames: [
+          {
+            title: "Submit Order",
+            key: "PAY-1",
+            criterionId: "c1",
+            kind: "html",
+            html: "<main><button>Pay $10</button></main>",
+            viewport: { width: 1440, height: 900 },
+            notes: "Initial checkout screen",
+          },
+        ],
+      });
+      repo.act("v05", {
+        op: "pin",
+        name: "Checkout Flow",
+        frame: 0,
+        x: 0.5,
+        y: 0.5,
+        text: "Disable button while submitting",
+        kind: "rect",
+        geometry: { w: 0.2, h: 0.1 },
+        selector: "button.pay",
+        forAgents: true,
+      });
+      repo.act("v05", { op: "resolve_pin", name: "Checkout Flow", frame: 0, pinIndex: 0, resolved: true });
+      assert.equal(repo.read("v05").flows[0]?.frames[0]?.pins[0]?.resolved, true);
+
+      repo.act("v05", {
+        op: "propose_flow_change",
+        kind: "change",
+        flowName: "Checkout Flow",
+        frameIndex: 0,
+        basedOnVersion: 1,
+        frame: {
+          title: "Submit Order (loading)",
+          key: "PAY-1",
+          criterionId: "c1",
+          kind: "html",
+          html: "<main><button disabled>Processing...</button></main>",
+        },
+        selfGrade: "pass",
+        ref: "PR #99",
+        note: "Shows disabled spinner during POST",
+      });
+      // 1 unanswered plan comment + 1 pending flow proposal = 2 inbox items
+      assert.equal(repo.view("v05").inbox, 2);
+      const flowPropId = repo.read("v05").flowProposals![0]!.id;
+      repo.act("v05", { op: "accept_flow_change", id: flowPropId, reviewNote: "Ship it" }, { actor: "human", via: "ui" });
+      let flowFrame = repo.read("v05").flows[0]!.frames[0]!;
+      assert.equal(flowFrame.version, 2);
+      assert.equal(flowFrame.history?.length, 1);
+      assert.equal(flowFrame.title, "Submit Order (loading)");
+
+      repo.act("v05", { op: "restore_frame_version", flowName: "Checkout Flow", frameIndex: 0, version: 1 });
+      flowFrame = repo.read("v05").flows[0]!.frames[0]!;
+      assert.equal(flowFrame.version, 3);
+      assert.equal(flowFrame.title, "Submit Order");
+
+      repo.act("v05", { op: "set_frame_drift", flowName: "Checkout Flow", frameIndex: 0, driftDetected: true, driftNote: "Button color drifted" });
+      assert.equal(repo.read("v05").flows[0]!.frames[0]!.driftDetected, true);
+
+      // 5. FTS5 search, Insights, Artifacts (templates + locks + HTML export), and Upgraded Mirror
+      const hits = repo.search("v05", "idempotency");
+      assert.ok(hits.length >= 2, `expected FTS5 search hits, got ${hits.length}`);
+
+      const insights = computeInsights(repo, "v05", { days: 30, track: "main" });
+      assert.equal(insights.totals.bySignal.verified, 1);
+      assert.equal(insights.totals.verifiedRatePct, 100);
+      assert.ok(insights.byActor.some((a) => a.actor === "ci-bot" && a.via === "ci"));
+
+      const gen = generateArtifactFromTemplate(repo, "v05", { template: "weekly-update", save: true });
+      assert.ok(gen.saved);
+      assert.ok(gen.body.includes("PAY-1"));
+      repo.saveArtifact("v05", { id: gen.saved!.id, title: gen.saved!.title, body: gen.body, locked: true });
+      assert.throws(
+        () => repo.saveArtifact("v05", { id: gen.saved!.id, title: "Overwrite", body: "Blocked" }),
+        /locked/i,
+      );
+
+      const exportedHtml = exportShareableReport(repo, "v05", { format: "html" });
+      assert.ok(exportedHtml.content.includes("<!doctype html>"));
+      assert.ok(exportedHtml.content.includes("PAY-1"));
+      const exportedMd = exportShareableReport(repo, "v05", { format: "markdown" });
+      assert.ok(exportedMd.content.includes("PAY-1"));
+
+      const mirror = await writeMirror(workDir, repo.view("v05"), { artifacts: repo.listArtifacts("v05") });
+      assert.ok(existsSync(join(mirror.root, "flows", "checkout-flow.md")));
+      assert.ok(existsSync(join(mirror.root, "reports", `${gen.saved!.id}.md`)));
+      repo.close();
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
+
+  it("v0.5.0 Phase 3: blueprints, Markdown import, automation hooks, ingestAlert, loopback REST server & MCP tool contracts", async () => {
+    const workDir = tempDir("hc-v05-p3-work-");
+    const dataDir = tempDir("hc-v05-p3-data-");
+    const markerFile = join(workDir, "hook-fired.txt");
+    try {
+      const db = openDatabase(dataDir);
+      const repo = createRepository(db);
+      repo.registerProject({ id: "p3", name: "Phase3", directory: workDir });
+
+      // 1. Blueprints & Markdown importer with 22-rule lint
+      assert.ok(listBlueprints().length >= 5);
+      const bp = blueprintActions("saas-api");
+      assert.ok(bp.actions.length >= 3);
+      repo.actBatch("p3", bp.actions, { actor: "human", via: "ui" });
+      assert.ok(repo.read("p3").outcomes.some((o) => o.key === "API-IDEMPOTENCY"));
+
+      const md = parseMarkdownImport(
+        "# Reliability\n\n## Fast responses\n- As a user, I want pages fast.\n- Given cold cache, when requesting home, then responds under 200ms.\n",
+        { asProposals: true },
+      );
+      assert.ok(md.actions.some((a) => a.op === "propose_outcome"));
+
+      // 2. Automation engine: autoSyncMirror + shell hook fired by ingestAlert -> outcome.broken
+      const auto = createAutomationEngine(repo);
+      repo.setSetting("p3", "autoSyncMirror", "true");
+      repo.saveHook("p3", {
+        event: "outcome.broken",
+        targetType: "shell",
+        target: `printf '%s' "$HILLCLIMB_EVENT" > '${markerFile.replace(/'/g, "'\\''")}'`,
+        enabled: true,
+      });
+
+      // Confirm outcome first so an incoming production alert flips it verified -> broken
+      repo.act("p3", {
+        op: "add_evidence",
+        key: "API-IDEMPOTENCY",
+        version: 1,
+        kind: "confirms",
+        criterionIds: ["ac1", "ac2"],
+        text: "Initial idempotency integration tests passed",
+        source: "ci://initial-pass",
+        track: "main",
+      });
+      assert.equal(repo.view("p3").ranked.find((r) => r.key === "API-IDEMPOTENCY")?.signal, "verified");
+
+      const alert = ingestAlert(repo, {
+        project: "p3",
+        key: "API-IDEMPOTENCY",
+        message: "Duplicate charges detected in prod telemetry",
+        source: "pagerduty:inc-77",
+      });
+      assert.equal(alert.signal, "broken");
+
+      // Wait briefly for async debounced mirror & shell hook completion
+      const deadline = Date.now() + 3000;
+      while (Date.now() < deadline && (!existsSync(markerFile) || !existsSync(join(workDir, ".hillclimb", "INDEX.md")))) {
+        await new Promise((r) => setTimeout(r, 80));
+      }
+      assert.equal(existsSync(markerFile), true, "outcome.broken shell hook must have fired");
+      assert.equal(readFileSync(markerFile, "utf8"), "outcome.broken");
+      assert.equal(existsSync(join(workDir, ".hillclimb", "INDEX.md")), true, "autoSyncMirror must sync .hillclimb/");
+      auto.stop();
+
+      // 3. Opt-in Loopback REST server (127.0.0.1, Bearer auth, human gate)
+      const token = "test-loopback-secret-token-1234";
+      const srv = await startLoopbackServer(repo, { port: 0, token });
+      try {
+        assert.ok(srv.url.startsWith("http://127.0.0.1:"));
+        const unauth = await fetch(`${srv.url}/api/v1/projects`);
+        assert.equal(unauth.status, 401, "REST API must reject unauthenticated requests");
+
+        const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+        const health = await fetch(`${srv.url}/api/v1/health`, { headers });
+        assert.equal(health.status, 200);
+
+        const searchRes = await fetch(`${srv.url}/api/v1/projects/p3/search?q=idempotency`, { headers });
+        assert.equal(searchRes.status, 200);
+        const searchBody = (await searchRes.json()) as { hits: unknown[] };
+        assert.ok(searchBody.hits.length >= 1);
+
+        const forbidden = await fetch(`${srv.url}/api/v1/projects/p3/act`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ action: { op: "accept_flow_change", id: "fp-1" } }),
+        });
+        assert.equal(forbidden.status, 403, "REST API must enforce human confirmation gate on flow/contract decisions");
+      } finally {
+        await srv.close();
+      }
+      repo.close();
+
+      // 4. End-to-end MCP server checks: 33 tools, new tools callable, requireApprovalForNewOutcomes policy
+      const transport = new StdioClientTransport({
+        command: process.execPath,
+        args: [join(PLUGIN_ROOT, "dist", "mcp-server.mjs"), "--data-dir", dataDir],
+        env: { ...process.env, HILLCLIMB_DISABLE_CONVERSATION_SERVICE: "1" },
+      });
+      const client = new Client({ name: "v05-test", version: "1.0.0" });
+      await client.connect(transport);
+      try {
+        const listed = await client.listTools();
+        const names = new Set(listed.tools.map((t) => t.name));
+        for (const expected of ["hillclimb_search", "hillclimb_insights", "hillclimb_artifact", "hillclimb_import"]) {
+          assert.ok(names.has(expected), `missing MCP tool ${expected}`);
+        }
+        const searchTool = await client.callTool({
+          name: "hillclimb_search",
+          arguments: { projectId: "p3", query: "idempotency" },
+        });
+        assert.ok(!searchTool.isError);
+        const searchData = searchTool.structuredContent as { count: number };
+        assert.ok(searchData.count >= 1);
+
+        const insightsTool = await client.callTool({
+          name: "hillclimb_insights",
+          arguments: { projectId: "p3", days: 30 },
+        });
+        assert.ok(!insightsTool.isError);
+
+        const artTool = await client.callTool({
+          name: "hillclimb_artifact",
+          arguments: { mode: "export", projectId: "p3", format: "html" },
+        });
+        assert.ok(!artTool.isError);
+        assert.ok(String((artTool.structuredContent as { content: string }).content).includes("API-IDEMPOTENCY"));
+
+        const impTool = await client.callTool({
+          name: "hillclimb_import",
+          arguments: { mode: "blueprints" },
+        });
+        assert.ok(!impTool.isError);
+        assert.ok(((impTool.structuredContent as { blueprints: unknown[] }).blueprints).length >= 5);
+
+        // Enforce human gate on accept_flow_change via MCP
+        const refusedFlow = await client.callTool({
+          name: "hillclimb_act",
+          arguments: { projectId: "p3", action: { op: "accept_flow_change", id: "fp-none" } },
+        });
+        assert.equal(refusedFlow.isError, true, "hillclimb_act must refuse accept_flow_change");
+      } finally {
+        await client.close();
+      }
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+      rmSync(dataDir, { recursive: true, force: true });
     }
   });
 });

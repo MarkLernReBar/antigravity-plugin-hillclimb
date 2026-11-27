@@ -34,7 +34,12 @@ import { ingestJunitReport, postTestEvidenceBundle } from "./ci-ingest.js";
 import { runStudyPreview, runStudyReport } from "./studies.js";
 import { HillClimbError } from "./errors.js";
 import { rigSchema } from "./rig.js";
+import { computeInsights } from "./insights.js";
+import { ARTIFACT_TEMPLATES, exportShareableReport, generateArtifactFromTemplate, type ArtifactTemplateId } from "./artifacts.js";
+import { blueprintActions, listBlueprints, parseMarkdownImport } from "./templates.js";
+import { createAutomationEngine, ingestAlert } from "./hooks.js";
 import type { Contract, Criterion, Evidence, Outcome, Snapshot, Tree } from "./model.js";
+import type { HookEvent, SearchHit } from "./repository.js";
 
 const APP_URI = "ui://hillclimb/app.html";
 const OUTPUT_LIMIT = 24_000;
@@ -113,6 +118,7 @@ function inboxOf(snapshot: Snapshot) {
     count: snapshot.inbox,
     pendingChanges: snapshot.changes.filter((change) => change.state === "pending").length,
     openQuestions: snapshot.comments.filter((comment) => comment.answer === null).length,
+    pendingFlowChanges: snapshot.flowProposals.filter((proposal) => proposal.state === "pending").length,
   };
 }
 
@@ -130,7 +136,13 @@ function outcomeOf(tree: Tree, wanted: string): Outcome {
 }
 
 function isDecision(action: Action): boolean {
-  return action.op === "approve_change" || action.op === "reject_change" || action.op === "promote_track";
+  return (
+    action.op === "approve_change" ||
+    action.op === "reject_change" ||
+    action.op === "promote_track" ||
+    action.op === "accept_flow_change" ||
+    action.op === "reject_flow_change"
+  );
 }
 
 function textResult(text: string) {
@@ -167,6 +179,42 @@ function defaultSessionActor(): string {
 
 export function createHillClimbServer(repo: Repository, runtime: Runtime): McpServer {
   const autoTracker = createAutoTracker(repo);
+  createAutomationEngine(repo);
+  const projectSettingsOf = (projectId: string) => ({
+    autoSyncMirror: repo.getSetting(projectId, "autoSyncMirror") === "true",
+    wakeOnAnswer: repo.getSetting(projectId, "wakeOnAnswer") === "true",
+    requireApprovalForNewOutcomes: repo.getSetting(projectId, "requireApprovalForNewOutcomes") === "true",
+    designKit: repo.getSetting(projectId, "designKit") ?? "",
+  });
+  const searchWithClimbs = (
+    projectId: string | null,
+    query: string,
+    opts?: { types?: SearchHit["entityType"][]; limit?: number },
+  ): SearchHit[] => {
+    const base = repo.search(projectId, query, opts);
+    const wantClimbs = !opts?.types || opts.types.length === 0 || opts.types.includes("climb");
+    if (!wantClimbs || !projectId) return base;
+    const dir = repo.getProject(projectId)?.directory ?? null;
+    if (!dir) return base;
+    const needle = query.trim().toLowerCase();
+    if (!needle) return base;
+    const scanned = scanProjectClimbs(dir, { rowLimit: 25, includeNotes: true });
+    const extra: SearchHit[] = [];
+    for (const c of scanned.climbs) {
+      const hay = `${c.name} ${c.goal ?? ""} ${c.notes} ${c.rows.map((r) => `${r.idea ?? ""} ${r.why ?? ""}`).join(" ")}`.toLowerCase();
+      const idx = hay.indexOf(needle);
+      if (idx === -1) continue;
+      extra.push({
+        project: projectId,
+        entityType: "climb",
+        entityId: c.id,
+        title: `${c.name} (${c.workerLabel})`,
+        snippet: `${c.verdict} · ${c.baseline ?? "—"} -> ${c.best ?? "—"} · ${c.goal ?? ""}`.trim(),
+        rank: 0,
+      });
+    }
+    return [...base, ...extra].slice(0, opts?.limit ?? 30);
+  };
   const scanAndSync = (projectId: string, opts?: ScanProjectClimbsOptions) => {
     const dir = repo.getProject(projectId)?.directory ?? null;
     const scanned = scanProjectClimbs(dir, opts);
@@ -197,7 +245,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     return projects[0]?.id ?? repo.resolveProjectId();
   };
   const server = new McpServer(
-    { name: "hillclimb", version: "0.4.0" },
+    { name: "hillclimb", version: "0.5.0" },
     {
       capabilities: {
         tools: {},
@@ -240,13 +288,12 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     "hillclimb_open",
     {
       title: "Hill Climb",
-      description:
-        "Open the interactive Hill Climb workspace (ranked outcomes map/outline, approval inbox, release roadmap, flows, live score charts, MAP-Elites grid, and verifier rig editor).",
+      description: "Open interactive Hill Climb UI (outcomes, climbs, inbox, roadmap, flows, insights, reports).",
       inputSchema: {
-        projectId: z.string().optional().describe("Project ID or name; omit to auto-select the active/first project"),
-        page: z.enum(["tree", "climbs", "inbox", "roadmap", "flows"]).optional().describe("Initial tab to open"),
-        outcomeKey: z.string().optional().describe("Outcome key to open in the inspector drawer"),
-        track: z.string().optional().describe("Evidence track (defaults to main)"),
+        projectId: z.string().optional(),
+        page: z.enum(["tree", "climbs", "inbox", "roadmap", "flows", "insights", "reports"]).optional(),
+        outcomeKey: z.string().optional(),
+        track: z.string().optional(),
       },
       _meta: {
         ui: { resourceUri: APP_URI },
@@ -278,6 +325,9 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
           tree,
           repoClimbs,
           inboxCount,
+          views: repo.listViews(chosen),
+          scopes: repo.listScopes(chosen),
+          settings: projectSettingsOf(chosen),
         };
         const summary = `Opened Hill Climb for project "${chosen}" (${tree.outcomes.length} outcomes, ${repoClimbs.climbs.length} repo climb(s), ${tree.next.length} ready next, ${tree.inbox} inbox item(s)).`;
         return appJsonResult(payload, summary);
@@ -294,11 +344,10 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
   server.registerTool(
     "hillclimb_setup",
     {
-      title: "Install Hill Climb engine",
-      description:
-        "Install the Hill Climb engine (climb.py, judge.py) and all 5 benchmark kits into a git repository's `.hill-climb/` directory, adding `/.hill-climb/` to git's `info/exclude`. Never runs the check itself.",
+      title: "Install engine",
+      description: "Install climb.py, judge.py, and 5 kits into `.hill-climb/` and exclude it in `.git/info/exclude`.",
       inputSchema: {
-        directory: z.string().min(1).max(1024).optional().describe("Absolute path to the git repository"),
+        directory: z.string().min(1).max(1024).optional(),
       },
     },
     async ({ directory }) => {
@@ -315,14 +364,13 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
   server.registerTool(
     "hillclimb_status",
     {
-      title: "Read climb status",
-      description:
-        "Read a repo climb's score, bar, trail, sparkline, and verdict (BAR REACHED, STUCK, PLATEAU) from card.json and log.jsonl without running any check. Use after compaction or restart.",
+      title: "Climb status",
+      description: "Read climb score, bar, trail, and verdict from card.json/log.jsonl without running checks.",
       inputSchema: {
-        name: z.string().min(1).max(64).optional().describe("Climb name; omit if the repo has only one"),
-        directory: z.string().min(1).max(1024).optional().describe("Absolute repository path"),
-        last: z.number().int().min(0).max(200).optional().describe("Number of log rows to include (default 10 compact, 15 full)"),
-        format: z.enum(["compact", "full"]).default("compact").describe("compact omits duplicated recent-row array from structuredContent (trail remains in text); full includes complete rows"),
+        name: z.string().min(1).max(64).optional(),
+        directory: z.string().min(1).max(1024).optional(),
+        last: z.number().int().min(0).max(200).optional(),
+        format: z.enum(["compact", "full"]).default("compact"),
       },
     },
     async ({ name, directory, last, format }) => {
@@ -347,12 +395,11 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
   server.registerTool(
     "hillclimb_card",
     {
-      title: "Read climb card",
-      description:
-        "Read the climb rig from card.json: check command, score pattern, score mode, regression guards, holdout, locked paths, and fingerprint.",
+      title: "Climb card",
+      description: "Read climb rig from card.json (check, guards, holdout, locked paths).",
       inputSchema: {
-        name: z.string().min(1).max(64).optional().describe("Climb name; omit when only one exists"),
-        directory: z.string().min(1).max(1024).optional().describe("Absolute repository path"),
+        name: z.string().min(1).max(64).optional(),
+        directory: z.string().min(1).max(1024).optional(),
       },
     },
     async ({ name, directory }) => {
@@ -369,23 +416,13 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
   server.registerTool(
     "hillclimb_list",
     {
-      title: "List repo climbs",
-      description:
-        "List all climbs (and prepared directories without card.json) in a git repository, optionally scanning linked git worktrees (including Antigravity swarm worktrees).",
+      title: "List climbs",
+      description: "List climbs across repo and linked worktrees.",
       inputSchema: {
-        directory: z.string().min(1).max(1024).optional().describe("Absolute repository path"),
-        includeWorktrees: z
-          .boolean()
-          .default(true)
-          .describe("Also scan linked git worktrees and Antigravity swarm worktrees for this repo (default true)"),
-        includeRows: z
-          .boolean()
-          .default(false)
-          .describe("Include per-climb log rows in structuredContent (default false for compact output)"),
-        includeNotes: z
-          .boolean()
-          .default(false)
-          .describe("Include per-climb notes.md text in structuredContent (default false)"),
+        directory: z.string().min(1).max(1024).optional(),
+        includeWorktrees: z.boolean().default(true),
+        includeRows: z.boolean().default(false),
+        includeNotes: z.boolean().default(false),
       },
     },
     async ({ directory, includeWorktrees, includeRows, includeNotes }) => {
@@ -426,13 +463,13 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
   server.registerTool(
     "hillclimb_log",
     {
-      title: "Read climb log, notes, or verdict",
-      description: "Read raw log.jsonl rows, notes.md, or the one-line verdict for a repo climb.",
+      title: "Climb log/notes",
+      description: "Read log.jsonl, notes.md, or verdict for a repo climb.",
       inputSchema: {
-        mode: z.enum(["log", "notes", "verdict"]).default("log").describe("What to read"),
-        name: z.string().min(1).max(64).optional().describe("Climb name; omit when only one exists"),
-        directory: z.string().min(1).max(1024).optional().describe("Absolute repository path"),
-        limit: z.number().int().min(1).max(500).optional().describe("Log rows from the end (default 40)"),
+        mode: z.enum(["log", "notes", "verdict"]).default("log"),
+        name: z.string().min(1).max(64).optional(),
+        directory: z.string().min(1).max(1024).optional(),
+        limit: z.number().int().min(1).max(500).optional(),
       },
     },
     async ({ mode, name, directory, limit }) => {
@@ -455,13 +492,12 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
   server.registerTool(
     "hillclimb_projects",
     {
-      title: "List or register Hill Climb projects",
-      description:
-        "List discovered Antigravity projects and registered Hill Climb projects, or register a local workspace directory as a Hill Climb project.",
+      title: "Projects",
+      description: "List or register Hill Climb projects.",
       inputSchema: {
-        registerDirectory: z.string().optional().describe("Absolute repo path to register as a Hill Climb project"),
-        id: z.string().optional().describe("Optional explicit project ID when registering"),
-        name: z.string().optional().describe("Optional human-readable project name when registering"),
+        registerDirectory: z.string().optional(),
+        id: z.string().optional(),
+        name: z.string().optional(),
       },
     },
     async ({ registerDirectory, id, name }) => {
@@ -480,21 +516,22 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
   server.registerTool(
     "hillclimb_tree",
     {
-      title: "Read Hill Climb contract tree",
-      description:
-        "Read the ranked outcomes, ancestor briefs, next available work, and inbox for a project. Pass `key` for a single outcome's contract, plan, evidence, and comments.",
+      title: "Contract tree",
+      description: "Read ranked outcomes, next work, and inbox (or one outcome via `key`).",
       inputSchema: {
-        projectId: z.string().optional().describe("Project ID, name, or directory"),
-        directory: z.string().optional().describe("Workspace directory to resolve the project from"),
-        key: z.string().optional().describe("Specific outcome key to inspect"),
-        track: z.string().optional().describe("Evidence track (defaults to main)"),
-        limit: z.number().int().min(1).max(200).default(50).describe("Max ranked outcomes returned when key is omitted"),
-        offset: z.number().int().min(0).default(0).describe("Offset into ranked outcomes when key is omitted"),
-        evidenceLimit: z.number().int().min(1).max(MAX_LIMIT).default(20).describe("Max recent evidence rows when key is set"),
-        commentLimit: z.number().int().min(1).max(MAX_LIMIT).default(20).describe("Max recent comments when key is set"),
+        projectId: z.string().optional(),
+        directory: z.string().optional(),
+        key: z.string().optional(),
+        track: z.string().optional(),
+        tag: z.string().optional(),
+        scope: z.string().optional(),
+        limit: z.number().int().min(1).max(200).default(50),
+        offset: z.number().int().min(0).default(0),
+        evidenceLimit: z.number().int().min(1).max(MAX_LIMIT).default(20),
+        commentLimit: z.number().int().min(1).max(MAX_LIMIT).default(20),
       },
     },
-    async ({ projectId, directory, key, track, limit, offset, evidenceLimit, commentLimit }) => {
+    async ({ projectId, directory, key, track, tag, scope, limit, offset, evidenceLimit, commentLimit }) => {
       try {
         const pid = repo.resolveProjectId(projectId, directory);
         const trackName = track ?? "main";
@@ -534,8 +571,21 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
             inbox: s.inbox,
           });
         }
-        const rankedAll = s.ranked.map(({ key: k, signal, blockedBy, claim }) => ({ key: k, signal, blockedBy, claim }));
+        const scopeKeys = scope ? repo.resolveScopeOutcomeKeys(pid, scope, s) : null;
+        const rankedAll = s.ranked
+          .filter((r) => (!scopeKeys || scopeKeys.has(r.key)) && (!tag || (r.tags ?? []).includes(tag)))
+          .map(({ key: k, signal, blockedBy, claim, availability, availabilityReason, tags, sectionNumber }) => ({
+            key: k,
+            signal,
+            blockedBy,
+            claim,
+            availability,
+            availabilityReason,
+            tags,
+            sectionNumber,
+          }));
         const page = windowOf(rankedAll, limit, offset);
+        const allowedNext = new Set(rankedAll.map((r) => r.key));
         return jsonResult({
           projectId: pid,
           track: trackName,
@@ -548,7 +598,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
             hasMore: page.hasMore,
             nextOffset: page.nextOffset,
           },
-          next: s.next,
+          next: s.next.filter((k) => allowedNext.has(k)),
           inbox: s.inbox,
         });
       } catch (error) {
@@ -560,27 +610,35 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
   server.registerTool(
     "hillclimb_next_outcomes",
     {
-      title: "Next ranked outcomes",
-      description:
-        "The queue this project should work on next in rank order, plus the approval inbox. `next` holds unverified/broken/stale/recheck outcomes that nothing blocks and nobody holds.",
+      title: "Next outcomes",
+      description: "Rank-ordered `next` queue (unblocked, unclaimed, active) plus inbox counts.",
       inputSchema: {
-        projectId: z.string().optional().describe("Project ID, name, or directory"),
-        directory: z.string().optional().describe("Workspace directory"),
+        projectId: z.string().optional(),
+        directory: z.string().optional(),
         track: z.string().optional(),
+        scope: z.string().optional(),
+        tag: z.string().optional(),
         limit: z.number().int().min(1).max(MAX_LIMIT).default(DEFAULT_LIMIT),
         offset: z.number().int().min(0).default(0),
-        includeContract: z.boolean().default(false).describe("Include story, criteria, and dependsOn inline to save a hillclimb_outcome call"),
-        includeBlocked: z.boolean().default(false).describe("Also list unverified outcomes currently blocked by unproven dependencies"),
+        includeContract: z.boolean().default(false),
+        includeBlocked: z.boolean().default(false),
       },
     },
-    async ({ projectId, directory, track, limit, offset, includeContract, includeBlocked }) => {
+    async ({ projectId, directory, track, scope, tag, limit, offset, includeContract, includeBlocked }) => {
       try {
         const pid = repo.resolveProjectId(projectId, directory);
         const trackName = track ?? "main";
         scanAndSync(pid);
         const snapshot = repo.view(pid, trackName);
+        const activeScope = scope ?? repo.listScopes(pid).find((s) => s.active)?.name ?? null;
+        const scopeKeys = activeScope ? repo.resolveScopeOutcomeKeys(pid, activeScope, snapshot) : null;
         const outcomeByKey = new Map(snapshot.outcomes.map((row) => [row.key, row]));
         const rankByKey = new Map(snapshot.ranked.map((row) => [row.key, row]));
+        const matchesFilter = (wanted: string) => {
+          if (scopeKeys && !scopeKeys.has(wanted)) return false;
+          if (tag && !(rankByKey.get(wanted)?.tags ?? []).includes(tag)) return false;
+          return true;
+        };
         const formatRow = (wanted: string) => {
           const rank = rankByKey.get(wanted);
           const outcome = outcomeByKey.get(wanted);
@@ -588,8 +646,13 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
             key: wanted,
             title: outcome?.title ?? wanted,
             goalKey: outcome?.goalKey ?? null,
+            sectionNumber: rank?.sectionNumber ?? "",
             version: outcome?.version ?? null,
             signal: rank?.signal ?? "unverified",
+            availability: rank?.availability ?? "active",
+            availabilityReason: rank?.availabilityReason ?? null,
+            deferredUntil: rank?.deferredUntil ?? null,
+            tags: rank?.tags ?? [],
             blockedBy: rank?.blockedBy ?? [],
             claim: rank?.claim ?? null,
             ...(includeContract && outcome
@@ -597,17 +660,23 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
               : {}),
           };
         };
-        const rows = snapshot.next.map(formatRow);
+        const rows = snapshot.next.filter(matchesFilter).map(formatRow);
         const counts: Record<string, number> = {};
         for (const rank of snapshot.ranked) counts[rank.signal] = (counts[rank.signal] ?? 0) + 1;
         const blocked = includeBlocked
           ? snapshot.ranked
-              .filter((r) => r.signal !== "verified" && r.blockedBy.length > 0)
+              .filter(
+                (r) =>
+                  matchesFilter(r.key) &&
+                  r.signal !== "verified" &&
+                  (r.blockedBy.length > 0 || (r.availability ?? "active") !== "active"),
+              )
               .map((r) => formatRow(r.key))
           : undefined;
         return jsonResult({
           projectId: pid,
           track: trackName,
+          activeScope,
           queue: windowOf(rows, limit, offset),
           ...(includeBlocked ? { blocked: windowOf(blocked ?? [], limit, 0) } : {}),
           outcomeCount: snapshot.outcomes.length,
@@ -672,11 +741,36 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
           (best, row) => (best === null || row.version > best.version ? row : best),
           null,
         );
+        const linkedFlows = tree.flows.flatMap((flow) =>
+          flow.frames
+            .map((frame, frameIndex) => ({ flow, frame, frameIndex }))
+            .filter(({ frame }) => frame.key === input.key)
+            .map(({ flow, frame, frameIndex }) => ({
+              flowName: flow.name,
+              folder: flow.folder ?? null,
+              designKit: flow.designKit ?? repo.getSetting(pid, "designKit") ?? null,
+              frameIndex,
+              title: frame.title,
+              criterionId: frame.criterionId,
+              kind: frame.kind ?? "html",
+              version: frame.version ?? 1,
+              imagePath: frame.imagePath ?? null,
+              viewport: frame.viewport ?? null,
+              notes: frame.notes ?? null,
+              driftDetected: Boolean(frame.driftDetected),
+              openAgentPins: frame.pins.filter((p) => !p.resolved && (p.forAgents ?? true)),
+            })),
+        );
         return jsonResult({
           projectId: pid,
           track: trackName,
           key: outcome.key,
           version: outcome.version,
+          sectionNumber: rank?.sectionNumber ?? "",
+          availability: rank?.availability ?? "active",
+          availabilityReason: rank?.availabilityReason ?? null,
+          deferredUntil: rank?.deferredUntil ?? null,
+          tags: rank?.tags ?? [],
           contract: {
             title: outcome.title,
             story: outcome.story,
@@ -684,6 +778,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
             dependsOn: outcome.dependsOn,
             rank: outcome.rank,
             recheckDays: outcome.recheckDays,
+            tags: outcome.tags ?? [],
           },
           goalChain: rank?.ancestors.map((goal) => ({ key: goal.key, title: goal.title, brief: goal.brief })) ?? [],
           signal: rank?.signal ?? "unverified",
@@ -693,7 +788,11 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
           planVersions: plans.map((row) => row.version).sort((a, b) => a - b),
           evidence: windowOf(evidence, input.evidenceLimit, input.evidenceOffset),
           comments: windowOf(comments, input.commentLimit, input.commentOffset),
+          linkedFlows,
           pendingChange: snapshot.changes.filter((change) => change.key === input.key && change.state === "pending").at(-1) ?? null,
+          pendingFlowProposals: snapshot.flowProposals.filter(
+            (p) => p.state === "pending" && (p.frame?.key === input.key || (p.frames ?? []).some((f) => f.key === input.key)),
+          ),
           inbox: inboxOf(snapshot),
         });
       } catch (error) {
@@ -705,22 +804,13 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
   server.registerTool(
     "hillclimb_act",
     {
-      title: "Apply a contract tree action",
-      description:
-        "Apply a JSON tree action (`create_goal` with `parentGoalKey: null` or omitted for root goals, `create_outcome`, `propose_change`, `claim_outcome`, `release_outcome`, `add_evidence`, `write_plan`, `revise_plan`, `comment`, `answer`, `create_track`, `create_release`, `create_flow`, `pin`). Human decisions (`approve_change`, `reject_change`, `promote_track`) are refused here and must be confirmed in the Hill Climb UI.",
+      title: "Tree action",
+      description: "Apply one or batched tree action(s) (`op` JSON). Human decisions (`approve_change`, `reject_change`, `accept_flow_change`, `reject_flow_change`, `promote_track`) require UI confirmation.",
       inputSchema: {
         projectId: z.string().optional(),
         directory: z.string().optional(),
-        action: z
-          .union([z.string(), z.record(z.string(), z.unknown())])
-          .optional()
-          .describe("JSON string or object with `op` and its arguments"),
-        actions: z
-          .array(z.union([z.string(), z.record(z.string(), z.unknown())]))
-          .min(1)
-          .max(50)
-          .optional()
-          .describe("Optional atomic batch of actions to apply in one transaction"),
+        action: z.union([z.string(), z.record(z.string(), z.unknown())]).optional(),
+        actions: z.array(z.union([z.string(), z.record(z.string(), z.unknown())])).min(1).max(50).optional(),
       },
     },
     async ({ projectId, directory, action, actions }) => {
@@ -730,21 +820,29 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
         if (rawList.length === 0) {
           throw new Error("Pass `action` or a non-empty `actions` array.");
         }
+        const requireApproval = repo.getSetting(pid, "requireApprovalForNewOutcomes") === "true";
         const parsedList = rawList.map((item) => {
           const raw = typeof item === "string" ? JSON.parse(item) : item;
           const parsed = actionSchema.parse(raw);
           if (isDecision(parsed)) {
             throw new HillClimbError("Review this decision in the Hill Climb UI inbox (human confirmation required).", {
               code: "human_decision_required",
-              hint: "Call hillclimb_open with page='inbox' or page='roadmap' so the user can review and confirm.",
+              hint: "Call hillclimb_open with page='inbox', 'flows', or 'roadmap' so the user can review and confirm.",
+            });
+          }
+          if (requireApproval && parsed.op === "create_outcome") {
+            throw new HillClimbError("This project requires human approval for new outcomes.", {
+              code: "approval_required_for_new_outcome",
+              hint: "Use op='propose_outcome' instead so the user can approve it in the Inbox.",
             });
           }
           return parsed;
         });
+        const meta = { actor: defaultSessionActor(), via: "mcp" as const };
         if (parsedList.length === 1) {
-          repo.act(pid, parsedList[0]!);
+          repo.act(pid, parsedList[0]!, meta);
         } else {
-          repo.actBatch(pid, parsedList);
+          repo.actBatch(pid, parsedList, meta);
         }
         const view = repo.view(pid);
         const createdKeys = new Set(
@@ -770,14 +868,13 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
   server.registerTool(
     "hillclimb_propose_change",
     {
-      title: "Propose contract edit",
-      description:
-        "Propose a new contract (title, story, criteria) for an outcome. Files a pending change for human review in the Hill Climb Inbox without mutating the active contract.",
+      title: "Propose edit",
+      description: "File a pending contract edit for human review in Inbox.",
       inputSchema: {
         projectId: z.string().optional(),
         directory: z.string().optional(),
         key: keySchema,
-        contract: contractInputSchema,
+        contract: z.record(z.string(), z.unknown()),
       },
     },
     async (input) => {
@@ -785,13 +882,14 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
         const pid = repo.resolveProjectId(input.projectId, input.directory);
         const tree = repo.read(pid);
         const outcome = outcomeOf(tree, input.key);
+        const parsedContract = contractInputSchema.parse(input.contract);
         const contract: Contract = {
-          title: input.contract.title,
-          story: input.contract.story,
-          criteria: input.contract.criteria as Criterion[],
-          dependsOn: input.contract.dependsOn,
-          rank: input.contract.rank,
-          recheckDays: input.contract.recheckDays,
+          title: parsedContract.title,
+          story: parsedContract.story,
+          criteria: parsedContract.criteria as Criterion[],
+          dependsOn: parsedContract.dependsOn,
+          rank: parsedContract.rank,
+          recheckDays: parsedContract.recheckDays,
         };
         repo.act(pid, { op: "propose_change", key: input.key, version: outcome.version, contract });
         const after = repo.view(pid, "main");
@@ -981,14 +1079,16 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
         text: z.string().trim().min(1).optional(),
         options: z.array(z.string().trim().min(1)).max(8).default([]),
         parentId: z.string().trim().min(1).nullable().default(null),
+        planVersion: z.number().int().positive().nullable().optional().describe("Optional plan version this comment refers to"),
         answer: z.object({ id: z.string().trim().min(1), answer: z.string().trim().min(1) }).optional(),
       },
     },
     async (input) => {
       try {
         const pid = repo.resolveProjectId(input.projectId, input.directory);
+        const actor = defaultSessionActor();
         if (input.answer !== undefined) {
-          repo.act(pid, { op: "answer", id: input.answer.id, answer: input.answer.answer });
+          repo.act(pid, { op: "answer", id: input.answer.id, answer: input.answer.answer }, { actor, via: "mcp" });
           const after = repo.view(pid, "main");
           const answered = after.comments.find((c) => c.id === input.answer?.id);
           return jsonResult({
@@ -1003,7 +1103,19 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
           throw new Error("pass either `answer: {id, answer}`, or `key` and `text` to post a comment");
         }
         outcomeOf(repo.read(pid), input.key);
-        repo.act(pid, { op: "comment", key: input.key, text: input.text, options: input.options, parentId: input.parentId });
+        repo.act(
+          pid,
+          {
+            op: "comment",
+            key: input.key,
+            text: input.text,
+            options: input.options,
+            parentId: input.parentId,
+            planVersion: input.planVersion ?? null,
+            threadId: input.options.length > 0 ? actor : null,
+          },
+          { actor, via: "mcp" },
+        );
         const after = repo.view(pid, "main");
         const posted = after.comments.filter((c) => c.key === input.key).at(-1);
         return jsonResult({
@@ -1061,12 +1173,33 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
             options: comment.options,
             created: comment.created,
           }));
+        const flowProposals = snapshot.flowProposals
+          .filter(
+            (proposal) =>
+              proposal.state === "pending" &&
+              (input.key === undefined ||
+                proposal.frame?.key === input.key ||
+                (proposal.frames ?? []).some((f) => f.key === input.key)),
+          )
+          .map((proposal) => ({
+            id: proposal.id,
+            kind: proposal.kind,
+            flowName: proposal.flowName,
+            frameIndex: proposal.frameIndex,
+            basedOnVersion: proposal.basedOnVersion,
+            selfGrade: proposal.selfGrade ?? null,
+            ref: proposal.ref ?? null,
+            note: proposal.note ?? null,
+            created: proposal.created,
+            review: "accept_flow_change / reject_flow_change are confirmed by a person in the Hill Climb UI",
+          }));
         return jsonResult({
           projectId: pid,
           scope: input.key ?? "project",
           inbox: inboxOf(snapshot),
           changes: windowOf(changes, input.limit, input.offset),
           questions: windowOf(questions, input.limit, input.offset),
+          flowProposals: windowOf(flowProposals, input.limit, input.offset),
           next: windowOf(snapshot.next, input.limit, input.offset),
         });
       } catch (error) {
@@ -1078,9 +1211,8 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
   server.registerTool(
     "hillclimb_add_evidence",
     {
-      title: "Record outcome evidence",
-      description:
-        "Record append-only version-scoped evidence (`confirms`, `denies`, or `note`) on an outcome at its current contract version.",
+      title: "Add evidence",
+      description: "Record version-scoped `confirms`, `denies`, or `note` evidence on an outcome.",
       inputSchema: {
         projectId: z.string().optional(),
         directory: z.string().optional(),
@@ -1089,6 +1221,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
         criterionIds: z.array(keySchema).default([]),
         text: z.string().trim().min(1),
         source: z.string().trim().min(1),
+        attachments: z.array(z.record(z.string(), z.unknown())).max(12).optional(),
         track: z.string().optional(),
         version: z.number().int().positive().optional(),
       },
@@ -1109,21 +1242,33 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
           throw new Error(`criterion ${unknown.join(", ")} is not in ${input.key} v${outcome.version}`);
         }
         if (new Set(input.criterionIds).size !== input.criterionIds.length) {
-          throw new Error("duplicate criterion ids in one evidence record");
+          throw new Error("duplicate criterion ids in evidence");
         }
         if (!tree.tracks.some((row) => row.name === trackName)) {
           throw new Error(`unknown track ${trackName}`);
         }
-        repo.act(pid, {
-          op: "add_evidence",
-          key: input.key,
-          version,
-          kind: input.kind,
-          criterionIds: input.criterionIds,
-          text: input.text,
-          source: input.source,
-          track: trackName,
-        });
+        const parsedAttachments = input.attachments
+          ? input.attachments.map((a) => ({
+              label: String(a.label ?? "Attachment"),
+              path: String(a.path ?? ""),
+              ...(typeof a.mimeType === "string" ? { mimeType: a.mimeType } : {}),
+            }))
+          : undefined;
+        repo.act(
+          pid,
+          {
+            op: "add_evidence",
+            key: input.key,
+            version,
+            kind: input.kind,
+            criterionIds: input.criterionIds,
+            text: input.text,
+            source: input.source,
+            ...(parsedAttachments ? { attachments: parsedAttachments } : {}),
+            track: trackName,
+          },
+          { actor: defaultSessionActor(), via: "mcp" },
+        );
         const after = repo.view(pid, trackName);
         return jsonResult({
           projectId: pid,
@@ -1145,9 +1290,8 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
   server.registerTool(
     "hillclimb_set_status",
     {
-      title: "Record evidence-backed status",
-      description:
-        "Record a status decision backed by evidence. `verified` refuses unless the tree already derives verified/recheck and every current criterion is covered by cited confirming evidence IDs; `broken` writes a `denies`.",
+      title: "Set status",
+      description: "Record `verified` (citing confirming evidenceIds) or `broken` (writes `denies`).",
       inputSchema: {
         projectId: z.string().optional(),
         directory: z.string().optional(),
@@ -1267,7 +1411,10 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
         if (!target) {
           throw new HillClimbError(`Project ${pid} has no registered directory; pass directory.`, { code: "missing_directory" });
         }
-        const result = await writeMirror(target, repo.view(pid));
+        const result = await writeMirror(target, repo.view(pid), {
+          artifacts: repo.listArtifacts(pid),
+          scannedClimbs: scanProjectClimbs(target, { rowLimit: 10, includeNotes: true }),
+        });
         return jsonResult({ projectId: pid, ...result });
       } catch (error) {
         return errorResult(error);
@@ -1282,17 +1429,14 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
   server.registerTool(
     "hillclimb_rig",
     {
-      title: "Get or save verifier rig",
-      description: "Read or save the version-bound verifier configuration (`repo` or `search` engine) for an outcome.",
+      title: "Verifier rig",
+      description: "Read or save version-bound `repo` or `search` verifier rig.",
       inputSchema: {
         projectId: z.string().optional(),
         directory: z.string().optional(),
         key: keySchema,
         engine: z.enum(["repo", "search"]),
-        rig: z
-          .record(z.string(), z.unknown())
-          .optional()
-          .describe("Verifier rig object ({engine:'repo', check, direction, target, guard, holdout, lock, ...} or {engine:'search', problemId, metric, higherIsBetter, target, verifier, baseline, ...}) validated against rigSchema"),
+        rig: z.record(z.string(), z.unknown()).optional(),
       },
     },
     async ({ projectId, directory, key, engine, rig }) => {
@@ -1314,9 +1458,8 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
   server.registerTool(
     "hillclimb_search_start",
     {
-      title: "Dispatch climb or search worker",
-      description:
-        "Prepare and dispatch a repo climb or evolutionary search worker for an outcome. Materializes the binding marker, receipt.py, engine/kits or problem spec, enforces claims & limits, and launches a worker conversation when available.",
+      title: "Start climb",
+      description: "Dispatch a repo climb or evolutionary search worker for an outcome.",
       inputSchema: {
         projectId: z.string().optional(),
         directory: z.string().optional(),
@@ -1347,9 +1490,8 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
   server.registerTool(
     "hillclimb_search_status",
     {
-      title: "Read live climb or search status",
-      description:
-        "Progress of the current repo climb or evolutionary search for an outcome: engine, baseline, best, target, steps, MAP-Elites grid cells, and worker status.",
+      title: "Live search status",
+      description: "Read live climb/search baseline, best, target, steps, MAP-Elites cells, and worker status.",
       inputSchema: {
         projectId: z.string().optional(),
         directory: z.string().optional(),
@@ -1394,9 +1536,8 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
   server.registerTool(
     "hillclimb_search_summit",
     {
-      title: "Reconcile and verify run summit",
-      description:
-        "Reconcile active runs, verify the receipt written by the run against the current contract version & criterion scope, and confirm the resulting evidence row in the ledger.",
+      title: "Verify summit",
+      description: "Reconcile runs, verify receipt against contract version/criteria, and confirm evidence.",
       inputSchema: {
         projectId: z.string().optional(),
         directory: z.string().optional(),
@@ -1463,13 +1604,12 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
   server.registerTool(
     "hillclimb_ingest_junit",
     {
-      title: "Ingest CI test report as evidence",
-      description:
-        "Parse a JUnit XML, Jest/Vitest JSON, or runner text report for outcome tags (e.g. HC-12@3#ac1,ac2) using assets/ci/hillclimb-evidence.mjs. Dry-run by default; pass apply=true to write atomically.",
+      title: "Ingest CI report",
+      description: "Parse JUnit/JSON/text report for outcome tags (dry-run by default; apply=true writes).",
       inputSchema: {
         projectId: z.string().optional(),
         directory: z.string().optional(),
-        report: z.string().describe("Path to test report file"),
+        report: z.string(),
         format: z.enum(["auto", "junit", "json", "text"]).default("auto"),
         source: z.string().optional(),
         track: z.string().optional(),
@@ -1537,12 +1677,11 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
   server.registerTool(
     "hillclimb_study_preview",
     {
-      title: "Preview equal-budget study plan",
-      description:
-        "Parse a hillclimb study spec, expand the exact job matrix, and report equal-budget allocation, validity checks, and worker-local commands without running any search.",
+      title: "Study preview",
+      description: "Expand study spec job matrix and equal-budget allocation without running searches.",
       inputSchema: {
-        spec: z.string().optional().describe("Study spec path or name under experiments/"),
-        directory: z.string().optional().describe("Hillclimb folder holding experiments/ and runs/"),
+        spec: z.string().optional(),
+        directory: z.string().optional(),
         candidates: z.number().int().min(1).optional(),
         verifierRepeat: z.number().int().min(1).max(100).optional(),
         trialAllowance: z.number().int().min(0).optional(),
@@ -1571,9 +1710,8 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
   server.registerTool(
     "hillclimb_study_report",
     {
-      title: "Read equal-budget study report",
-      description:
-        "Import a native `hillclimb experiment report --json` artifact or reconstruct the matched-repeats comparison directly from `runs/<run>/searches/*`.",
+      title: "Study report",
+      description: "Read or reconstruct matched-repeats equal-budget study comparison.",
       inputSchema: {
         directory: z.string().optional(),
         artifact: z.string().optional(),
@@ -1596,6 +1734,215 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
           noiseFloor: input.noiseFloor,
         });
         return jsonResult(res.report as unknown as Record<string, unknown>, res.text);
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // Search, Insights, Artifacts & Blueprints/Import (model-visible)
+  // -------------------------------------------------------------------------
+
+  server.registerTool(
+    "hillclimb_search",
+    {
+      title: "Search",
+      description: "Full-text FTS5 search across goals, outcomes, plans, evidence, comments, flows, artifacts, and climbs.",
+      inputSchema: {
+        query: z.string().trim().min(1),
+        projectId: z.string().optional(),
+        directory: z.string().optional(),
+        types: z.array(z.enum(["goal", "outcome", "plan", "evidence", "comment", "flow", "artifact", "climb"])).optional(),
+        limit: z.number().int().min(1).max(100).default(25),
+      },
+    },
+    async ({ query, projectId, directory, types, limit }) => {
+      try {
+        const pid = projectId || directory ? repo.resolveProjectId(projectId, directory) : null;
+        const hits = searchWithClimbs(pid, query, { types, limit });
+        const summary =
+          hits.length === 0
+            ? `No matches for "${query}".`
+            : hits.map((h) => `[${h.entityType}] ${h.entityId} — ${h.title}: ${h.snippet}`).join("\n");
+        return jsonResult({ query, projectId: pid, count: hits.length, hits }, summary);
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "hillclimb_insights",
+    {
+      title: "Insights",
+      description: "Daily verifications, streak, provenance, and climb keep-rate/holdout analytics.",
+      inputSchema: {
+        projectId: z.string().optional(),
+        directory: z.string().optional(),
+        days: z.number().int().min(1).max(365).default(30),
+        track: z.string().optional(),
+      },
+    },
+    async ({ projectId, directory, days, track }) => {
+      try {
+        const pid = repo.resolveProjectId(projectId, directory);
+        const dir = repo.getProject(pid)?.directory ?? null;
+        const scanned = dir ? scanProjectClimbs(dir, { rowLimit: 50, includeNotes: false }) : null;
+        const insights = computeInsights(repo, pid, { days, track: track ?? "main", scannedClimbs: scanned });
+        const summary = `Insights (${pid}, ${days}d): ${insights.totals.verifiedRatePct}% verified (${insights.totals.bySignal.verified}/${insights.totals.outcomes}), streak ${insights.streakDays}d, climbs ${insights.climbs.keptSteps}/${insights.climbs.totalSteps} kept (${insights.climbs.holdoutChecksRun} holdouts).`;
+        return jsonResult(insights as unknown as Record<string, unknown>, summary);
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "hillclimb_artifact",
+    {
+      title: "Artifacts & export",
+      description: "List, get, save, generate from template, delete, or export HTML/Markdown snapshots.",
+      inputSchema: {
+        mode: z.enum(["list", "get", "save", "generate", "export", "delete"]).default("list"),
+        projectId: z.string().optional(),
+        directory: z.string().optional(),
+        id: z.string().optional(),
+        folder: z.string().optional(),
+        title: z.string().optional(),
+        body: z.string().optional(),
+        template: z.enum(["weekly-update", "release-readiness", "climb-experiment-report", "compliance-audit", "postmortem"]).optional(),
+        releaseName: z.string().optional(),
+        format: z.enum(["html", "markdown"]).optional(),
+        scope: z.string().optional(),
+        locked: z.boolean().optional(),
+        save: z.boolean().default(true),
+        citations: z.array(z.string()).optional(),
+      },
+    },
+    async (input) => {
+      try {
+        const pid = repo.resolveProjectId(input.projectId, input.directory);
+        const dir = repo.getProject(pid)?.directory ?? null;
+        if (input.mode === "list") {
+          const artifacts = repo.listArtifacts(pid, input.folder).map(({ history: _h, body, ...rest }) => ({
+            ...rest,
+            chars: body.length,
+          }));
+          return jsonResult({ projectId: pid, templates: ARTIFACT_TEMPLATES, artifacts });
+        }
+        if (input.mode === "get") {
+          if (!input.id) throw new Error("Pass `id` for mode='get'.");
+          const artifact = repo.getArtifact(pid, input.id);
+          if (!artifact) throw new Error(`Unknown artifact "${input.id}".`);
+          return jsonResult({ projectId: pid, artifact }, artifact.body);
+        }
+        if (input.mode === "delete") {
+          if (!input.id) throw new Error("Pass `id` for mode='delete'.");
+          return jsonResult({ projectId: pid, deleted: repo.deleteArtifact(pid, input.id) });
+        }
+        if (input.mode === "save") {
+          const saved = repo.saveArtifact(pid, {
+            id: input.id,
+            folder: input.folder,
+            title: input.title ?? "Untitled report",
+            body: input.body ?? "",
+            citations: input.citations,
+            locked: input.locked,
+            actor: defaultSessionActor(),
+          });
+          return jsonResult({ projectId: pid, artifact: saved }, `Saved artifact "${saved.title}" (${saved.id} v${saved.version}).`);
+        }
+        const scanned = dir ? scanProjectClimbs(dir, { rowLimit: 25, includeNotes: false }) : null;
+        if (input.mode === "export") {
+          const exported = exportShareableReport(repo, pid, {
+            format: input.format ?? "html",
+            releaseName: input.releaseName,
+            scope: input.scope,
+            scannedClimbs: scanned,
+          });
+          return jsonResult(
+            exported as unknown as Record<string, unknown>,
+            `Exported ${exported.format} snapshot "${exported.filename}" (${exported.outcomesIncluded} outcomes, ${exported.content.length} chars).`,
+          );
+        }
+        const gen = generateArtifactFromTemplate(repo, pid, {
+          template: (input.template ?? "weekly-update") as ArtifactTemplateId,
+          title: input.title,
+          folder: input.folder,
+          releaseName: input.releaseName,
+          scannedClimbs: scanned,
+          actor: defaultSessionActor(),
+          save: input.save,
+        });
+        return jsonResult({ projectId: pid, ...gen }, gen.body);
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "hillclimb_import",
+    {
+      title: "Import blueprints/MD",
+      description: "List blueprints or preview/import a blueprint or Markdown spec with 22-rule lint.",
+      inputSchema: {
+        mode: z.enum(["blueprints", "blueprint", "markdown"]).default("blueprints"),
+        projectId: z.string().optional(),
+        directory: z.string().optional(),
+        blueprintId: z.string().optional(),
+        markdown: z.string().optional(),
+        goalKey: z.string().optional(),
+        prefix: z.string().optional(),
+        tags: z.array(z.string()).optional(),
+        asProposals: z.boolean().default(false),
+        apply: z.boolean().default(false),
+      },
+    },
+    async (input) => {
+      try {
+        if (input.mode === "blueprints") {
+          return jsonResult({ blueprints: listBlueprints() });
+        }
+        const pid = repo.resolveProjectId(input.projectId, input.directory);
+        const existingTree = repo.read(pid);
+        const existingKeys = new Set([
+          ...existingTree.goals.map((g) => g.key),
+          ...existingTree.outcomes.map((o) => o.key),
+        ]);
+        const requireApproval = repo.getSetting(pid, "requireApprovalForNewOutcomes") === "true";
+        const asProposals = input.asProposals || requireApproval;
+        let actions: Action[] = [];
+        let lint: ReturnType<typeof lintTree>;
+        if (input.mode === "blueprint") {
+          if (!input.blueprintId) throw new Error("Pass `blueprintId` for mode='blueprint'.");
+          const built = blueprintActions(input.blueprintId, { asProposals, keyPrefix: input.prefix, existingKeys });
+          actions = built.actions;
+          lint = built.lint;
+        } else {
+          if (!input.markdown?.trim()) throw new Error("Pass `markdown` for mode='markdown'.");
+          const parsed = parseMarkdownImport(input.markdown, {
+            goalKey: input.goalKey,
+            prefix: input.prefix,
+            asProposals,
+            existingKeys,
+            tags: input.tags,
+          });
+          actions = parsed.actions;
+          lint = parsed.lint;
+        }
+        if (input.apply && actions.length > 0) {
+          repo.actBatch(pid, actions, { actor: defaultSessionActor(), via: "mcp" });
+        }
+        return jsonResult({
+          projectId: pid,
+          applied: input.apply ? actions.length : 0,
+          actionCount: actions.length,
+          asProposals,
+          lint: { passed: lint.passed, errorCount: lint.errorCount, warningCount: lint.warningCount, findings: lint.findings.slice(0, 20) },
+          actions: input.apply ? undefined : actions,
+        });
       } catch (error) {
         return errorResult(error);
       }
@@ -1659,7 +2006,14 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
         const tree = repo.view(projectId, track ?? "main");
         const inboxCount = repo.inboxCountTotal();
         return appJsonResult(
-          { tree, repoClimbs, inboxCount },
+          {
+            tree,
+            repoClimbs,
+            inboxCount,
+            views: repo.listViews(projectId),
+            scopes: repo.listScopes(projectId),
+            settings: projectSettingsOf(projectId),
+          },
           `Tree ${projectId} (${tree.outcomes.length} outcomes, ${repoClimbs.climbs.length} climb(s), ${inboxCount} inbox)`,
         );
       } catch (error) {
@@ -1760,9 +2114,9 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
       try {
         const parsed = actionSchema.parse(action);
         if (isDecision(parsed) && confirmed !== true) {
-          throw new Error("Human confirmation required before approving/rejecting a contract change or promoting a track.");
+          throw new Error("Human confirmation required before approving/rejecting a contract change, flow change, or promoting a track.");
         }
-        repo.act(projectId, parsed);
+        repo.act(projectId, parsed, { actor: "human", via: "ui" });
         const tree = repo.view(projectId, track ?? "main");
         const inboxCount = repo.inboxCountTotal();
         return appJsonResult({ ok: true, tree, inboxCount }, `Applied ${parsed.op} on ${projectId}`);
@@ -1941,7 +2295,10 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
       try {
         const dir = repo.getProject(projectId)?.directory;
         if (!dir) throw new Error(`Project ${projectId} has no registered workspace directory.`);
-        const res = await writeMirror(dir, repo.view(projectId));
+        const res = await writeMirror(dir, repo.view(projectId), {
+          artifacts: repo.listArtifacts(projectId),
+          scannedClimbs: scanProjectClimbs(dir, { rowLimit: 10, includeNotes: true }),
+        });
         return appJsonResult(res, `Synced ${res.files} files to ${res.root}`);
       } catch (error) {
         return errorResult(error);
@@ -1963,6 +2320,226 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
         return appJsonResult(
           result as unknown as Record<string, unknown>,
           `Lint ${result.passed ? "passed" : "failed"} (${result.errorCount} errors, ${result.warningCount} warnings)`,
+        );
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  );
+
+  registerAppTool(
+    server,
+    "app_search",
+    {
+      description: "Search everything for UI Cmd+K palette",
+      inputSchema: { projectId: z.string().optional(), query: z.string(), limit: z.number().int().min(1).max(50).optional() },
+      _meta: APP_ONLY,
+    },
+    async ({ projectId, query, limit }) => {
+      try {
+        const hits = searchWithClimbs(projectId ?? null, query, { limit: limit ?? 25 });
+        return appJsonResult({ hits }, `${hits.length} hit(s)`);
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  );
+
+  registerAppTool(
+    server,
+    "app_insights",
+    {
+      description: "Compute project + climb insights for UI",
+      inputSchema: { projectId: z.string().min(1), days: z.number().int().min(1).max(365).optional(), track: z.string().optional() },
+      _meta: APP_ONLY,
+    },
+    async ({ projectId, days, track }) => {
+      try {
+        const dir = repo.getProject(projectId)?.directory ?? null;
+        const scanned = dir ? scanProjectClimbs(dir, { rowLimit: 50, includeNotes: false }) : null;
+        const insights = computeInsights(repo, projectId, { days: days ?? 30, track: track ?? "main", scannedClimbs: scanned });
+        return appJsonResult(insights as unknown as Record<string, unknown>, `Insights ${projectId}`);
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  );
+
+  registerAppTool(
+    server,
+    "app_artifacts",
+    {
+      description: "Manage artifacts and exports from UI",
+      inputSchema: {
+        projectId: z.string().min(1),
+        mode: z.enum(["list", "save", "generate", "export", "delete"]),
+        payload: z.record(z.string(), z.unknown()).optional(),
+      },
+      _meta: APP_ONLY,
+    },
+    async ({ projectId, mode, payload }) => {
+      try {
+        const p = payload ?? {};
+        const dir = repo.getProject(projectId)?.directory ?? null;
+        if (mode === "list") {
+          return appJsonResult({ templates: ARTIFACT_TEMPLATES, artifacts: repo.listArtifacts(projectId) }, "Artifacts loaded");
+        }
+        if (mode === "delete") {
+          repo.deleteArtifact(projectId, String(p.id ?? ""));
+          return appJsonResult({ artifacts: repo.listArtifacts(projectId) }, "Artifact deleted");
+        }
+        if (mode === "save") {
+          const saved = repo.saveArtifact(projectId, {
+            id: typeof p.id === "string" ? p.id : undefined,
+            folder: typeof p.folder === "string" ? p.folder : undefined,
+            title: String(p.title ?? "Untitled"),
+            body: String(p.body ?? ""),
+            locked: typeof p.locked === "boolean" ? p.locked : undefined,
+            citations: Array.isArray(p.citations) ? p.citations.map(String) : undefined,
+            actor: "human",
+          });
+          return appJsonResult({ artifact: saved, artifacts: repo.listArtifacts(projectId) }, `Saved ${saved.title}`);
+        }
+        const scanned = dir ? scanProjectClimbs(dir, { rowLimit: 25, includeNotes: false }) : null;
+        if (mode === "export") {
+          const exported = exportShareableReport(repo, projectId, {
+            format: p.format === "markdown" ? "markdown" : "html",
+            track: typeof p.track === "string" ? p.track : "main",
+            releaseName: typeof p.releaseName === "string" ? p.releaseName : undefined,
+            scope: typeof p.scope === "string" ? p.scope : undefined,
+            scannedClimbs: scanned,
+          });
+          return appJsonResult(exported as unknown as Record<string, unknown>, `Exported ${exported.filename}`);
+        }
+        const gen = generateArtifactFromTemplate(repo, projectId, {
+          template: (typeof p.template === "string" ? p.template : "weekly-update") as ArtifactTemplateId,
+          title: typeof p.title === "string" ? p.title : undefined,
+          folder: typeof p.folder === "string" ? p.folder : undefined,
+          releaseName: typeof p.releaseName === "string" ? p.releaseName : undefined,
+          scannedClimbs: scanned,
+          actor: "human",
+          save: true,
+        });
+        return appJsonResult({ artifact: gen.saved, artifacts: repo.listArtifacts(projectId) }, `Generated ${gen.title}`);
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  );
+
+  registerAppTool(
+    server,
+    "app_views_scopes",
+    {
+      description: "Manage saved views, focus scopes, settings, and automation hooks from UI",
+      inputSchema: {
+        projectId: z.string().min(1),
+        mode: z.enum(["list", "save_view", "delete_view", "save_scope", "delete_scope", "set_setting", "save_hook", "delete_hook"]),
+        payload: z.record(z.string(), z.unknown()).optional(),
+      },
+      _meta: APP_ONLY,
+    },
+    async ({ projectId, mode, payload }) => {
+      try {
+        const p = payload ?? {};
+        if (mode === "save_view") {
+          repo.saveView(projectId, {
+            id: typeof p.id === "string" ? p.id : undefined,
+            name: String(p.name ?? ""),
+            filter: (p.filter ?? {}) as Record<string, unknown>,
+          });
+        } else if (mode === "delete_view") {
+          repo.deleteView(projectId, String(p.id ?? ""));
+        } else if (mode === "save_scope") {
+          repo.saveScope(projectId, {
+            id: typeof p.id === "string" ? p.id : undefined,
+            name: String(p.name ?? ""),
+            owner: typeof p.owner === "string" ? p.owner : null,
+            releaseName: typeof p.releaseName === "string" ? p.releaseName : null,
+            goalKeys: Array.isArray(p.goalKeys) ? p.goalKeys.map(String) : [],
+            tags: Array.isArray(p.tags) ? p.tags.map(String) : [],
+            active: Boolean(p.active),
+          });
+        } else if (mode === "delete_scope") {
+          repo.deleteScope(projectId, String(p.id ?? ""));
+        } else if (mode === "set_setting") {
+          repo.setSetting(projectId, String(p.key ?? ""), String(p.value ?? ""));
+        } else if (mode === "save_hook") {
+          repo.saveHook(projectId, {
+            id: typeof p.id === "string" ? p.id : undefined,
+            event: (typeof p.event === "string" ? p.event : "*") as HookEvent,
+            targetType: (p.targetType === "webhook" || p.targetType === "notify" ? p.targetType : "shell"),
+            target: String(p.target ?? ""),
+            enabled: p.enabled !== false,
+            secret: typeof p.secret === "string" ? p.secret : null,
+          });
+        } else if (mode === "delete_hook") {
+          repo.deleteHook(projectId, String(p.id ?? ""));
+        }
+        return appJsonResult(
+          {
+            views: repo.listViews(projectId),
+            scopes: repo.listScopes(projectId),
+            hooks: repo.listHooks(projectId),
+            settings: projectSettingsOf(projectId),
+          },
+          `Updated ${mode}`,
+        );
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  );
+
+  registerAppTool(
+    server,
+    "app_import",
+    {
+      description: "List blueprints, preview or apply blueprint/Markdown imports from UI",
+      inputSchema: {
+        projectId: z.string().min(1),
+        mode: z.enum(["blueprints", "preview", "apply"]),
+        payload: z.record(z.string(), z.unknown()).optional(),
+      },
+      _meta: APP_ONLY,
+    },
+    async ({ projectId, mode, payload }) => {
+      try {
+        if (mode === "blueprints") {
+          return appJsonResult({ blueprints: listBlueprints() }, "Blueprints loaded");
+        }
+        const p = payload ?? {};
+        const existingTree = repo.read(projectId);
+        const existingKeys = new Set([
+          ...existingTree.goals.map((g) => g.key),
+          ...existingTree.outcomes.map((o) => o.key),
+        ]);
+        const asProposals = Boolean(p.asProposals);
+        const built =
+          typeof p.blueprintId === "string" && p.blueprintId.trim() !== ""
+            ? blueprintActions(p.blueprintId, {
+                asProposals,
+                keyPrefix: typeof p.prefix === "string" ? p.prefix : undefined,
+                existingKeys,
+              })
+            : parseMarkdownImport(String(p.markdown ?? ""), {
+                goalKey: typeof p.goalKey === "string" ? p.goalKey : undefined,
+                prefix: typeof p.prefix === "string" ? p.prefix : undefined,
+                asProposals,
+                existingKeys,
+              });
+        if (mode === "apply" && built.actions.length > 0) {
+          repo.actBatch(projectId, built.actions, { actor: "human", via: "ui" });
+        }
+        return appJsonResult(
+          {
+            applied: mode === "apply" ? built.actions.length : 0,
+            actionCount: built.actions.length,
+            lint: built.lint,
+            tree: mode === "apply" ? repo.view(projectId, typeof p.track === "string" ? p.track : "main") : undefined,
+            inboxCount: repo.inboxCountTotal(),
+          },
+          `${mode} ${built.actions.length} action(s)`,
         );
       } catch (error) {
         return errorResult(error);

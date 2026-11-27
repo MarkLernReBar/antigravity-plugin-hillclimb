@@ -4,7 +4,7 @@
 // comparison readings here come from the snapshot and are advisory. Approval,
 // promotion and release policy lives on the server, which validates versions
 // and evidence at the moment it writes.
-import { useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import type { Action } from "../actions.js";
 import type {
@@ -13,8 +13,10 @@ import type {
   Contract,
   Criterion,
   Flow,
+  FlowProposal,
   Outcome,
   Pin,
+  PinKind,
   Release,
   Signal,
   Snapshot,
@@ -35,6 +37,8 @@ export interface PortfolioProps {
   chooseTrack: (t: string) => void;
   track: string;
   preview: (name: string, keys: string[]) => Promise<PromotionPreviewRow[]>;
+  initialFlow?: string | null;
+  onFocusScopeFromRelease?: (release: Release) => Promise<void>;
 }
 
 type Run = (label: string, action: () => Promise<void>, done?: string) => Promise<boolean>;
@@ -263,10 +267,11 @@ export function questionThreads(data: Snapshot, key?: string): QuestionThread[] 
   return threads.sort((a, b) => Number(b.open) - Number(a.open) || b.root.created.localeCompare(a.root.created));
 }
 
-export function inboxCounts(data: Snapshot): { changes: number; questions: number } {
+export function inboxCounts(data: Snapshot): { changes: number; questions: number; flowProposals: number } {
   return {
     changes: data.changes.filter((change) => change.state === "pending").length,
     questions: data.comments.filter((comment) => comment.answer === null).length,
+    flowProposals: (data.flowProposals ?? []).filter((proposal) => proposal.state === "pending").length,
   };
 }
 
@@ -527,19 +532,33 @@ function ChangeCard({
   select: (key: string | null) => void;
 }): ReactNode {
   const diff = contractDiff(outcome ?? null, change.proposed);
-  const moved = outcome !== undefined && outcome.version !== change.baseVersion;
+  const isCreate = change.kind === "create";
+  const moved = !isCreate && outcome !== undefined && outcome.version !== change.baseVersion;
   const decided = change.state !== "pending";
   return (
     <article className="pf-card">
       <header className="pf-card-head">
         <div>
-          <h3 className="pf-card-title">{change.proposed.title}</h3>
+          <h3 className="pf-card-title">
+            {isCreate ? <span className="pf-badge pf-tone-info" style={{ marginRight: 6 }}>New outcome</span> : null}
+            {change.proposed.title}
+          </h3>
           <p className="pf-muted pf-small">
-            <button type="button" className="pf-link" onClick={() => select(change.key)}>
-              {change.key}
-            </button>
-            {outcome === undefined ? " · outcome not in this tree" : ` · now v${outcome.version}`} · proposed against v
-            {change.baseVersion}
+            {isCreate ? (
+              <>
+                <code>{change.key}</code>
+                {change.goalKey ? ` · under goal ${change.goalKey}` : ""}
+              </>
+            ) : (
+              <>
+                <button type="button" className="pf-link" onClick={() => select(change.key)}>
+                  {change.key}
+                </button>
+                {outcome === undefined ? " · outcome not in this tree" : ` · now v${outcome.version}`} · proposed against v
+                {change.baseVersion}
+              </>
+            )}
+            {change.actor ? ` · by ${change.actor}` : ""}
           </p>
         </div>
         <span className={`pf-pill${decided ? "" : " is-open"}`}>{decided ? change.state : "pending"}</span>
@@ -553,7 +572,12 @@ function ChangeCard({
         </p>
       )}
 
-      {outcome === undefined ? (
+      {isCreate ? (
+        <>
+          <p className="pf-small">{change.proposed.story}</p>
+          <ContractDiffView diff={diff} base={null} next={change.proposed} />
+        </>
+      ) : outcome === undefined ? (
         <>
           <p className="pf-hint">There is no outcome with this key in the current tree. The proposal is shown as written.</p>
           <ContractDiffView diff={diff} base={null} next={change.proposed} />
@@ -754,6 +778,166 @@ function ThreadCard({
   );
 }
 
+function FlowProposalCard({
+  proposal,
+  currentFlow,
+  act,
+  run,
+  busy,
+}: {
+  proposal: FlowProposal;
+  currentFlow: Flow | undefined;
+  act: PortfolioProps["act"];
+  run: Run;
+  busy: string | null;
+}): ReactNode {
+  const [reviewNote, setReviewNote] = useState("");
+  const currentFrame =
+    proposal.kind === "change" && proposal.frameIndex !== null
+      ? currentFlow?.frames[proposal.frameIndex] ?? null
+      : null;
+  const proposedFrames = proposal.kind === "new_flow" ? (proposal.frames ?? []) : proposal.frame ? [proposal.frame] : [];
+  const decided = proposal.state !== "pending";
+
+  return (
+    <article className="pf-card">
+      <header className="pf-card-head">
+        <div>
+          <h3 className="pf-card-title">
+            <span className="pf-badge pf-tone-info" style={{ marginRight: 6 }}>
+              {proposal.kind === "new_flow" ? "New flow" : proposal.kind === "new_step" ? "New frame" : "Frame update"}
+            </span>
+            {proposal.flowName}
+            {proposal.frameIndex !== null ? ` · frame #${proposal.frameIndex + 1}` : ""}
+          </h3>
+          <p className="pf-muted pf-small">
+            <code>{proposal.id}</code>
+            {proposal.basedOnVersion !== null ? ` · based on v${proposal.basedOnVersion}` : ""}
+            {proposal.selfGrade ? ` · self-grade: ${proposal.selfGrade}` : ""}
+            {proposal.ref ? ` · ref: ${proposal.ref}` : ""}
+            {proposal.actor ? ` · by ${proposal.actor}` : ""}
+          </p>
+        </div>
+        <span className={`pf-pill${decided ? "" : " is-open"}`}>{proposal.state}</span>
+      </header>
+
+      {proposal.note ? <p className="pf-small">{proposal.note}</p> : null}
+
+      {currentFrame && proposedFrames[0] ? (
+        <div className="pf-compare-frames">
+          <div>
+            <p className="pf-label">Current approved (v{currentFrame.version ?? 1})</p>
+            <div className="pf-frame-canvas pf-frame-canvas-sm">
+              {currentFrame.kind === "image" && currentFrame.imagePath ? (
+                <img src={currentFrame.imagePath} alt={currentFrame.title} className="pf-frame-img" />
+              ) : (
+                <iframe
+                  title={`Current ${currentFrame.title}`}
+                  sandbox={FRAME_SANDBOX}
+                  referrerPolicy="no-referrer"
+                  loading="lazy"
+                  srcDoc={isolateHtml(currentFrame.html)}
+                />
+              )}
+            </div>
+          </div>
+          <div>
+            <p className="pf-label">Proposed update</p>
+            <div className="pf-frame-canvas pf-frame-canvas-sm">
+              {proposedFrames[0].kind === "image" && proposedFrames[0].imagePath ? (
+                <img src={proposedFrames[0].imagePath} alt={proposedFrames[0].title} className="pf-frame-img" />
+              ) : (
+                <iframe
+                  title={`Proposed ${proposedFrames[0].title}`}
+                  sandbox={FRAME_SANDBOX}
+                  referrerPolicy="no-referrer"
+                  loading="lazy"
+                  srcDoc={isolateHtml(proposedFrames[0].html)}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      ) : proposedFrames[0] ? (
+        <div>
+          <p className="pf-label">
+            Proposed preview ({proposedFrames.length} frame{proposedFrames.length === 1 ? "" : "s"} — {proposedFrames[0].title})
+          </p>
+          <div className="pf-frame-canvas pf-frame-canvas-sm">
+            {proposedFrames[0].kind === "image" && proposedFrames[0].imagePath ? (
+              <img src={proposedFrames[0].imagePath} alt={proposedFrames[0].title} className="pf-frame-img" />
+            ) : (
+              <iframe
+                title={`Proposed ${proposedFrames[0].title}`}
+                sandbox={FRAME_SANDBOX}
+                referrerPolicy="no-referrer"
+                loading="lazy"
+                srcDoc={isolateHtml(proposedFrames[0].html)}
+              />
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {proposal.reviewNote ? <p className="pf-hint">Review note: {proposal.reviewNote}</p> : null}
+
+      {!decided ? (
+        <div className="pf-stack">
+          <input
+            className="pf-input"
+            value={reviewNote}
+            onChange={(e) => setReviewNote(e.target.value)}
+            placeholder="Optional review note (shown if accepted or sent back)…"
+            aria-label="Flow proposal review note"
+          />
+          <div className="pf-actions">
+            <button
+              type="button"
+              className="pf-btn pf-btn-primary"
+              disabled={busy !== null}
+              onClick={() =>
+                void run(
+                  `accept-flow:${proposal.id}`,
+                  async () => {
+                    await act({
+                      op: "accept_flow_change",
+                      id: proposal.id,
+                      ...(reviewNote.trim() ? { reviewNote: reviewNote.trim() } : {}),
+                    });
+                  },
+                  `Accepted flow proposal ${proposal.id}.`,
+                )
+              }
+            >
+              Accept
+            </button>
+            <button
+              type="button"
+              className="pf-btn pf-btn-danger"
+              disabled={busy !== null}
+              onClick={() =>
+                void run(
+                  `reject-flow:${proposal.id}`,
+                  async () => {
+                    await act({
+                      op: "reject_flow_change",
+                      id: proposal.id,
+                      ...(reviewNote.trim() ? { reviewNote: reviewNote.trim() } : {}),
+                    });
+                  },
+                  `Sent back flow proposal ${proposal.id}.`,
+                )
+              }
+            >
+              Send back
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
 function Inbox({
   data,
   act,
@@ -775,18 +959,65 @@ function Inbox({
     () => data.changes.filter((change) => change.state !== "pending").sort((a, b) => b.created.localeCompare(a.created)),
     [data.changes],
   );
+  const pendingFlowProposals = useMemo(
+    () =>
+      (data.flowProposals ?? [])
+        .filter((p) => p.state === "pending")
+        .sort((a, b) => b.created.localeCompare(a.created)),
+    [data.flowProposals],
+  );
   const threads = useMemo(() => questionThreads(data), [data]);
   const open = threads.filter((thread) => thread.open);
   const answered = threads.filter((thread) => !thread.open);
   const outcomes = useMemo(() => new Map(data.outcomes.map((outcome) => [outcome.key, outcome])), [data.outcomes]);
+  const flowsByName = useMemo(() => new Map(data.flows.map((f) => [f.name, f])), [data.flows]);
   const [showDecided, setShowDecided] = useState(false);
+
+  // Keyboard shortcuts when not focused in a form input:
+  // 1-9 answer the first open multiple-choice question; a/r approve/reject top pending change
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey || busy !== null) return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable)) {
+        return;
+      }
+      if (/^[1-9]$/.test(event.key)) {
+        const idx = Number(event.key) - 1;
+        const firstQuestion = open
+          .flatMap((t) => [t.root, ...t.replies])
+          .find((c) => c.answer === null && c.options.length > idx);
+        const choice = firstQuestion?.options[idx];
+        if (firstQuestion && choice) {
+          event.preventDefault();
+          void run(`answer:${firstQuestion.id}`, async () => {
+            await act({ op: "answer", id: firstQuestion.id, answer: choice });
+          }, `Answered "${choice}".`);
+        }
+      } else if (event.key === "a" && changes[0]) {
+        event.preventDefault();
+        const top = changes[0];
+        void run(`approve:${top.id}`, async () => {
+          await act({ op: "approve_change", id: top.id });
+        }, `Approved ${top.proposed.title}.`);
+      } else if (event.key === "r" && changes[0]) {
+        event.preventDefault();
+        const top = changes[0];
+        void run(`reject:${top.id}`, async () => {
+          await act({ op: "reject_change", id: top.id });
+        }, `Rejected ${top.proposed.title}.`);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [act, busy, changes, open, run]);
 
   return (
     <>
-      {changes.length === 0 && open.length === 0 ? (
+      {changes.length === 0 && open.length === 0 && pendingFlowProposals.length === 0 ? (
         <Empty
           title="Nothing is waiting on you."
-          body="Agent-proposed contract edits land here for approval, and open questions stay until you answer them. Both appear the moment an agent acts."
+          body="Agent-proposed contract edits, flow updates, and open questions land here for approval or answers. They appear the moment an agent acts."
         >
           {data.next[0] !== undefined && (
             <button type="button" className="pf-btn" onClick={() => select(data.next[0] ?? null)}>
@@ -796,6 +1027,10 @@ function Inbox({
         </Empty>
       ) : (
         <>
+          <p className="pf-muted pf-small">
+            Shortcuts: press <code>1</code>–<code>9</code> to answer top multiple-choice question · <code>a</code> approve /{" "}
+            <code>r</code> reject top contract change.
+          </p>
           {changes.length > 0 && (
             <section className="pf-section" aria-labelledby="pf-changes-title">
               <h3 className="pf-section-title" id="pf-changes-title">
@@ -815,6 +1050,26 @@ function Inbox({
                     run={run}
                     busy={busy}
                     select={select}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {pendingFlowProposals.length > 0 && (
+            <section className="pf-section" aria-labelledby="pf-flow-proposals-title">
+              <h3 className="pf-section-title" id="pf-flow-proposals-title">
+                Visual flow proposals <span className="pf-count">{pendingFlowProposals.length}</span>
+              </h3>
+              <div className="pf-stack">
+                {pendingFlowProposals.map((proposal) => (
+                  <FlowProposalCard
+                    key={proposal.id}
+                    proposal={proposal}
+                    currentFlow={flowsByName.get(proposal.flowName)}
+                    act={act}
+                    run={run}
+                    busy={busy}
                   />
                 ))}
               </div>
@@ -891,6 +1146,29 @@ function Inbox({
 
 const KEY_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,95}$/;
 
+function ProgressRing({ percent }: { percent: number }): ReactNode {
+  const r = 16;
+  const c = 2 * Math.PI * r;
+  const offset = c - (Math.max(0, Math.min(100, percent)) / 100) * c;
+  return (
+    <svg className="pf-ring" width="40" height="40" viewBox="0 0 40 40" aria-hidden="true">
+      <circle className="pf-ring-bg" cx="20" cy="20" r={r} />
+      <circle
+        className="pf-ring-fill"
+        cx="20"
+        cy="20"
+        r={r}
+        strokeDasharray={c}
+        strokeDashoffset={offset}
+        transform="rotate(-90 20 20)"
+      />
+      <text x="20" y="24" textAnchor="middle" className="pf-ring-text">
+        {percent}%
+      </text>
+    </svg>
+  );
+}
+
 function Roadmap({
   data,
   act,
@@ -900,6 +1178,7 @@ function Roadmap({
   track,
   chooseTrack,
   select,
+  onFocusScopeFromRelease,
 }: {
   data: Snapshot;
   act: PortfolioProps["act"];
@@ -909,6 +1188,7 @@ function Roadmap({
   track: string;
   chooseTrack: (t: string) => void;
   select: (key: string | null) => void;
+  onFocusScopeFromRelease?: (release: Release) => Promise<void>;
 }): ReactNode {
   const outcomes = useMemo(() => new Map(data.outcomes.map((outcome) => [outcome.key, outcome])), [data.outcomes]);
   const ranked = data.ranked.filter((row) => outcomes.has(row.key));
@@ -920,6 +1200,9 @@ function Roadmap({
   const [releaseDate, setReleaseDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [releaseScenario, setReleaseScenario] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [editingReleaseId, setEditingReleaseId] = useState<string | null>(null);
+  const [editDate, setEditDate] = useState("");
+  const [editKeys, setEditKeys] = useState<string[]>([]);
   const [compareAId, setCompareAId] = useState<string | null>(null);
   const [compareBId, setCompareBId] = useState<string | null>(null);
 
@@ -968,65 +1251,210 @@ function Roadmap({
           body="Pick the outcomes that belong in a release below, name the scenario, and create the first release. Readiness updates as evidence lands."
         />
       ) : (
-        <div className="pf-stack">
-          {releases.map(({ release }, index) => {
-            const rows = releaseReadiness(data, release);
-            const counts = readinessCounts(rows);
-            const percent = counts.total === 0 ? 0 : Math.round((counts.ready / counts.total) * 100);
-            const key = releaseIds[index] ?? `${index}:${release.name}`;
-            const isOpen = expanded[key] === true;
-            return (
-              <article className="pf-card" key={key}>
-                <header className="pf-card-head">
-                  <div>
-                    <h4 className="pf-card-title">{release.name}</h4>
-                    <p className="pf-muted pf-small">
-                      {release.date} · scenario <strong>{release.scenario}</strong> · {counts.ready}/{counts.total} ready
-                    </p>
+        <>
+          <section className="pf-card pf-timeline-card" aria-label="Release timeline">
+            <header className="pf-card-head">
+              <div>
+                <h4 className="pf-card-title">Timeline swimlane</h4>
+                <p className="pf-muted pf-small">
+                  Ordered by target date · today is <strong>{new Date().toISOString().slice(0, 10)}</strong>
+                </p>
+              </div>
+            </header>
+            <div className="pf-swimlane">
+              {releases
+                .slice()
+                .sort((a, b) => (a.release.date || "").localeCompare(b.release.date || ""))
+                .map(({ release }, idx) => {
+                  const rows = releaseReadiness(data, release);
+                  const counts = readinessCounts(rows);
+                  const pct = counts.total === 0 ? 0 : Math.round((counts.ready / counts.total) * 100);
+                  const today = new Date().toISOString().slice(0, 10);
+                  const pastDue = release.date !== "" && release.date < today && pct < 100;
+                  const relId = `${release.name}\u0000${release.scenario}\u0000${release.date}`;
+                  return (
+                    <button
+                      key={`${relId}:${idx}`}
+                      type="button"
+                      className={`pf-swim-item${pastDue ? " is-overdue" : ""}`}
+                      onClick={() => setExpanded((cur) => ({ ...cur, [relId]: !cur[relId] }))}
+                    >
+                      <ProgressRing percent={pct} />
+                      <div className="pf-swim-meta">
+                        <strong>{release.name}</strong>
+                        <span className="pf-muted pf-small">
+                          {release.date || "unscheduled"} · {release.scenario}
+                        </span>
+                        <span className="pf-small">
+                          {counts.ready} of {counts.total} proven
+                          {pastDue ? " · past target" : ""}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+            </div>
+          </section>
+
+          <div className="pf-stack">
+            {releases.map(({ release }, index) => {
+              const rows = releaseReadiness(data, release);
+              const counts = readinessCounts(rows);
+              const percent = counts.total === 0 ? 0 : Math.round((counts.ready / counts.total) * 100);
+              const key = releaseIds[index] ?? `${index}:${release.name}`;
+              const isOpen = expanded[key] === true;
+              const isEditing = editingReleaseId === key;
+              return (
+                <article className="pf-card" key={key}>
+                  <header className="pf-card-head">
+                    <div className="pf-row">
+                      <ProgressRing percent={percent} />
+                      <div>
+                        <h4 className="pf-card-title">{release.name}</h4>
+                        <p className="pf-muted pf-small">
+                          {release.date} · scenario <strong>{release.scenario}</strong> · {counts.ready}/{counts.total} proven
+                        </p>
+                      </div>
+                    </div>
+                    <div className="pf-actions">
+                      {onFocusScopeFromRelease ? (
+                        <button
+                          type="button"
+                          className="pf-btn pf-btn-ghost"
+                          disabled={busy !== null}
+                          onClick={() =>
+                            void run(
+                              `scope:${release.name}`,
+                              async () => {
+                                await onFocusScopeFromRelease(release);
+                              },
+                              `Focused agents on release "${release.name}".`,
+                            )
+                          }
+                        >
+                          Focus agents
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="pf-btn pf-btn-ghost"
+                        onClick={() => {
+                          if (isEditing) {
+                            setEditingReleaseId(null);
+                          } else {
+                            setEditingReleaseId(key);
+                            setEditDate(release.date);
+                            setEditKeys(release.keys.slice());
+                          }
+                        }}
+                      >
+                        {isEditing ? "Cancel edit" : "Edit"}
+                      </button>
+                      <button
+                        type="button"
+                        className="pf-btn pf-btn-ghost"
+                        aria-expanded={isOpen}
+                        onClick={() => setExpanded((current) => ({ ...current, [key]: !isOpen }))}
+                      >
+                        {isOpen ? "Hide keys" : "Show keys"}
+                      </button>
+                    </div>
+                  </header>
+                  <div className="pf-bar" role="img" aria-label={`${percent}% ready`}>
+                    <span className="pf-bar-fill" style={{ width: `${percent}%` }} />
                   </div>
-                  <button
-                    type="button"
-                    className="pf-btn pf-btn-ghost"
-                    aria-expanded={isOpen}
-                    onClick={() => setExpanded((current) => ({ ...current, [key]: !isOpen }))}
-                  >
-                    {isOpen ? "Hide keys" : "Show keys"}
-                  </button>
-                </header>
-                <div className="pf-bar" role="img" aria-label={`${percent}% ready`}>
-                  <span className="pf-bar-fill" style={{ width: `${percent}%` }} />
-                </div>
-                {isOpen && (
-                  <table className="pf-table">
-                    <thead>
-                      <tr>
-                        <th scope="col">Outcome</th>
-                        <th scope="col">Signal</th>
-                        <th scope="col">Why not ready</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rows.map((row) => (
-                        <tr key={row.key}>
-                          <td>
-                            <button type="button" className="pf-link" onClick={() => select(row.key)}>
-                              {row.title}
-                            </button>
-                            <span className="pf-muted pf-small"> {row.key}</span>
-                          </td>
-                          <td>
-                            <SignalBadge signal={row.signal} />
-                          </td>
-                          <td className="pf-muted pf-small">{row.ready ? "" : row.reason}</td>
+                  {isEditing ? (
+                    <div className="pf-pin-form">
+                      <div className="pf-row">
+                        <label className="pf-label" htmlFor={`pf-edit-rel-date-${index}`}>
+                          Target date
+                        </label>
+                        <input
+                          id={`pf-edit-rel-date-${index}`}
+                          type="date"
+                          className="pf-input"
+                          style={{ maxWidth: 180 }}
+                          value={editDate}
+                          onChange={(e) => setEditDate(e.target.value)}
+                        />
+                        <button
+                          type="button"
+                          className="pf-btn pf-btn-primary"
+                          disabled={busy !== null || editKeys.length === 0 || !editDate}
+                          onClick={() =>
+                            void run(
+                              `revise:${release.name}`,
+                              async () => {
+                                await act({
+                                  op: "revise_release",
+                                  name: release.name,
+                                  scenario: release.scenario,
+                                  date: editDate,
+                                  keys: editKeys,
+                                });
+                              },
+                              `Updated release "${release.name}".`,
+                            ).then((ok) => {
+                              if (ok) setEditingReleaseId(null);
+                            })
+                          }
+                        >
+                          Save release
+                        </button>
+                      </div>
+                      <div className="pf-actions">
+                        {ranked.map((r) => {
+                          const included = editKeys.includes(r.key);
+                          return (
+                            <label key={r.key} className="pf-chip" style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
+                              <input
+                                type="checkbox"
+                                checked={included}
+                                onChange={() =>
+                                  setEditKeys((cur) =>
+                                    included ? cur.filter((k) => k !== r.key) : [...cur, r.key],
+                                  )
+                                }
+                              />
+                              <span>{r.key}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+                  {isOpen && (
+                    <table className="pf-table">
+                      <thead>
+                        <tr>
+                          <th scope="col">Outcome</th>
+                          <th scope="col">Signal</th>
+                          <th scope="col">Why not ready</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </article>
-            );
-          })}
-        </div>
+                      </thead>
+                      <tbody>
+                        {rows.map((row) => (
+                          <tr key={row.key}>
+                            <td>
+                              <button type="button" className="pf-link" onClick={() => select(row.key)}>
+                                {row.title}
+                              </button>
+                              <span className="pf-muted pf-small"> {row.key}</span>
+                            </td>
+                            <td>
+                              <SignalBadge signal={row.signal} />
+                            </td>
+                            <td className="pf-muted pf-small">{row.ready ? "" : row.reason}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        </>
       )}
 
       <section className="pf-section" aria-labelledby="pf-pick-title">
@@ -1404,8 +1832,13 @@ interface FrameDraft {
   title: string;
   key: string;
   criterionId: string;
+  kind: "html" | "image";
   html: string;
+  imagePath: string;
+  notes: string;
 }
+
+type ViewportPreset = "auto" | "mobile" | "laptop" | "desktop";
 
 function FrameCard({
   frame,
@@ -1413,6 +1846,7 @@ function FrameCard({
   total,
   data,
   flowName,
+  viewportPreset,
   act,
   run,
   busy,
@@ -1423,6 +1857,7 @@ function FrameCard({
   total: number;
   data: Snapshot;
   flowName: string;
+  viewportPreset: ViewportPreset;
   act: PortfolioProps["act"];
   run: Run;
   busy: string | null;
@@ -1432,6 +1867,9 @@ function FrameCard({
   const [pinning, setPinning] = useState(false);
   const [point, setPoint] = useState<{ x: number; y: number } | null>(null);
   const [text, setText] = useState("");
+  const [pinKind, setPinKind] = useState<PinKind>("point");
+  const [forAgents, setForAgents] = useState(true);
+  const [selector, setSelector] = useState("");
   const [openPin, setOpenPin] = useState<string | null>(null);
   const textId = useId();
   const criterion = criterionFor(data, frame.key, frame.criterionId);
@@ -1441,6 +1879,14 @@ function FrameCard({
   )[0];
   const hue = criterionHue(frame.criterionId);
   const isolatedHtml = useMemo(() => isolateHtml(frame.html), [frame.html]);
+  const canvasStyle =
+    viewportPreset === "mobile"
+      ? { maxWidth: 390, height: 480, margin: "0 auto" }
+      : viewportPreset === "laptop"
+        ? { maxWidth: 960, height: 420, margin: "0 auto" }
+        : viewportPreset === "desktop"
+          ? { maxWidth: 1200, height: 460, margin: "0 auto" }
+          : undefined;
 
   const capture = (event: ReactMouseEvent<HTMLDivElement>): void => {
     if (!pinning) return;
@@ -1449,6 +1895,9 @@ function FrameCard({
     setPoint(normalizePoint(box, event.clientX, event.clientY));
   };
 
+  const openPinsCount = frame.pins.filter((p) => !p.resolved).length;
+  const agentPinsCount = frame.pins.filter((p) => !p.resolved && p.forAgents).length;
+
   return (
     <li className="pf-frame">
       <header className="pf-frame-bar">
@@ -1456,33 +1905,130 @@ function FrameCard({
           Frame {index + 1} of {total}
         </span>
         <span className="pf-frame-title">{frame.title}</span>
+        <span className="pf-pill">v{frame.version ?? 1}</span>
+        {frame.kind === "image" ? <span className="pf-pill">image</span> : null}
         <button type="button" className="pf-link pf-small" onClick={() => select(frame.key)}>
           {frame.key}
         </button>
         <code className="pf-criterion-id" style={{ borderColor: `hsl(${hue} 65% 45%)` }}>
           {frame.criterionId}
         </code>
+        {frame.history && frame.history.length > 0 ? (
+          <select
+            aria-label={`Restore previous version of ${frame.title}`}
+            className="pf-select"
+            style={{ width: "auto", minHeight: 24, fontSize: 11.5, padding: "1px 6px" }}
+            value=""
+            disabled={busy !== null}
+            onChange={(e) => {
+              const ver = Number(e.target.value);
+              if (!Number.isInteger(ver) || ver < 1) return;
+              void run(
+                `restore:${flowName}:${index}:${ver}`,
+                async () => {
+                  await act({ op: "restore_frame_version", flowName, frameIndex: index, version: ver });
+                },
+                `Restored frame ${index + 1} from v${ver}.`,
+              );
+            }}
+          >
+            <option value="">History ({frame.history.length})…</option>
+            {frame.history
+              .slice()
+              .reverse()
+              .map((rev) => (
+                <option key={rev.version} value={rev.version}>
+                  Restore v{rev.version} ({rev.title})
+                </option>
+              ))}
+          </select>
+        ) : null}
       </header>
       {criterion !== null && (
         <p className="pf-criterion-text">
           Given {criterion.given}, when {criterion.when}, then {criterion.then}.
         </p>
       )}
+      {frame.notes ? <p className="pf-muted pf-small">Notes: {frame.notes}</p> : null}
+      {frame.driftDetected ? (
+        <div className="pf-drift-banner" role="status">
+          <span>
+            <strong>Visual drift detected:</strong> {frame.driftNote ?? "Live screen differs from approved reference."}
+          </span>
+          <button
+            type="button"
+            className="pf-btn pf-btn-ghost"
+            disabled={busy !== null}
+            onClick={() =>
+              void run(
+                `drift:${flowName}:${index}`,
+                async () => {
+                  await act({ op: "set_frame_drift", flowName, frameIndex: index, driftDetected: false, driftNote: null });
+                },
+                "Cleared drift flag.",
+              )
+            }
+          >
+            Mark synced
+          </button>
+        </div>
+      ) : null}
 
-      <div className="pf-frame-canvas">
-        {/* sandbox="" is the isolation: no scripts, no same-origin, no forms, no top navigation. */}
-        <iframe
-          title={`${frame.title} (${frame.key} / ${frame.criterionId})`}
-          sandbox={FRAME_SANDBOX}
-          referrerPolicy="no-referrer"
-          loading="lazy"
-          srcDoc={isolatedHtml}
-        />
+      <div className="pf-frame-canvas" style={canvasStyle}>
+        {frame.kind === "image" && frame.imagePath ? (
+          <img src={frame.imagePath} alt={`${frame.title} (${frame.key})`} className="pf-frame-img" />
+        ) : (
+          /* sandbox="" is the isolation: no scripts, no same-origin, no forms, no top navigation. */
+          <iframe
+            title={`${frame.title} (${frame.key} / ${frame.criterionId})`}
+            sandbox={FRAME_SANDBOX}
+            referrerPolicy="no-referrer"
+            loading="lazy"
+            srcDoc={isolatedHtml}
+          />
+        )}
         <div
           ref={overlay}
           className={`pf-pin-layer${pinning ? " is-capturing" : ""}`}
           onClick={capture}
         >
+          <svg className="pf-pin-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+            {frame.pins.map((pin, pinIndex) => {
+              if (pin.resolved) return null;
+              const cx = Math.min(1, Math.max(0, pin.x)) * 100;
+              const cy = Math.min(1, Math.max(0, pin.y)) * 100;
+              if (pin.kind === "rect") {
+                const w = Number(pin.geometry?.w ?? 0.16) * 100;
+                const h = Number(pin.geometry?.h ?? 0.12) * 100;
+                return (
+                  <rect
+                    key={`svg:${index}:${pinIndex}`}
+                    x={Math.max(0, cx - w / 2)}
+                    y={Math.max(0, cy - h / 2)}
+                    width={w}
+                    height={h}
+                    rx={1.5}
+                    className={pin.forAgents ? "pf-ann-shape is-agent" : "pf-ann-shape"}
+                  />
+                );
+              }
+              if (pin.kind === "arrow") {
+                const x2 = Number(pin.geometry?.x2 ?? Math.min(1, pin.x + 0.1)) * 100;
+                const y2 = Number(pin.geometry?.y2 ?? Math.max(0, pin.y - 0.08)) * 100;
+                return (
+                  <line
+                    key={`svg:${index}:${pinIndex}`}
+                    x1={x2}
+                    y1={y2}
+                    x2={cx}
+                    y2={cy}
+                    className={pin.forAgents ? "pf-ann-arrow is-agent" : "pf-ann-arrow"}
+                  />
+                );
+              }
+              return null;
+            })}
+          </svg>
           {frame.pins.map((pin, pinIndex) => {
             const id = `${index}:${pinIndex}`;
             const position = pinPosition(pin);
@@ -1490,16 +2036,16 @@ function FrameCard({
               <button
                 key={id}
                 type="button"
-                className="pf-pin"
-                style={{ ...position, borderColor: `hsl(${criterionHue(frame.criterionId)} 65% 45%)` }}
-                title={pin.text}
+                className={`pf-pin${pin.resolved ? " is-resolved" : ""}${pin.forAgents ? " is-agent" : ""}`}
+                style={{ ...position, borderColor: pin.resolved ? undefined : `hsl(${criterionHue(frame.criterionId)} 65% 45%)` }}
+                title={`${pin.forAgents ? "[for agents] " : ""}${pin.resolved ? "[resolved] " : ""}${pin.text}`}
                 aria-label={`Pin ${pinIndex + 1}: ${pin.text}`}
                 onClick={(event) => {
                   event.stopPropagation();
                   setOpenPin((current) => (current === id ? null : id));
                 }}
               >
-                {pinIndex + 1}
+                {pin.kind === "step" ? `S${pinIndex + 1}` : pinIndex + 1}
               </button>
             );
           })}
@@ -1525,9 +2071,12 @@ function FrameCard({
             setPoint(null);
           }}
         >
-          {pinning ? "Click the frame to place a pin" : "Pin a comment"}
+          {pinning ? "Click the frame to place an annotation" : "Annotate / Pin"}
         </button>
-        <span className="pf-muted pf-small">{frame.pins.length} pin{frame.pins.length === 1 ? "" : "s"}</span>
+        <span className="pf-muted pf-small">
+          {openPinsCount} open ({frame.pins.length} total)
+          {agentPinsCount > 0 ? ` · ${agentPinsCount} for agents` : ""}
+        </span>
       </div>
 
       {point !== null && (
@@ -1540,12 +2089,24 @@ function FrameCard({
             void run(
               `pin:${index}`,
               async () => {
-                await act({ op: "pin", name: flowName, frame: index, x: point.x, y: point.y, text: trimmed });
+                await act({
+                  op: "pin",
+                  name: flowName,
+                  frame: index,
+                  x: point.x,
+                  y: point.y,
+                  text: trimmed,
+                  kind: pinKind,
+                  forAgents,
+                  ...(selector.trim() ? { selector: selector.trim() } : {}),
+                  ...(pinKind === "rect" ? { geometry: { w: 0.16, h: 0.12 } } : {}),
+                });
               },
-              "Pin added.",
+              "Annotation added.",
             ).then((ok) => {
               if (ok) {
                 setText("");
+                setSelector("");
                 setPoint(null);
                 setPinning(false);
               }
@@ -1553,8 +2114,34 @@ function FrameCard({
           }}
         >
           <p className="pf-muted pf-small">
-            Pin at {(point.x * 100).toFixed(0)}% × {(point.y * 100).toFixed(0)}% on frame {index + 1}.
+            Annotation at {(point.x * 100).toFixed(0)}% × {(point.y * 100).toFixed(0)}% on frame {index + 1}.
           </p>
+          <div className="pf-row">
+            <select
+              aria-label="Annotation kind"
+              className="pf-select"
+              style={{ width: "auto" }}
+              value={pinKind}
+              onChange={(e) => setPinKind(e.target.value as PinKind)}
+            >
+              <option value="point">Pin</option>
+              <option value="rect">Highlight box</option>
+              <option value="arrow">Callout arrow</option>
+              <option value="step">Step badge</option>
+            </select>
+            <label className="pf-small" style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
+              <input type="checkbox" checked={forAgents} onChange={(e) => setForAgents(e.target.checked)} />
+              <span>For agents</span>
+            </label>
+            <input
+              className="pf-input"
+              style={{ maxWidth: 190 }}
+              value={selector}
+              onChange={(e) => setSelector(e.target.value)}
+              placeholder="Optional CSS selector"
+              aria-label="Optional CSS selector"
+            />
+          </div>
           <div className="pf-row">
             <label className="pf-sr" htmlFor={textId}>
               Pin comment
@@ -1563,11 +2150,11 @@ function FrameCard({
               id={textId}
               className="pf-input"
               value={text}
-              placeholder="What is wrong or worth noting here?"
+              placeholder="What should change or be noted here?"
               onChange={(event) => setText(event.target.value)}
             />
             <button type="submit" className="pf-btn pf-btn-primary" disabled={busy !== null || text.trim() === ""}>
-              Pin
+              Save pin
             </button>
             <button type="button" className="pf-btn pf-btn-ghost" onClick={() => setPoint(null)}>
               Cancel
@@ -1581,14 +2168,56 @@ function FrameCard({
           {frame.pins.map((pin, pinIndex) => {
             const id = `${index}:${pinIndex}`;
             return (
-              <li key={id} className={openPin === id ? "is-open" : ""}>
-                <button type="button" className="pf-link" onClick={() => setOpenPin((current) => (current === id ? null : id))}>
-                  Pin {pinIndex + 1}
-                </button>{" "}
-                <span className="pf-muted pf-small">
-                  {(pin.x * 100).toFixed(0)}% × {(pin.y * 100).toFixed(0)}%
-                </span>
-                {(openPin === id || frame.pins.length === 1) && <p className="pf-pin-text">{pin.text}</p>}
+              <li key={id} className={`${openPin === id ? "is-open" : ""}${pin.resolved ? " is-resolved" : ""}`}>
+                <div className="pf-row pf-between">
+                  <div>
+                    <button type="button" className="pf-link" onClick={() => setOpenPin((current) => (current === id ? null : id))}>
+                      {pin.kind && pin.kind !== "point" ? `${pin.kind} ` : "Pin "}
+                      {pinIndex + 1}
+                    </button>{" "}
+                    <span className="pf-muted pf-small">
+                      {(pin.x * 100).toFixed(0)}% × {(pin.y * 100).toFixed(0)}%
+                    </span>
+                    {pin.forAgents ? (
+                      <span className="pf-badge pf-tone-info" style={{ marginLeft: 6 }}>
+                        for agents
+                      </span>
+                    ) : null}
+                    {pin.resolved ? (
+                      <span className="pf-badge pf-tone-ready" style={{ marginLeft: 6 }}>
+                        resolved
+                      </span>
+                    ) : null}
+                    {pin.selector ? (
+                      <code className="pf-small" style={{ marginLeft: 6 }}>
+                        {pin.selector}
+                      </code>
+                    ) : null}
+                  </div>
+                  <button
+                    type="button"
+                    className="pf-link pf-small"
+                    disabled={busy !== null}
+                    onClick={() =>
+                      void run(
+                        `resolve-pin:${index}:${pinIndex}`,
+                        async () => {
+                          await act({
+                            op: "resolve_pin",
+                            name: flowName,
+                            frame: index,
+                            pinIndex,
+                            resolved: !pin.resolved,
+                          });
+                        },
+                        pin.resolved ? "Reopened pin." : "Resolved pin.",
+                      )
+                    }
+                  >
+                    {pin.resolved ? "Reopen" : "Resolve"}
+                  </button>
+                </div>
+                {(openPin === id || frame.pins.length === 1 || !pin.resolved) && <p className="pf-pin-text">{pin.text}</p>}
               </li>
             );
           })}
@@ -1639,6 +2268,20 @@ function FrameEditor({
           />
         </div>
         <div className="pf-field">
+          <label className="pf-label" htmlFor={`${base}-kind`}>
+            Frame type
+          </label>
+          <select
+            id={`${base}-kind`}
+            className="pf-select"
+            value={draft.kind}
+            onChange={(event) => onChange({ ...draft, kind: event.target.value as "html" | "image" })}
+          >
+            <option value="html">Sandboxed HTML mockup</option>
+            <option value="image">Screenshot / Image</option>
+          </select>
+        </div>
+        <div className="pf-field">
           <label className="pf-label" htmlFor={`${base}-outcome`}>
             Outcome
           </label>
@@ -1680,19 +2323,46 @@ function FrameEditor({
           ))}
         </select>
       </div>
+      {draft.kind === "image" ? (
+        <div className="pf-field">
+          <label className="pf-label" htmlFor={`${base}-img`}>
+            Image path or data URI
+          </label>
+          <input
+            id={`${base}-img`}
+            className="pf-input"
+            value={draft.imagePath}
+            placeholder="data:image/png;base64,… or screenshots/checkout.png"
+            onChange={(event) => onChange({ ...draft, imagePath: event.target.value })}
+          />
+        </div>
+      ) : (
+        <div className="pf-field">
+          <label className="pf-label" htmlFor={`${base}-html`}>
+            HTML
+          </label>
+          <textarea
+            id={`${base}-html`}
+            className="pf-textarea"
+            rows={5}
+            value={draft.html}
+            placeholder="<main style='font:16px system-ui;padding:24px'>…</main>"
+            onChange={(event) => onChange({ ...draft, html: event.target.value })}
+          />
+          <p className="pf-hint">Rendered without scripts, forms or network access. Scripts are stripped before display.</p>
+        </div>
+      )}
       <div className="pf-field">
-        <label className="pf-label" htmlFor={`${base}-html`}>
-          HTML
+        <label className="pf-label" htmlFor={`${base}-notes`}>
+          Interaction notes (optional)
         </label>
-        <textarea
-          id={`${base}-html`}
-          className="pf-textarea"
-          rows={5}
-          value={draft.html}
-          placeholder="<main style='font:16px system-ui;padding:24px'>…</main>"
-          onChange={(event) => onChange({ ...draft, html: event.target.value })}
+        <input
+          id={`${base}-notes`}
+          className="pf-input"
+          value={draft.notes}
+          placeholder="Click primary CTA to advance to confirmation screen…"
+          onChange={(event) => onChange({ ...draft, notes: event.target.value })}
         />
-        <p className="pf-hint">Rendered without scripts, forms or network access. Scripts are stripped before display.</p>
       </div>
       <div className="pf-actions">
         <button type="button" className="pf-btn pf-btn-ghost" disabled={index === 0} onClick={() => onMove(-1)}>
@@ -1715,21 +2385,72 @@ function Flows({
   run,
   busy,
   select,
+  initialFlow,
 }: {
   data: Snapshot;
   act: PortfolioProps["act"];
   run: Run;
   busy: string | null;
   select: (key: string | null) => void;
+  initialFlow?: string | null;
 }): ReactNode {
-  const [activeName, setActiveName] = useState<string | null>(null);
+  const [activeName, setActiveName] = useState<string | null>(initialFlow ?? null);
+  const [folderFilter, setFolderFilter] = useState<string>("all");
+  const [needsAttentionOnly, setNeedsAttentionOnly] = useState(false);
+  const [playerMode, setPlayerMode] = useState(false);
+  const [playerStep, setPlayerStep] = useState(0);
+  const [viewportPreset, setViewportPreset] = useState<ViewportPreset>("auto");
   const [name, setName] = useState("");
+  const [folder, setFolder] = useState("");
+  const [designKit, setDesignKit] = useState("");
   const [frames, setFrames] = useState<FrameDraft[]>([]);
+
+  useEffect(() => {
+    if (initialFlow) setActiveName(initialFlow);
+  }, [initialFlow]);
+
   const outcomes = useMemo(
     () => data.outcomes.slice().sort((a, b) => a.title.localeCompare(b.title)),
     [data.outcomes],
   );
-  const flow = (activeName !== null ? data.flows.find((entry) => entry.name === activeName) : undefined) ?? data.flows[0] ?? null;
+  const pendingProposals = useMemo(
+    () => (data.flowProposals ?? []).filter((p) => p.state === "pending"),
+    [data.flowProposals],
+  );
+
+  const flowNeedsAttention = (entry: Flow): boolean =>
+    pendingProposals.some((p) => p.flowName === entry.name) ||
+    entry.frames.some((fr) => fr.driftDetected || fr.pins.some((p) => !p.resolved && p.forAgents));
+
+  const folders = useMemo(() => {
+    const set = new Set<string>();
+    for (const f of data.flows) if (f.folder) set.add(f.folder);
+    return [...set].sort();
+  }, [data.flows]);
+
+  const visibleFlows = useMemo(
+    () =>
+      data.flows.filter((f) => {
+        if (folderFilter !== "all" && (f.folder ?? "") !== folderFilter) return false;
+        if (needsAttentionOnly && !flowNeedsAttention(f)) return false;
+        return true;
+      }),
+    [data.flows, folderFilter, needsAttentionOnly, pendingProposals],
+  );
+
+  const flow =
+    (activeName !== null ? visibleFlows.find((entry) => entry.name === activeName) ?? data.flows.find((entry) => entry.name === activeName) : undefined) ??
+    visibleFlows[0] ??
+    null;
+
+  useEffect(() => {
+    setPlayerStep(0);
+  }, [flow?.name]);
+
+  const flowProposalsForActive = useMemo(
+    () => (flow ? pendingProposals.filter((p) => p.flowName === flow.name) : pendingProposals),
+    [flow, pendingProposals],
+  );
   const groups = flow === null ? [] : pinsByCriterion(flow, data);
 
   const addFrame = (): void => {
@@ -1740,7 +2461,10 @@ function Flows({
         title: "",
         key: first?.key ?? "",
         criterionId: first?.criteria[0]?.id ?? "",
+        kind: "html",
         html: "",
+        imagePath: "",
+        notes: "",
       },
     ]);
   };
@@ -1749,38 +2473,94 @@ function Flows({
     frame.title.trim() !== "" &&
     frame.key !== "" &&
     frame.criterionId !== "" &&
-    frame.html.trim() !== "";
+    (frame.kind === "image" ? frame.imagePath.trim() !== "" : frame.html.trim() !== "");
 
   const canCreate = name.trim() !== "" && frames.length > 0 && frames.every(frameValid);
 
   return (
     <div className="pf-flows">
       <aside className="pf-flow-list" aria-label="Flows">
-        <h3 className="pf-section-title">Flows</h3>
-        {data.flows.length === 0 ? (
-          <p className="pf-muted pf-small">No flows yet. Use New flow to create the first one.</p>
+        <div className="pf-row pf-between">
+          <h3 className="pf-section-title">Flows</h3>
+          <button
+            type="button"
+            className={`pf-chip${needsAttentionOnly ? " is-active" : ""}`}
+            aria-pressed={needsAttentionOnly}
+            onClick={() => setNeedsAttentionOnly((v) => !v)}
+          >
+            Needs attention
+          </button>
+        </div>
+        {folders.length > 0 ? (
+          <select
+            aria-label="Filter flows by folder"
+            className="pf-select"
+            value={folderFilter}
+            onChange={(e) => setFolderFilter(e.target.value)}
+          >
+            <option value="all">All folders</option>
+            {folders.map((f) => (
+              <option key={f} value={f}>
+                {f}
+              </option>
+            ))}
+          </select>
+        ) : null}
+        {visibleFlows.length === 0 ? (
+          <p className="pf-muted pf-small">
+            {data.flows.length === 0
+              ? "No flows yet. Use New flow to create the first one."
+              : "No flows match this filter."}
+          </p>
         ) : (
           <ul>
-            {data.flows.map((entry, index) => (
-              <li key={`${entry.name}:${index}`}>
-                <button
-                  type="button"
-                  className={`pf-flow-item${entry === flow ? " is-active" : ""}`}
-                  aria-pressed={entry === flow}
-                  onClick={() => setActiveName(entry.name)}
-                >
-                  <span className="pf-flow-name">{entry.name}</span>
-                  <span className="pf-muted pf-small">
-                    {entry.frames.length} frame{entry.frames.length === 1 ? "" : "s"}
-                  </span>
-                </button>
-              </li>
-            ))}
+            {visibleFlows.map((entry, index) => {
+              const attention = flowNeedsAttention(entry);
+              return (
+                <li key={`${entry.name}:${index}`}>
+                  <button
+                    type="button"
+                    className={`pf-flow-item${entry === flow ? " is-active" : ""}`}
+                    aria-pressed={entry === flow}
+                    onClick={() => setActiveName(entry.name)}
+                  >
+                    <span className="pf-flow-name">
+                      {entry.name}
+                      {attention ? <span className="pf-badge pf-tone-warn" style={{ marginLeft: 6 }}>!</span> : null}
+                    </span>
+                    <span className="pf-muted pf-small">
+                      {entry.folder ? `${entry.folder} · ` : ""}
+                      {entry.frames.length} frame{entry.frames.length === 1 ? "" : "s"}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
       </aside>
 
       <section className="pf-flow-main" aria-label="Selected flow">
+        {flowProposalsForActive.length > 0 ? (
+          <section className="pf-section" aria-label="Pending proposals for this flow">
+            <h4 className="pf-section-title">
+              Pending review <span className="pf-count">{flowProposalsForActive.length}</span>
+            </h4>
+            <div className="pf-stack">
+              {flowProposalsForActive.map((proposal) => (
+                <FlowProposalCard
+                  key={proposal.id}
+                  proposal={proposal}
+                  currentFlow={data.flows.find((f) => f.name === proposal.flowName)}
+                  act={act}
+                  run={run}
+                  busy={busy}
+                />
+              ))}
+            </div>
+          </section>
+        ) : null}
+
         {flow === null ? (
           <Empty
             title="No flow to show."
@@ -1790,37 +2570,125 @@ function Flows({
           <>
             <header className="pf-section-head">
               <div>
-                <h3 className="pf-section-title">{flow.name}</h3>
+                <h3 className="pf-section-title">
+                  {flow.folder ? <span className="pf-muted">{flow.folder} / </span> : null}
+                  {flow.name}
+                  {flow.designKit ? <span className="pf-pill">{flow.designKit}</span> : null}
+                </h3>
                 <p className="pf-muted pf-small">
                   {flow.frames.length} ordered frame{flow.frames.length === 1 ? "" : "s"} ·{" "}
-                  {flow.frames.reduce((total, frame) => total + frame.pins.length, 0)} pinned comments
+                  {flow.frames.reduce((total, frame) => total + frame.pins.filter((p) => !p.resolved).length, 0)} open
+                  annotations
                 </p>
+              </div>
+              <div className="pf-actions">
+                <div className="cl-seg" role="group" aria-label="Flow display mode">
+                  <button
+                    type="button"
+                    className={!playerMode ? "is-active" : ""}
+                    onClick={() => setPlayerMode(false)}
+                  >
+                    All frames
+                  </button>
+                  <button
+                    type="button"
+                    className={playerMode ? "is-active" : ""}
+                    onClick={() => setPlayerMode(true)}
+                  >
+                    Player
+                  </button>
+                </div>
+                <select
+                  aria-label="Viewport preset"
+                  className="pf-select"
+                  style={{ width: "auto" }}
+                  value={viewportPreset}
+                  onChange={(e) => setViewportPreset(e.target.value as ViewportPreset)}
+                >
+                  <option value="auto">Viewport: auto</option>
+                  <option value="mobile">Mobile 390×844</option>
+                  <option value="laptop">Laptop 1280×720</option>
+                  <option value="desktop">Desktop 1440×900</option>
+                </select>
               </div>
             </header>
 
-            <ol className="pf-frames">
-              {flow.frames.map((frame, index) => (
-                <FrameCard
-                  key={`${flow.name}:${index}:${frame.title}`}
-                  frame={frame}
-                  index={index}
-                  total={flow.frames.length}
-                  data={data}
-                  flowName={flow.name}
-                  act={act}
-                  run={run}
-                  busy={busy}
-                  select={select}
-                />
-              ))}
-            </ol>
+            {playerMode && flow.frames.length > 0 ? (
+              <div className="pf-stack">
+                <div className="pf-row pf-between">
+                  <button
+                    type="button"
+                    className="pf-btn"
+                    disabled={playerStep <= 0}
+                    onClick={() => setPlayerStep((s) => Math.max(0, s - 1))}
+                  >
+                    ← Prev
+                  </button>
+                  <div className="pf-actions">
+                    {flow.frames.map((fr, idx) => (
+                      <button
+                        key={`${flow.name}:dot:${idx}`}
+                        type="button"
+                        className={`pf-chip${idx === playerStep ? " is-active" : ""}`}
+                        onClick={() => setPlayerStep(idx)}
+                      >
+                        {idx + 1}. {fr.title.slice(0, 14)}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    className="pf-btn"
+                    disabled={playerStep >= flow.frames.length - 1}
+                    onClick={() => setPlayerStep((s) => Math.min(flow.frames.length - 1, s + 1))}
+                  >
+                    Next →
+                  </button>
+                </div>
+                <ol className="pf-frames">
+                  {flow.frames[playerStep] ? (
+                    <FrameCard
+                      key={`${flow.name}:${playerStep}:${flow.frames[playerStep]!.title}`}
+                      frame={flow.frames[playerStep]!}
+                      index={playerStep}
+                      total={flow.frames.length}
+                      data={data}
+                      flowName={flow.name}
+                      viewportPreset={viewportPreset}
+                      act={act}
+                      run={run}
+                      busy={busy}
+                      select={select}
+                    />
+                  ) : null}
+                </ol>
+              </div>
+            ) : (
+              <ol className="pf-frames">
+                {flow.frames.map((frame, index) => (
+                  <FrameCard
+                    key={`${flow.name}:${index}:${frame.title}`}
+                    frame={frame}
+                    index={index}
+                    total={flow.frames.length}
+                    data={data}
+                    flowName={flow.name}
+                    viewportPreset={viewportPreset}
+                    act={act}
+                    run={run}
+                    busy={busy}
+                    select={select}
+                  />
+                ))}
+              </ol>
+            )}
 
             <section className="pf-section" aria-labelledby="pf-pins-title">
               <h4 className="pf-section-title" id="pf-pins-title">
                 Comments by criterion
               </h4>
               {groups.length === 0 ? (
-                <p className="pf-muted pf-small">No pins yet. Use “Pin a comment” on a frame.</p>
+                <p className="pf-muted pf-small">No pins yet. Use “Annotate / Pin” on a frame.</p>
               ) : (
                 <div className="pf-stack">
                   {groups.map((group) => (
@@ -1843,10 +2711,12 @@ function Flows({
                       </header>
                       <ul className="pf-pin-list">
                         {group.pins.map((entry, index) => (
-                          <li key={`${entry.frame}:${index}`}>
+                          <li key={`${entry.frame}:${index}`} className={entry.pin.resolved ? "is-resolved" : ""}>
                             <span className="pf-muted pf-small">
                               Frame {entry.frame + 1} · {entry.frameTitle} · {(entry.pin.x * 100).toFixed(0)}% ×{" "}
                               {(entry.pin.y * 100).toFixed(0)}%
+                              {entry.pin.forAgents ? " · for agents" : ""}
+                              {entry.pin.resolved ? " · resolved" : ""}
                             </span>
                             <p className="pf-pin-text">{entry.pin.text}</p>
                           </li>
@@ -1874,11 +2744,16 @@ function Flows({
                   await act({
                     op: "create_flow",
                     name: createdName,
+                    ...(folder.trim() ? { folder: folder.trim() } : {}),
+                    ...(designKit.trim() ? { designKit: designKit.trim() } : {}),
                     frames: frames.map((frame) => ({
                       title: frame.title.trim(),
                       key: frame.key,
                       criterionId: frame.criterionId,
-                      html: frame.html.trim(),
+                      kind: frame.kind,
+                      html: frame.kind === "html" ? frame.html.trim() : "",
+                      ...(frame.kind === "image" ? { imagePath: frame.imagePath.trim() } : {}),
+                      ...(frame.notes.trim() ? { notes: frame.notes.trim() } : {}),
                     })),
                   });
                 },
@@ -1886,23 +2761,51 @@ function Flows({
               ).then((ok) => {
                 if (ok) {
                   setName("");
+                  setFolder("");
+                  setDesignKit("");
                   setFrames([]);
                   setActiveName(createdName);
                 }
               });
             }}
           >
-            <div className="pf-field">
-              <label className="pf-label" htmlFor="pf-flow-name">
-                Flow name
-              </label>
-              <input
-                id="pf-flow-name"
-                className="pf-input"
-                value={name}
-                placeholder="Checkout walkthrough"
-                onChange={(event) => setName(event.target.value)}
-              />
+            <div className="pf-grid">
+              <div className="pf-field">
+                <label className="pf-label" htmlFor="pf-flow-name">
+                  Flow name
+                </label>
+                <input
+                  id="pf-flow-name"
+                  className="pf-input"
+                  value={name}
+                  placeholder="Checkout walkthrough"
+                  onChange={(event) => setName(event.target.value)}
+                />
+              </div>
+              <div className="pf-field">
+                <label className="pf-label" htmlFor="pf-flow-folder">
+                  Folder (optional)
+                </label>
+                <input
+                  id="pf-flow-folder"
+                  className="pf-input"
+                  value={folder}
+                  placeholder="Onboarding"
+                  onChange={(event) => setFolder(event.target.value)}
+                />
+              </div>
+              <div className="pf-field">
+                <label className="pf-label" htmlFor="pf-flow-kit">
+                  Design kit (optional)
+                </label>
+                <input
+                  id="pf-flow-kit"
+                  className="pf-input"
+                  value={designKit}
+                  placeholder="Linear / Minimal / Brand"
+                  onChange={(event) => setDesignKit(event.target.value)}
+                />
+              </div>
             </div>
 
             {outcomes.length === 0 ? (
@@ -1944,7 +2847,7 @@ function Flows({
                   </button>
                 </div>
                 {!canCreate && frames.length > 0 && (
-                  <p className="pf-hint">Every frame needs a title, an outcome, a criterion and some HTML.</p>
+                  <p className="pf-hint">Every frame needs a title, an outcome, a criterion, and HTML or an image path.</p>
                 )}
               </>
             )}
@@ -1959,18 +2862,28 @@ function Flows({
 // Entry
 // ---------------------------------------------------------------------------
 
-export function Portfolio({ page, data, act, select, chooseTrack, track, preview }: PortfolioProps): ReactNode {
+export function Portfolio({
+  page,
+  data,
+  act,
+  select,
+  chooseTrack,
+  track,
+  preview,
+  initialFlow,
+  onFocusScopeFromRelease,
+}: PortfolioProps): ReactNode {
   const { busy, error, notice, run } = useAction(act);
   const counts = inboxCounts(data);
   const titles = { inbox: "Inbox", roadmap: "Roadmap", flows: "Flows" } as const;
   const subtitles = {
-    inbox: `${counts.changes} pending contract edit${counts.changes === 1 ? "" : "s"} · ${counts.questions} open question${
-      counts.questions === 1 ? "" : "s"
-    }`,
+    inbox: `${counts.changes} pending contract edit${counts.changes === 1 ? "" : "s"} · ${counts.flowProposals} flow proposal${
+      counts.flowProposals === 1 ? "" : "s"
+    } · ${counts.questions} open question${counts.questions === 1 ? "" : "s"}`,
     roadmap: `${data.releases.length} release${data.releases.length === 1 ? "" : "s"} · ${data.ranked.length} ranked outcome${
       data.ranked.length === 1 ? "" : "s"
     }`,
-    flows: `${data.flows.length} flow${data.flows.length === 1 ? "" : "s"} · sandboxed HTML previews`,
+    flows: `${data.flows.length} flow${data.flows.length === 1 ? "" : "s"} · sandboxed HTML & screenshot previews`,
   } as const;
 
   return (
@@ -1998,9 +2911,12 @@ export function Portfolio({ page, data, act, select, chooseTrack, track, preview
           track={track}
           chooseTrack={chooseTrack}
           select={select}
+          onFocusScopeFromRelease={onFocusScopeFromRelease}
         />
       )}
-      {page === "flows" && <Flows data={data} act={act} run={run} busy={busy} select={select} />}
+      {page === "flows" && (
+        <Flows data={data} act={act} run={run} busy={busy} select={select} initialFlow={initialFlow} />
+      )}
     </section>
   );
 }
