@@ -37,8 +37,8 @@ import {
 export { redactSecrets } from "./state.js";
 
 export const ENGINE_COMMANDS = [
-  'init <name> --goal "..." --check "<command>" --lock <check files>',
-  'try "<idea>"  [--fix]',
+  'init <name> --goal "..." --check "<command>" [--probe "<fast-cmd>"] --lock <check files>',
+  'try "<idea>"  [--fix] [--probe "<fast-cmd>"] [--guards-first]',
   "status [name]",
   'relock [name] --why "..."',
   'holdout --why "..."',
@@ -218,13 +218,15 @@ export function readClimb(repoPath: string, wanted?: string): { card: ClimbCard;
 export function readState(repoPath: string, wanted?: string): ClimbFiles & { name: string } {
   const { card, name } = readClimb(repoPath, wanted);
   const base = joinPath(stateDir(repoPath), name);
-  const notes = readLocalFile(joinPath(base, "notes.md"));
+  const notesPath = joinPath(base, "notes.md");
+  const notes = readLocalFile(notesPath);
   const pending = readLocalFile(joinPath(base, "pending-tree"));
   return {
     name,
     card,
     rows: readRows(repoPath, name),
     notes: notes.text,
+    notesMtimeMs: notes.text === null ? null : statMtimeMs(notesPath),
     pendingTree: pending.text !== null,
   };
 }
@@ -386,9 +388,18 @@ export function getClimbStatus(repoPath: string, name?: string, last = 15) {
 }
 
 export function getClimbCard(repoPath: string, name?: string) {
-  const { card } = readClimb(repoPath, name);
+  const state = readState(repoPath, name);
+  const { card } = state;
+  const summary = summarize(state, 0);
+  const extras: string[] = [];
+  if (summary.notes) extras.push(`Notes:\n${summary.notes}`);
+  if (summary.thrashWarning) extras.push(summary.thrashWarning);
+  else if (summary.stallWarning) extras.push(summary.stallWarning);
+  if (summary.notesWarning) extras.push(summary.notesWarning);
+  const baseText = formatRig(card);
+  const text = extras.length > 0 ? `${baseText}\n\n${extras.join("\n")}` : baseText;
   return {
-    text: formatRig(card),
+    text,
     data: {
       directory: repoPath,
       name: card.name,
@@ -396,6 +407,7 @@ export function getClimbCard(repoPath: string, name?: string) {
       branch: card.branch ?? null,
       base: card.base ?? null,
       check: (Array.isArray(card.check) ? card.check : card.check === undefined ? [] : [card.check]).map(redactSecrets),
+      probe: card.probe ? redactSecrets(card.probe) : null,
       score: card.score ?? [],
       direction: card.direction,
       target: card.target,
@@ -414,6 +426,10 @@ export function getClimbCard(repoPath: string, name?: string) {
       maxSteps: card.max_steps ?? null,
       maxHours: card.max_hours ?? null,
       hard: card.hard ?? false,
+      notes: summary.notes,
+      thrashWarning: summary.thrashWarning,
+      stallWarning: summary.stallWarning,
+      notesWarning: summary.notesWarning,
     },
   };
 }

@@ -79,6 +79,19 @@ An outcome can list prerequisite outcome keys in `dependsOn` (set in `create_out
 - A dependency inherits higher urgency when a high-priority outcome depends on it (`effectiveRank`).
 - Cycles are rejected. If you discover a missing dependency mid-work, propose it via `hillclimb_propose_change` and work on the prerequisite first if unblocked.
 
+## Breaking through plateaus
+
+Single-threaded greedy tweaking naturally saturates on local heuristics. When `climb.py` emits **`STALL`** (3+ steps without gain), **`THRASH DETECTED`** (repeated attempts in the same hypothesis family), **`ZERO-CASE-CHANGE`**, or **`CANCEL-OUT / TRADE-OFF`**, switch gears immediately:
+
+1. **Use a fast inner-inner loop (`--probe`):** On any check taking >=60s, never spend full eval cycles debugging whether an edit executed. Prove the edit flips >=1 missed case in a <15s targeted script or pass `--probe "<fast-cmd>"` to `climb.py try` (or lock a reusable slice probe on `climb.py init --probe`).
+2. **Maintain a compaction-proof `notes.md` Pareto ledger (every 2–3 steps):** Keep three short sections current — **Remaining Misses (Pareto)** (`Bucket | Count | Max gain | Status`), **Dead Ends** (`Idea family | Steps | Exact failure mode`), and **Next Highest-Leverage Bucket**. Both `hillclimb_status` and `hillclimb_card` surface `notes.md` plus staleness/thrash warnings after context compaction.
+3. **Read per-case diffs, not just scalars:**
+   - `ZERO-CASE-CHANGE` means your edit probably never executed on any missed case — verify on 1 failing example before retrying.
+   - `CANCEL-OUT / TRADE-OFF` means some cases improved while others regressed or jittered — separate regressions from noise (`--runs 2` / `--paired`) instead of discarding a real win blindly.
+   - `BUNDLED DIFF WARNING` (>150 changed lines during a stall) means too many variables changed at once — split into atomic 1-cause steps.
+4. **Run a Parallel Orthogonal Tournament on `STALL`:** Instead of tweaking the same narrow patch a 3rd or 4th time, fan out 2–3 parallel subagents via `invoke_subagent` — each assigned a **distinct untouched failure bucket** (using `Workspace="share"` for isolated code probes, plus one fresh-context `research` Skeptic auditing raw inputs/upstream responses with zero inherited narrative). Prove winners on the fast slice first, then land them sequentially in the main climb checkout through `climb.py try`.
+5. **Check contract-vs-check drift:** If the user approved a contract update (`v2+`), check `hillclimb_outcome`'s `linkedClimb.contractCheckDrift` and update/relock the scoring check (`climb.py relock --why "..."`) before climbing further against stale rules.
+
 ## When you're blocked
 
 - **Never declare your own ceiling:** Before claiming a climb is "impossible", at a "physical/structural ceiling", or "needs a new paid vendor/API", spawn a fresh-context read-only `research` subagent (zero inherited narrative from the climber or prior climbs' `notes.md`) to audit raw inputs/queries, raw uncached upstream responses, and official docs on >=3 missed cases and try to **falsify** your excuse. Pass its concrete findings to `climb.py review "..." --skeptic "..."`.

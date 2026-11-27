@@ -161,12 +161,13 @@ Present one Markdown message (not in a code block) with the goal, current vs. ba
 
 ### 4. Climb
 
-Each step is one idea, one change, one `try`:
+Each step is one causal idea, one atomic change, one `try`:
 
-1. Read `hillclimb_status` (and `.hill-climb/judge-notes.md` if using judges). Never retry an undone idea unchanged (max 2 tries per idea; if still stuck, refine the check and `relock`).
-2. Make one targeted edit with an expected gain in the description: `python3 "$CLIMB" try "<idea (expect -10%)>"`. If reality misses badly, profile before guessing again.
-3. Read failure/check output in `.hill-climb/<name>/last.txt` (`best.txt` for best)—never re-run the check manually just to read output.
-4. Update `.hill-climb/<name>/notes.md` every 5 steps; inspect the real app/output every 10 kept steps to verify the proxy hasn't drifted.
+1. Read `hillclimb_status` (and `.hill-climb/judge-notes.md` if using judges). Never retry an undone hypothesis family >2× — if `THRASH DETECTED` fires, log it under **Dead Ends** in `notes.md` and pivot buckets.
+2. **Fast inner-inner loop (for checks >= 60s):** Never use a slow full `climb.py try` to verify whether a code path executed. Prove your edit triggers and flips >=1 targeted missed case in a <15s script (or pass `--probe "<fast-cmd>"` to `init` / `try`) BEFORE paying for a full eval.
+3. Make one focused edit (avoid bundling >150 lines across multiple ideas, especially during a stall) with an expected gain in the description: `python3 "$CLIMB" try "<idea (expect -10%)>"`. If reality misses badly, read the automatic `Case deltas` / `CANCEL-OUT` / `ZERO-CASE-CHANGE` diff before editing again.
+4. Read failure/check output in `.hill-climb/<name>/last.txt` (`best.txt` for best)—never re-run the check manually just to read output.
+5. Update `.hill-climb/<name>/notes.md` every **2–3 steps** (keeping the **Remaining Misses Pareto Table**, **Dead Ends**, and **Next Highest-Leverage Bucket** current so compaction never rewinds progress); inspect the real app/output every 10 kept steps to verify the proxy hasn't drifted.
 
 **Never cheat the check:** never special-case check inputs, hardcode/cache expected outputs, skip/weaken/delete tests or swallow errors, make the benchmark do less work, leave background artifacts skewing paired runs, read or manually execute the holdout outside `climb.py`, or print per-case holdout breakdowns. Any of these fails the climb even if `try` commits it.
 
@@ -193,9 +194,13 @@ Each step is one idea, one change, one `try`:
 | `check exited N and printed nothing that matches --score` | Read `last.txt`, fix check, then `relock --why` | Loosen `--score` regex |
 | `the check or a guard changed a locked file` | Make check read-only or move generated output out | Unlock check files |
 
-### 5. Stalls (`PLATEAU`), First-Principles Skeptic Audit & 6. Reaching the bar
+### 5. Breaking Through Stalls (`STALL` / `THRASH` / `PLATEAU`), Skeptic Audit & 6. Reaching the bar
 
-- **`PLATEAU` (5 steps with no gain):** stop and profile from **first principles** — never anchor on an earlier climb's `notes.md`, old `review` prose, wrapper summaries, or stale caches (treat all of them as untrusted hypotheses). Inspect the exact raw queries sent, raw crawled/input artifacts, raw uncached upstream API responses, and official tool/API docs on >=3 missed cases.
+- **`STALL` (3 steps with no gain) & `THRASH DETECTED` (repeating the same approach):** Stop linear single-threaded micro-tweaking immediately and run the **Plateau-Breaker Protocol**:
+  1. **Diagnose why the last tries missed:** Check `climb.py`'s per-case delta output (`ZERO-CASE-CHANGE` = your patch never triggered; `CANCEL-OUT / TRADE-OFF` = one case won while another regressed or jittered — isolate regressions or add `--runs 2` / `--paired`).
+  2. **Refresh the Pareto table & check contract drift:** Update `notes.md` with exact counts per failure bucket, log exhausted approaches under **Dead Ends**, and check `hillclimb_outcome` for `contractCheckDrift` (did an approved `v2+` contract change require `climb.py relock`?).
+  3. **Parallel Orthogonal Tournament (fan out 2–3 subagents):** Spawn 2–3 parallel subagents via `invoke_subagent` — each assigned a **strictly orthogonal failure bucket or architectural hypothesis** (`Workspace="share"` for isolated code probes, plus a fresh-context `research` Skeptic inspecting raw traces of missed cases with zero inherited narrative). Each subagent proves its candidate on a fast (<15s) targeted slice and returns expected lift + minimal diff; you land winning ideas sequentially via atomic `climb.py try` steps (and combine complementary winners).
+- **`PLATEAU` (5 steps with no gain):** Step back and profile from **first principles** — never anchor on an earlier climb's `notes.md`, old `review` prose, wrapper summaries, or stale caches (treat all of them as untrusted hypotheses). Inspect exact raw queries sent, raw inputs, raw uncached upstream responses, and official docs on >=3 missed cases.
 - **Mandatory fresh-context Skeptic Audit before claiming a ceiling or external blocker:** The climber may **never** declare its own "physical/structural ceiling", "impossible", or "needs a new paid vendor/API." Spawn a fresh read-only `research` subagent (zero inherited narrative from the climber or prior `notes.md`) briefed ONLY with the missed cases, raw logs/responses, and official docs, tasked with **falsifying** the climber's excuse. `climb.py review` enforces both `PLATEAU` (5 steps since last gain) and `--skeptic "<concrete raw-evidence disproof summary>"` whenever a review cites a ceiling, impossibility, or external vendor.
 - **Humans own abandoning `--target`:** Never merge, deploy, or close a climb below `--target` unilaterally, and never suggest buying new external vendors unless explicitly asked or the Skeptic Audit proved zero local query/parser/cache/pipeline bugs remain. If genuinely blocked below `--target` after the Skeptic Audit, call `hillclimb_comment(options=["Keep climbing from first principles (no new vendors)", "Re-scope target bar", "Accept current gain and stop"])` as your **final tool call** and wait for the user's click.
 - **`BAR REACHED` & Holdout Transfer:** `climb.py` runs the holdout and computes transfer (`dev_delta` vs `holdout_delta`). If `OVERFIT WARNING` fires (visible improved while holdout stayed flat or regressed), **do NOT claim holdout certification or merge** — investigate why gains didn't generalize. To push further on `--after raise`, check the floor first and run `python3 "$CLIMB" raise 2x --why "..."`.
@@ -231,9 +236,9 @@ Blockers: <exact blocker, or "none">
 
 | Command | Does |
 | --- | --- |
-| `init <name> --goal --check --direction min\|max` | Create card, baseline, `climb/<name>` branch, saved kit. Flags: `--check` (repeat), `--score`, `--score-mode failure-count`, `--repo` (repeat), `--guard` (repeat), `--target`, `--after stop\|raise`, `--runs`, `--paired`, `--min-gain`, `--timeout`, `--holdout`, `--lock` (repeat), `--max-hours`, `--max-steps`, `--hard`, `--here` |
-| `try "<idea>" [--fix]` | Run check + guards, commit win or reset tree (`--fix` keeps score-neutral repair) |
-| `status [name]` | Score, trail, last steps, `PLATEAU` / `STUCK` / `STORAGE` |
+| `init <name> --goal --check --direction min\|max` | Create card, baseline, `climb/<name>` branch, saved kit, structured `notes.md`. Flags: `--check` (repeat), `--probe` (fast <15s pre-check), `--score`, `--score-mode failure-count`, `--repo` (repeat), `--guard` (repeat), `--target`, `--after stop\|raise`, `--runs`, `--paired`, `--min-gain`, `--timeout`, `--holdout`, `--lock` (repeat), `--max-hours`, `--max-steps`, `--hard`, `--here` |
+| `try "<idea>" [--fix] [--probe "<cmd>"] [--guards-first]` | Run pre-check guards/probe + full check, commit win or undo with per-case delta/cancel-out/thrash diagnostics |
+| `status [name]` | Score, trail, last steps, `STALL` / `THRASH DETECTED` / `Notes warning` / `PLATEAU` / `STUCK` / `STORAGE` |
 | `holdout --why "..."` | Run unseen holdout check |
 | `raise <bar> --why "..."` | Raise bar after reaching current target |
 | `relock [name] --why "..."` | Accept edited locked check and re-measure baseline |

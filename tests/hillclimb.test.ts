@@ -2408,4 +2408,171 @@ experiments:
       rmSync(dataDir, { recursive: true, force: true });
     }
   });
+
+  it("v0.8.0 plateau-breaker engine & MCP diagnostics: --probe fast slice, ZERO-CASE-CHANGE & CANCEL-OUT diffs, bundled-diff warning, THRASH vs STALL, stale notes.md, and compaction-proof card", async () => {
+    const repoDir = tempDir("hc-v080-repo-");
+    const dataDir = tempDir("hc-v080-data-");
+    try {
+      initGitRepo(repoDir);
+      installEngine(repoDir);
+      const climbPy = join(repoDir, ".hill-climb", "engine", "climb.py");
+      const markerPath = join(dataDir, "full-check-ran");
+
+      writeFileSync(
+        join(repoDir, "solver.py"),
+        "CASE_A = 0.50\nCASE_B = 0.80\nPROBE_OK = True\n",
+        "utf8",
+      );
+      writeFileSync(
+        join(repoDir, "probe_slice.py"),
+        "import sys, solver\nsys.exit(0 if solver.PROBE_OK else 1)\n",
+        "utf8",
+      );
+      writeFileSync(
+        join(repoDir, "check_cases.py"),
+        [
+          "import pathlib, solver",
+          `pathlib.Path(${JSON.stringify(markerPath)}).write_text("ran")`,
+          'print(f"SUMMARY alpha={solver.CASE_A:.3f} beta={solver.CASE_B:.3f}")',
+          'print(f"{(solver.CASE_A + solver.CASE_B) / 2:.4f}")',
+        ].join("\n") + "\n",
+        "utf8",
+      );
+      execFileSync("git", ["add", "solver.py", "probe_slice.py", "check_cases.py"], { cwd: repoDir });
+      execFileSync("git", ["commit", "-q", "-m", "seed v080 multi-case check and probe"], { cwd: repoDir });
+
+      execFileSync(
+        "python3",
+        [
+          climbPy, "init", "plateau-demo",
+          "--goal", "Reach 0.85 multi-case mean",
+          "--check", "python3 -B check_cases.py",
+          "--probe", "python3 -B probe_slice.py",
+          "--direction", "max",
+          "--target", "0.85",
+          "--min-gain", "0.010",
+          "--lock", "check_cases.py",
+          "--lock", "probe_slice.py",
+        ],
+        { cwd: repoDir, encoding: "utf8" },
+      );
+
+      // 1. Structured starter notes.md + Probe recorded in card.json / getClimbCard
+      const notesPath = join(repoDir, ".hill-climb", "plateau-demo", "notes.md");
+      const starterNotes = readFileSync(notesPath, "utf8");
+      assert.match(starterNotes, /Remaining Misses \(Pareto\)/);
+      assert.match(starterNotes, /Dead Ends \(Do Not Retry Unchanged\)/);
+      const initCard = getClimbCard(repoDir, "plateau-demo");
+      assert.equal(initCard.data.probe, "python3 -B probe_slice.py");
+      assert.match(initCard.text, /Probe\s+python3 -B probe_slice\.py/);
+
+      // 2. Fast inner-inner --probe fails BEFORE full check runs!
+      rmSync(markerPath, { force: true });
+      writeFileSync(join(repoDir, "solver.py"), "CASE_A = 0.90\nCASE_B = 0.90\nPROBE_OK = False\n", "utf8");
+      const probeFail = execFileSync("python3", [climbPy, "try", "parser domain proof attempt 1"], {
+        cwd: repoDir,
+        encoding: "utf8",
+      });
+      assert.match(probeFail, /pre-check probe failed/);
+      assert.ok(!existsSync(markerPath), "full check must not run when fast --probe fails");
+
+      // 3. ZERO-CASE-CHANGE + BUNDLED DIFF WARNING (>150 changed lines during stall)
+      const filler = Array.from({ length: 165 }, (_, i) => `# comment line ${i}`).join("\n");
+      writeFileSync(join(repoDir, "solver.py"), `CASE_A = 0.50\nCASE_B = 0.80\nPROBE_OK = True\n${filler}\n`, "utf8");
+      const zeroChange = execFileSync("python3", [climbPy, "try", "parser domain proof calibration threshold"], {
+        cwd: repoDir,
+        encoding: "utf8",
+      });
+      assert.match(zeroChange, /ZERO-CASE-CHANGE/);
+      assert.match(zeroChange, /BUNDLED DIFF WARNING/);
+
+      // 4. CANCEL-OUT / TRADE-OFF + THRASH DETECTED (3rd consecutive repetitive undone step) + Notes warning!
+      writeFileSync(join(repoDir, "solver.py"), "CASE_A = 0.70\nCASE_B = 0.60\nPROBE_OK = True\n", "utf8");
+      const cancelOut = execFileSync("python3", [climbPy, "try", "parser domain proof fallback tuning"], {
+        cwd: repoDir,
+        encoding: "utf8",
+      });
+      assert.match(cancelOut, /CANCEL-OUT \/ TRADE-OFF/);
+      assert.match(cancelOut, /alpha 0\.5 -> 0\.7 \(\+0\.2\)/);
+      assert.match(cancelOut, /beta 0\.8 -> 0\.6 \(-0\.2\)/);
+      assert.match(cancelOut, /THRASH DETECTED/);
+      assert.match(cancelOut, /Notes warning: notes\.md has not been updated in 3 step\(s\)/);
+
+      // Verify status, TS summary, card, and MCP outcome all mirror thrashWarning & notesWarning
+      const pyStatus = execFileSync("python3", [climbPy, "status"], { cwd: repoDir, encoding: "utf8" });
+      assert.match(pyStatus, /THRASH DETECTED/);
+      assert.match(pyStatus, /Notes warning/);
+
+      const tsStatus = getClimbStatus(repoDir, "plateau-demo");
+      assert.match(tsStatus.summary.thrashWarning ?? "", /THRASH DETECTED/);
+      assert.equal(tsStatus.summary.stallWarning, null, "thrash supersedes generic stall");
+      assert.equal(tsStatus.summary.notesStaleSteps, 3);
+      assert.match(tsStatus.summary.notesWarning ?? "", /Notes warning/);
+      assert.match(tsStatus.text, /THRASH DETECTED/);
+
+      const cardAfterStall = getClimbCard(repoDir, "plateau-demo");
+      assert.match(cardAfterStall.data.thrashWarning ?? "", /THRASH DETECTED/);
+      assert.match(cardAfterStall.data.notesWarning ?? "", /Notes warning/);
+      assert.match(cardAfterStall.text, /THRASH DETECTED/);
+
+      // Verify hillclimb_outcome surfaces thrashWarning & notesWarning on linkedClimb
+      const transport = new StdioClientTransport({
+        command: process.execPath,
+        args: [join(PLUGIN_ROOT, "dist", "mcp-server.mjs")],
+        env: { ...process.env, HILLCLIMB_DATA_DIR: dataDir },
+      });
+      const client = new Client({ name: "v080-test-client", version: "1.0.0" });
+      await client.connect(transport);
+      try {
+        await client.callTool({ name: "hillclimb_projects", arguments: { id: "v080", name: "V080", registerDirectory: repoDir } });
+        await client.callTool({ name: "app_tree", arguments: { projectId: "v080", force: true } });
+        const out = (await client.callTool({
+          name: "hillclimb_outcome",
+          arguments: { projectId: "v080", key: "PLATEAU-DEMO" },
+        })).structuredContent as { linkedClimb?: { thrashWarning?: string; notesWarning?: string } };
+        assert.match(out.linkedClimb?.thrashWarning ?? "", /THRASH DETECTED/);
+        assert.match(out.linkedClimb?.notesWarning ?? "", /Notes warning/);
+      } finally {
+        await client.close();
+      }
+
+      // 5. Updating notes.md clears notesWarning; 3 orthogonal undone steps emit STALL (not THRASH)
+      writeFileSync(
+        notesPath,
+        "# plateau-demo notes\n\n## Remaining Misses (Pareto)\n| Bucket | Count |\n| --- | --- |\n| alpha | 1 |\n\n## Dead Ends\n- parser domain proof\n",
+        "utf8",
+      );
+      // Force one kept step so bestStep resets, then try 3 orthogonal undone edits
+      writeFileSync(join(repoDir, "solver.py"), "CASE_A = 0.65\nCASE_B = 0.80\nPROBE_OK = True\n", "utf8");
+      const kept = execFileSync("python3", [climbPy, "try", "unlock alpha registry lookup"], { cwd: repoDir, encoding: "utf8" });
+      assert.match(kept, /kept/);
+      // Refresh notes mtime AFTER kept step
+      writeFileSync(
+        notesPath,
+        "# plateau-demo notes\n\n## Remaining Misses (Pareto)\n- alpha: 0.65, beta: 0.80\n## Dead Ends\n- parser domain proof\n",
+        "utf8",
+      );
+
+      writeFileSync(join(repoDir, "solver.py"), "CASE_A = 0.65\nCASE_B = 0.79\nPROBE_OK = True\n", "utf8");
+      execFileSync("python3", [climbPy, "try", "vectorize matrix transpose kernel"], { cwd: repoDir, encoding: "utf8" });
+      writeFileSync(join(repoDir, "solver.py"), "CASE_A = 0.64\nCASE_B = 0.80\nPROBE_OK = True\n", "utf8");
+      execFileSync("python3", [climbPy, "try", "compress telemetry sqlite wal"], { cwd: repoDir, encoding: "utf8" });
+      writeFileSync(join(repoDir, "solver.py"), "CASE_A = 0.65\nCASE_B = 0.78\nPROBE_OK = True\n", "utf8");
+      const stallOut = execFileSync("python3", [climbPy, "try", "prefetch graphql schema fragments"], { cwd: repoDir, encoding: "utf8" });
+      assert.match(stallOut, /STALL: 3 steps without gain/);
+      assert.doesNotMatch(stallOut, /THRASH DETECTED/);
+
+      // 6. Verify plugin rules & skill docs encode v0.8.0 plateau-breaker discipline
+      const agentsMd = readFileSync(join(PLUGIN_ROOT, "rules", "AGENTS.md"), "utf8");
+      const skillMd = readFileSync(join(PLUGIN_ROOT, "skills", "hill-climb", "SKILL.md"), "utf8");
+      const climbingMd = readFileSync(join(PLUGIN_ROOT, "skills", "hill-climb", "references", "climbing.md"), "utf8");
+      assert.match(agentsMd, /--probe/);
+      assert.match(agentsMd, /THRASH DETECTED/);
+      assert.match(skillMd, /Parallel Orthogonal Tournament/);
+      assert.match(climbingMd, /Breaking through plateaus/i);
+    } finally {
+      rmSync(repoDir, { recursive: true, force: true });
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
 });

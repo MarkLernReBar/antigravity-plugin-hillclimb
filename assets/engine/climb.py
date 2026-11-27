@@ -31,12 +31,15 @@ sys.dont_write_bytecode = True
 ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 NUMBER = re.compile(r"[-+]?(?:\d+\.\d*|\.\d+|\d+)(?:[eE][-+]?\d+)?")
 BARS = "▁▂▃▄▅▆▇█"
+STALL = 3
 PLATEAU = 5
+BUNDLED_DIFF_LINES = 150
+NOTES_STALE_STEPS = 3
 FILE_LIMIT = 512_000
 KIT_LIMIT = 2_000_000
 COMMIT_LIMIT = 10_000_000
 STATE_WARN = 200_000_000
-KIT_KEYS = ("name", "goal", "check", "direction", "guards", "holdout", "lock", "runs", "paired", "min_gain", "timeout", "after", "max_steps", "max_hours", "hard", "repos", "score", "baseline", "score_mode", "holdout_once")
+KIT_KEYS = ("name", "goal", "check", "probe", "direction", "guards", "holdout", "lock", "runs", "paired", "min_gain", "timeout", "after", "max_steps", "max_hours", "hard", "repos", "score", "baseline", "score_mode", "holdout_once")
 LEGACY_SCORE_MODE = "failure-count"
 SCORE_MODES = ("numeric", LEGACY_SCORE_MODE)
 SLOW_STEP = 120
@@ -145,6 +148,7 @@ def append(folder, row):
     row = {"time": time.strftime("%Y-%m-%d %H:%M:%S"), **row}
     with (folder / "log.jsonl").open("a") as handle:
         handle.write(json.dumps(row) + "\n")
+    return row
 
 
 def rows(folder):
@@ -696,7 +700,7 @@ def init_command(meta):
     for pattern in meta.get("score") or []:
         words += ["--score", pattern]
     words += ["--score-mode", meta.get("score_mode") or LEGACY_SCORE_MODE]
-    for flag, key in (("--target", "target"), ("--holdout", "holdout"), ("--max-steps", "max_steps"), ("--max-hours", "max_hours")):
+    for flag, key in (("--target", "target"), ("--probe", "probe"), ("--holdout", "holdout"), ("--max-steps", "max_steps"), ("--max-hours", "max_hours")):
         if meta.get(key) is not None:
             words += [flag, str(meta[key])]
     words += ["--after", meta["after"], "--runs", str(meta["runs"]), "--min-gain", str(meta["min_gain"]), "--timeout", str(meta["timeout"])]
@@ -786,6 +790,7 @@ def cmd_init(args):
         "name": args.name,
         "goal": args.goal,
         "check": args.check,
+        "probe": args.probe,
         "score": args.score or [],
         "score_mode": mode,
         "direction": args.direction,
@@ -822,7 +827,16 @@ def cmd_init(args):
     if not notes_path.exists():
         notes_path.write_text(
             f"# {args.name} notes\n\nGoal: {args.goal}\n\n"
-            "Record what worked, dead ends, and blockers every ~5 steps.\n"
+            "## Remaining Misses (Pareto)\n"
+            "| Failure bucket | Count | Max gain | Status |\n"
+            "| --- | --- | --- | --- |\n"
+            "| (profile misses before step 1) | - | - | untouched |\n\n"
+            "## What Worked (Kept)\n"
+            "- (none yet)\n\n"
+            "## Dead Ends (Do Not Retry Unchanged)\n"
+            "- (none yet)\n\n"
+            "## Next Highest-Leverage Bucket\n"
+            "- (fill after profiling baseline)\n"
         )
     append(folder, {"kind": "baseline", "score": score, "spread": spread, "seconds": round(seconds, 2)})
     holdout = None
@@ -895,9 +909,14 @@ def cmd_try(args):
         )
     if not dirty(roots):
         raise Fail("No change to try. Edit the code first.")
+    files_changed, diff_lines = diff_stats(roots)
     step = len(steps) + 1
     best = card["best"]["score"]
     row = {"kind": "step", "step": step, "idea": args.idea}
+    if files_changed:
+        row["files"] = files_changed
+    if diff_lines > 0:
+        row["diff_lines"] = diff_lines
     cache_path = folder / "candidate-cache.json"
     cache_env = _cache_env(folder, uuid.uuid4().hex)
     timed_prior = [r["seconds"] for r in log_before if isinstance(r.get("seconds"), (int, float))]
@@ -905,19 +924,39 @@ def cmd_try(args):
     run_guards_first = bool(card["guards"]) and not getattr(args, "no_guards_first", False) and (
         getattr(args, "guards_first", False) or avg_check_sec >= 60.0
     )
+    probe_cmd = getattr(args, "probe", None) or (None if getattr(args, "no_probe", False) else card.get("probe"))
     guards_passed_pre = False
     try:
         if run_guards_first:
             failed = failing_guards(card["guards"], card["timeout"], env=cache_env)
             if failed:
                 undo(card)
-                append(folder, {**row, "result": "undone", "why": f"guard failed (pre-check): {failed[0]}"})
+                logged = append(folder, {**row, "result": "undone", "why": f"guard failed (pre-check): {failed[0]}"})
                 print(
                     f"step {step} undone  (pre-check guard failed: {failed[0]})\n"
                     f"{failed[1]}\nUndone before running slow check."
                 )
+                for warning in stall_and_notes_warnings(folder, card, steps + [logged]):
+                    print(warning)
                 return
             guards_passed_pre = True
+        if probe_cmd:
+            probe_res, probe_out, probe_err = _run(probe_cmd, card["timeout"], env=cache_env)
+            if probe_res is None or probe_res.returncode:
+                undo(card)
+                detail = (
+                    f"timed out after {card['timeout']}s\n{tail(probe_out + probe_err)}"
+                    if probe_res is None
+                    else failure_excerpt(probe_res)
+                )
+                logged = append(folder, {**row, "result": "undone", "why": f"probe failed (pre-check): {probe_cmd}"})
+                print(
+                    f"step {step} undone  (pre-check probe failed: {probe_cmd})\n"
+                    f"{detail}\nUndone before running full check."
+                )
+                for warning in stall_and_notes_warnings(folder, card, steps + [logged]):
+                    print(warning)
+                return
         try:
             if card.get("paired"):
                 score, row["pair"], seconds = paired(folder, card, cache_env=cache_env)
@@ -933,13 +972,18 @@ def cmd_try(args):
                 why = lines[0][:180]
             else:
                 why = f"{lines[0]}: {lines[-1][:140]}"[:180]
-            append(folder, {**row, "result": "broke", "why": why})
+            logged = append(folder, {**row, "result": "broke", "why": why})
             print(f"step {step} broke   {args.idea}\n{error}\nUndone. Full output: {folder / 'last.txt'}")
+            for warning in stall_and_notes_warnings(folder, card, steps + [logged]):
+                print(warning)
             return
         row.update(score=score, seconds=round(seconds, 2))
         held = score >= best if card["direction"] == "max" else score <= best
         strictly_better = score > best if card["direction"] == "max" else score < best
         if not (better(card, score, best) or args.fix and held):
+            delta_block, delta_summary = diff_check_outputs(folder / "best.txt", folder / "last.txt", card["direction"])
+            if delta_summary:
+                row["delta_summary"] = delta_summary
             undo(card)
             if args.fix:
                 reason = "score got worse"
@@ -949,9 +993,18 @@ def cmd_try(args):
                 reason = f"below min_gain (+{number(delta)} < {number(need)} — improved slightly; check run variance)"
             else:
                 reason = "no gain"
-            append(folder, {**row, "result": "undone", "why": reason})
+            logged = append(folder, {**row, "result": "undone", "why": reason})
             extra = f"  [{reason}]" if strictly_better and not args.fix else ""
             print(f"step {step} undone  {number(score)} (best {number(best)})  {args.idea}{extra}\nOutput: {folder / 'last.txt'}")
+            if delta_block:
+                print(delta_block)
+            if diff_lines >= BUNDLED_DIFF_LINES and (step - card["best"]["step"]) >= 2:
+                print(
+                    f"BUNDLED DIFF WARNING: undone step touched {diff_lines} lines across {len(files_changed)} file(s). "
+                    "During a stall, isolate 1 causal edit and verify it flips >=1 missed case in a fast --probe before running full eval."
+                )
+            for warning in stall_and_notes_warnings(folder, card, steps + [logged]):
+                print(warning)
             return
         if not guards_passed_pre:
             failed = failing_guards(card["guards"], card["timeout"], env=cache_env)
@@ -1055,6 +1108,234 @@ def branch_behind_base(card):
         return 0
 
 
+_THRASH_STOP_WORDS = frozenset({
+    "step", "with", "from", "that", "this", "into", "only", "when", "after", "more", "less",
+    "make", "using", "based", "check", "score", "expect", "expected", "improve", "improved",
+    "increase", "reduce", "update", "updated", "change", "changed", "still", "also", "then",
+    "than", "over", "under", "allow", "handle", "handling", "support", "avoid", "prevent",
+    "better", "attempt", "retry", "fixed", "added", "keep", "kept", "pure", "case", "cases",
+    "edit", "code", "file", "files", "test", "tests",
+})
+_NOISE_METRIC_KEYS = frozenset({
+    "time", "sec", "secs", "seconds", "ms", "elapsed", "pid", "port", "saved", "live",
+    "missing", "errors", "sample", "cases", "valid", "floor", "seed", "step", "w", "se",
+    "ci", "bar", "target", "version", "http", "code", "status", "excluded_infra_invalid",
+    "infra_invalid",
+})
+_TABULAR_SKIP_KEYS = frozenset({
+    "total", "overall", "mean", "average", "avg", "median", "summary", "score", "valid",
+    "ship", "integrity", "cassette", "check", "bar", "target", "baseline", "best", "step",
+    "time", "elapsed",
+})
+_LOG_LINE_RE = re.compile(r"^(?:\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}|(?:INFO|DEBUG|WARNING|ERROR|TRACE)\b|\$\s)")
+_KV_METRIC_RE = re.compile(r"(?<![A-Za-z0-9_./-])([A-Za-z][A-Za-z0-9_.-]{1,39})=([-+]?(?:\d+\.\d+|\d+))(?![A-Za-z0-9_.-])")
+_TABULAR_ROW_RE = re.compile(r"^\s*([A-Za-z][A-Za-z0-9_.-]{2,47})(?:\s*[:|]\s*|\s{2,})([-+]?(?:\d+\.\d+|\d+))(?:\s*(?:%|\(\d+/\d+\)|ms|s))?(?:\s|$)")
+_LEADING_ID_RE = re.compile(r"^\s*([A-Za-z][A-Za-z0-9_.-]{2,47})\s+")
+_STARTER_NOTES_MARKERS = (
+    "(profile misses before step 1)",
+    "Record what worked, dead ends, and blockers every ~5 steps.",
+)
+
+
+def diff_stats(roots):
+    """Return (relative_files[:10], total_changed_lines) for uncommitted edits across roots."""
+    root = repo()
+    files = changed_files(roots)
+    total = 0
+    for path in roots:
+        numstat = git("diff", "--numstat", "HEAD", cwd=path, check=False)
+        for line in numstat.splitlines():
+            parts = line.split("\t")
+            if len(parts) < 3:
+                continue
+            added, removed = parts[0], parts[1]
+            total += (int(added) if added.isdigit() else 1) + (int(removed) if removed.isdigit() else 1)
+        for name in git("ls-files", "--others", "--exclude-standard", cwd=path, check=False).splitlines():
+            target = path / name
+            try:
+                if target.is_file() and target.stat().st_size <= FILE_LIMIT:
+                    total += len(target.read_text(errors="replace").splitlines())
+            except OSError:
+                pass
+    return files[:10], total
+
+
+def _idea_tokens(text):
+    tokens = set()
+    for word in re.findall(r"[a-z][a-z0-9]{3,}", (text or "").lower()):
+        if word in _THRASH_STOP_WORDS or re.fullmatch(r"step\d*", word):
+            continue
+        tokens.add(word)
+    return tokens
+
+
+def _extract_case_metrics(text):
+    """Extract format-agnostic metric/case key -> float mappings and non-log metric lines."""
+    clean = ANSI.sub("", text or "")
+    raw_kv = []
+    tabular = {}
+    metric_lines = []
+    for raw_line in clean.splitlines():
+        line = raw_line.rstrip("\r").split("\r")[-1]
+        stripped = line.strip()
+        if not stripped or _LOG_LINE_RE.match(stripped) or NUMBER.fullmatch(stripped):
+            continue
+        metric_lines.append(stripped)
+        lead_match = _LEADING_ID_RE.match(line)
+        lead_id = lead_match.group(1) if lead_match else None
+        kvs = list(_KV_METRIC_RE.finditer(stripped))
+        if kvs:
+            for m in kvs:
+                k, v_str = m.group(1), m.group(2)
+                if k.lower() in _NOISE_METRIC_KEYS:
+                    continue
+                try:
+                    raw_kv.append((k, lead_id, float(v_str)))
+                except ValueError:
+                    pass
+        else:
+            tm = _TABULAR_ROW_RE.match(line)
+            if tm:
+                k, v_str = tm.group(1), tm.group(2)
+                if k.lower() not in _TABULAR_SKIP_KEYS and k.lower() not in _NOISE_METRIC_KEYS:
+                    try:
+                        tabular[k] = float(v_str)
+                    except ValueError:
+                        pass
+    key_counts = {}
+    for k, _, _ in raw_kv:
+        key_counts[k] = key_counts.get(k, 0) + 1
+    metrics = dict(tabular)
+    for k, lead_id, val in raw_kv:
+        if key_counts[k] > 1 and lead_id and lead_id.lower() not in _TABULAR_SKIP_KEYS and lead_id != k:
+            metrics[f"{lead_id}.{k}"] = val
+        else:
+            metrics[k] = val
+    return metrics, metric_lines
+
+
+def diff_check_outputs(best_path, last_path, direction):
+    """Compare best.txt and last.txt to expose per-case deltas, cancel-outs, or non-triggering edits."""
+    try:
+        if not best_path.exists() or not last_path.exists():
+            return None, None
+        best_text = best_path.read_text(errors="replace")[:FILE_LIMIT]
+        last_text = last_path.read_text(errors="replace")[:FILE_LIMIT]
+    except OSError:
+        return None, None
+    best_m, best_lines = _extract_case_metrics(best_text)
+    last_m, last_lines = _extract_case_metrics(last_text)
+    shared = [k for k in best_m if k in last_m]
+    changed = []
+    for k in shared:
+        delta = last_m[k] - best_m[k]
+        if abs(delta) > 1e-9:
+            changed.append((k, best_m[k], last_m[k], delta))
+    if changed:
+        changed.sort(key=lambda item: (-abs(item[3]), item[0]))
+        improved = [c for c in changed if (c[3] > 0 if direction == "max" else c[3] < 0)]
+        regressed = [c for c in changed if (c[3] < 0 if direction == "max" else c[3] > 0)]
+        parts = [f"{k} {number(old)} -> {number(new)} ({_signed_delta(d)})" for k, old, new, d in changed[:6]]
+        more = f" (+{len(changed) - 6} more)" if len(changed) > 6 else ""
+        summary = ", ".join(parts[:4])
+        if improved and regressed:
+            block = (
+                f"CANCEL-OUT / TRADE-OFF: {', '.join(parts)}{more}\n"
+                "  Some cases improved while others regressed/jittered — inspect regressions or run with --runs 2 / --paired."
+            )
+            return block, f"cancel-out: {summary}"
+        return f"Case deltas: {', '.join(parts)}{more}", summary
+    if len(shared) >= 2 or (best_lines and best_lines == last_lines):
+        return (
+            "ZERO-CASE-CHANGE: check output metrics were identical to best — your edit likely did not execute on any missed case. "
+            "Prove it flips >=1 missed case in a fast targeted probe (--probe) before retrying.",
+            "zero-case-change",
+        )
+    return None, None
+
+
+def detect_thrash(steps, best_step):
+    """Detect >=STALL consecutive undone/broke steps repeating the same hypothesis keywords or narrow file set."""
+    tail_steps = [r for r in steps if r.get("step", 0) > best_step and r.get("result") != "kept"]
+    if len(tail_steps) < STALL:
+        return None
+    recent = tail_steps[-STALL:]
+    toks = [_idea_tokens(r.get("idea", "")) for r in recent]
+    common_all = toks[0] & toks[1] & toks[2]
+    def _jacc(a, b):
+        union = a | b
+        return (len(a & b) / len(union)) if union else 0.0
+    j01, j12 = _jacc(toks[0], toks[1]), _jacc(toks[1], toks[2])
+    file_sets = [frozenset(r.get("files") or []) for r in recent]
+    same_files = all(file_sets) and len(set(file_sets)) == 1
+    union_all = toks[0] | toks[1] | toks[2]
+    freq2 = sorted(t for t in union_all if sum(t in s for s in toks) >= 2)
+    if len(common_all) >= 2 or (j01 >= 0.30 and j12 >= 0.30) or (same_files and len(freq2) >= 1):
+        terms = sorted(common_all) if common_all else freq2[:4]
+        label = ", ".join(terms[:4]) if terms else ", ".join(sorted(file_sets[0])[:3])
+        return {
+            "streak": len(tail_steps),
+            "terms": terms[:4],
+            "same_files": same_files,
+            "message": (
+                f"THRASH DETECTED: last {STALL} undone steps repeat the same approach ({label}). "
+                "STOP tweaking this hypothesis — log it under Dead Ends in notes.md, switch to the largest untouched "
+                "failure bucket (or check for pending contract relock), or fan out 2-3 parallel orthogonal subagents."
+            ),
+        }
+    return None
+
+
+def notes_staleness(folder, steps):
+    """Return how many steps have elapsed since notes.md was meaningfully updated."""
+    if not steps:
+        return 0
+    notes_path = folder / "notes.md"
+    if not notes_path.exists():
+        return len(steps)
+    try:
+        mtime = int(notes_path.stat().st_mtime)
+        text = notes_path.read_text(errors="replace")
+    except OSError:
+        return 0
+    stale = 0
+    for row in steps:
+        t_str = row.get("time")
+        if not t_str:
+            continue
+        try:
+            ts = int(time.mktime(time.strptime(t_str, "%Y-%m-%d %H:%M:%S")))
+        except ValueError:
+            continue
+        if ts > mtime:
+            stale += 1
+    if len(steps) >= NOTES_STALE_STEPS and any(marker in text for marker in _STARTER_NOTES_MARKERS):
+        stale = max(stale, len(steps))
+    return stale
+
+
+def stall_and_notes_warnings(folder, card, steps):
+    """Return actionable thrash, stall, and stale-notes warnings."""
+    out = []
+    if not reached(card, card["best"]["score"]):
+        since = len(steps) - card["best"]["step"]
+        thrash = detect_thrash(steps, card["best"]["step"])
+        if thrash:
+            out.append(thrash["message"])
+        elif STALL <= since < PLATEAU:
+            out.append(
+                f"STALL: {since} steps without gain. Update notes.md Pareto table, pivot to the largest untouched "
+                "failure bucket (or check for pending contract relock), or fan out 2-3 parallel orthogonal subagents."
+            )
+    stale_steps = notes_staleness(folder, steps)
+    if stale_steps >= NOTES_STALE_STEPS:
+        out.append(
+            f"Notes warning: notes.md has not been updated in {stale_steps} step(s) — refresh Remaining Misses "
+            "(Pareto) and Dead Ends so context compaction never resets progress."
+        )
+    return out
+
+
 def cmd_status(args):
     folder = resolve(args.name)
     card = load(folder)
@@ -1105,6 +1386,8 @@ def cmd_status(args):
         print(interrupted(folder))
     if (folder / "notes.md").exists():
         print("Notes:\n" + tail((folder / "notes.md").read_text(), 40))
+    for warning in stall_and_notes_warnings(folder, card, steps):
+        print(warning)
     size = folder_size(climbs_dir())
     if size > STATE_WARN:
         print(f"STORAGE: .hill-climb holds {size // 1_000_000} MB. Shrink or delete .hill-climb/{card['name']}/data/.")
@@ -1328,6 +1611,7 @@ def parse(argv):
     init.add_argument("--goal", required=True)
     init.add_argument("--check", action="append", required=True,
                       help="command that prints the score (repeatable: they run at once and their scores add)")
+    init.add_argument("--probe", help="optional fast (<15s) pre-check command on missed cases that runs before slow full checks on every try")
     init.add_argument("--score", action="append",
                       help="regex for the score in the check output, like '(\\d+) failed'; one for all checks or one per check; the matches on the last matching line add up; a missing match fails the run under numeric and reads as 0 under failure-count")
     init.add_argument("--score-mode", choices=list(SCORE_MODES), default=None,
@@ -1359,6 +1643,8 @@ def parse(argv):
     attempt.add_argument("--name")
     attempt.add_argument("--guards-first", action="store_true", help="run guards before check so broken edits fail fast (automatic when avg check >= 60s)")
     attempt.add_argument("--no-guards-first", action="store_true", help="always run check before guards even on slow checks")
+    attempt.add_argument("--probe", help="fast (<15s) pre-check command proving the edit triggers on missed case(s) before running full check")
+    attempt.add_argument("--no-probe", action="store_true", help="skip the card-level --probe command for this try")
 
     status = sub.add_parser("status", help="where the climb stands")
     status.add_argument("name", nargs="?")

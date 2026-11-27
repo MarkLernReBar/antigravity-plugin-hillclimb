@@ -38049,9 +38049,9 @@ function decisions(outcome2, evidence, criterionId, nowMs) {
     if (item.version > outcome2.version) return;
     const covers = item.criterionIds.length === 0 || criterionId !== "" && item.criterionIds.includes(criterionId);
     if (!covers) return;
-    const at2 = Date.parse(item.created);
-    if (!Number.isFinite(at2) || at2 > nowMs) return;
-    rows.push({ evidence: item, at: at2, order });
+    const at3 = Date.parse(item.created);
+    if (!Number.isFinite(at3) || at3 > nowMs) return;
+    rows.push({ evidence: item, at: at3, order });
   });
   rows.sort((left, right) => left.at - right.at || left.order - right.order);
   return rows;
@@ -38099,8 +38099,8 @@ function recheckDueAt(tree, key2, track2 = LIVE_TRACK, now = (/* @__PURE__ */ ne
   const newest = tree.evidence.filter(
     (item) => item.key === key2 && item.track === track2 && item.kind === "confirms" && item.version === outcome2.version && Date.parse(item.created) <= nowMs
   ).reduce((latest, item) => {
-    const at2 = Date.parse(item.created);
-    return latest === null || at2 > latest ? at2 : latest;
+    const at3 = Date.parse(item.created);
+    return latest === null || at3 > latest ? at3 : latest;
   }, null);
   if (newest === null) return null;
   return iso(newest + outcome2.recheckDays * DAY_MS);
@@ -38314,9 +38314,9 @@ function nextId(tree, prefix, used) {
   while (used(`${prefix}${counter}`)) counter += 1;
   return `${prefix}${counter}`;
 }
-function record2(tree, at2, key2, line, signal2, track2 = LIVE_TRACK, meta3) {
+function record2(tree, at3, key2, line, signal2, track2 = LIVE_TRACK, meta3) {
   const row = {
-    at: at2,
+    at: at3,
     key: key2,
     text: line,
     signal: signal2,
@@ -38697,9 +38697,9 @@ function nextId2(prefix, hint, taken) {
   while (taken.has(`${base}_${index}`)) index += 1;
   return `${base}_${index}`;
 }
-function log(tree, at2, key2, message2, signal2 = null, meta3) {
+function log(tree, at3, key2, message2, signal2 = null, meta3) {
   tree.activity.push({
-    at: at2,
+    at: at3,
     key: key2,
     text: message2,
     signal: signal2,
@@ -38750,14 +38750,14 @@ function readinessReason(readiness, track2, version2) {
   }
 }
 function previewPromotion(tree, name, keys, now = (/* @__PURE__ */ new Date()).toISOString()) {
-  const at2 = stamp(now);
+  const at3 = stamp(now);
   const track2 = name.trim();
   const trackExists = track2 !== "" && track2 !== LIVE_TRACK2 && tree.tracks.some((candidate) => candidate.name === track2);
   const named = Array.isArray(keys) ? keys : [];
   const repeated = duplicates(named);
   const unique2 = [...new Set(named)];
-  const trackSignals = trackExists ? rankedSignals(tree, track2, at2) : /* @__PURE__ */ new Map();
-  const liveSignals = rankedSignals(tree, LIVE_TRACK2, at2);
+  const trackSignals = trackExists ? rankedSignals(tree, track2, at3) : /* @__PURE__ */ new Map();
+  const liveSignals = rankedSignals(tree, LIVE_TRACK2, at3);
   const outcomes = unique2.map((key2) => {
     const outcome2 = tree.outcomes.find((candidate) => candidate.key === key2);
     if (outcome2 === void 0) {
@@ -38859,7 +38859,7 @@ function normalizeFrameInput(tree, step, label) {
   };
 }
 function applyPlanning(tree, a, now, meta3) {
-  const at2 = stamp(now);
+  const at3 = stamp(now);
   switch (a.op) {
     case "write_plan": {
       const key2 = a.key.trim();
@@ -38873,9 +38873,9 @@ function applyPlanning(tree, a, now, meta3) {
         body,
         ...meta3?.actor ? { actor: meta3.actor } : {},
         ...meta3?.via ? { via: meta3.via } : {},
-        created: at2
+        created: at3
       });
-      log(tree, at2, key2, `Plan v1 written for ${key2}`, null, meta3);
+      log(tree, at3, key2, `Plan v1 written for ${key2}`, null, meta3);
       return;
     }
     case "revise_plan": {
@@ -38892,9 +38892,9 @@ function applyPlanning(tree, a, now, meta3) {
         body,
         ...meta3?.actor ? { actor: meta3.actor } : {},
         ...meta3?.via ? { via: meta3.via } : {},
-        created: at2
+        created: at3
       });
-      log(tree, at2, key2, `Plan v${version2} written for ${key2}`, null, meta3);
+      log(tree, at3, key2, `Plan v${version2} written for ${key2}`, null, meta3);
       return;
     }
     case "comment": {
@@ -38927,12 +38927,12 @@ function applyPlanning(tree, a, now, meta3) {
         ...a.threadId ? { threadId: a.threadId } : {},
         ...meta3?.actor ? { actor: meta3.actor } : {},
         ...meta3?.via ? { via: meta3.via } : {},
-        created: at2
+        created: at3
       };
       tree.comments.push(comment);
       log(
         tree,
-        at2,
+        at3,
         key2,
         options.length > 0 ? `Question on ${key2}${planVersion ? ` (plan v${planVersion})` : ""} with ${options.length} options` : `Comment on ${key2}${planVersion ? ` (plan v${planVersion})` : ""}`,
         null,
@@ -38950,7 +38950,7 @@ function applyPlanning(tree, a, now, meta3) {
         fail2(`answer must be one of: ${comment.options.join(", ")}`);
       }
       comment.answer = answer;
-      log(tree, at2, comment.key, `Answered ${id} on ${comment.key}: ${clip(answer)}`, null, meta3);
+      log(tree, at3, comment.key, `Answered ${id} on ${comment.key}: ${clip(answer)}`, null, meta3);
       return;
     }
     case "create_track": {
@@ -38959,11 +38959,11 @@ function applyPlanning(tree, a, now, meta3) {
       if (tree.tracks.some((track2) => track2.name === name)) fail2(`track "${name}" already exists`);
       const description = text2(a.description, "track description");
       tree.tracks.push({ name, description });
-      log(tree, at2, name, `Track "${name}" created`, null, meta3);
+      log(tree, at3, name, `Track "${name}" created`, null, meta3);
       return;
     }
     case "promote_track": {
-      const preview = previewPromotion(tree, a.name, a.keys, at2);
+      const preview = previewPromotion(tree, a.name, a.keys, at3);
       if (!preview.canApply) fail2(`promote_track refused: ${preview.reason ?? "not ready"}`);
       const evidenceIds = takenIds(tree, "ev");
       const cut = [];
@@ -38981,14 +38981,14 @@ function applyPlanning(tree, a, now, meta3) {
           source: `track:${preview.track}`,
           ...meta3?.actor ? { actor: meta3.actor } : {},
           ...meta3?.via ? { via: meta3.via } : {},
-          created: at2
+          created: at3
         };
         evidenceIds.add(evidence.id);
         tree.evidence.push(evidence);
         cut.push(item.key);
-        log(tree, at2, item.key, `Cut over from track "${preview.track}" at v${outcome2.version}`, "verified", meta3);
+        log(tree, at3, item.key, `Cut over from track "${preview.track}" at v${outcome2.version}`, "verified", meta3);
       }
-      log(tree, at2, preview.track, `Track "${preview.track}" cut over ${cut.length} outcome(s) to live: ${cut.join(", ")}`, null, meta3);
+      log(tree, at3, preview.track, `Track "${preview.track}" cut over ${cut.length} outcome(s) to live: ${cut.join(", ")}`, null, meta3);
       return;
     }
     case "create_release": {
@@ -39008,7 +39008,7 @@ function applyPlanning(tree, a, now, meta3) {
         if (clash !== void 0) fail2(`outcome "${key2}" is already in release "${clash.name}" in scenario "${scenario}"`);
       }
       tree.releases.push({ name, keys: [...keys], scenario, date: a.date });
-      log(tree, at2, name, `Release "${name}" dated ${a.date} in scenario "${scenario}" with ${keys.length} outcome(s)`, null, meta3);
+      log(tree, at3, name, `Release "${name}" dated ${a.date} in scenario "${scenario}" with ${keys.length} outcome(s)`, null, meta3);
       return;
     }
     case "revise_release": {
@@ -39039,7 +39039,7 @@ function applyPlanning(tree, a, now, meta3) {
         }
         release.keys = [...keys];
       }
-      log(tree, at2, release.name, `Revised release "${release.name}" (${release.date}, ${release.keys.length} outcome(s)) in "${scenario}"`, null, meta3);
+      log(tree, at3, release.name, `Revised release "${release.name}" (${release.date}, ${release.keys.length} outcome(s)) in "${scenario}"`, null, meta3);
       return;
     }
     case "create_flow": {
@@ -39054,7 +39054,7 @@ function applyPlanning(tree, a, now, meta3) {
         ...a.designKit?.trim() ? { designKit: a.designKit.trim() } : {},
         frames
       });
-      log(tree, at2, name, `Flow "${name}" with ${frames.length} frame(s)`, null, meta3);
+      log(tree, at3, name, `Flow "${name}" with ${frames.length} frame(s)`, null, meta3);
       return;
     }
     case "pin": {
@@ -39081,10 +39081,10 @@ function applyPlanning(tree, a, now, meta3) {
         ...a.selector ? { selector: a.selector } : {},
         ...a.forAgents !== void 0 ? { forAgents: a.forAgents } : {},
         resolved: false,
-        created: at2
+        created: at3
       };
       frame.pins.push(pin2);
-      log(tree, at2, name, `Pinned comment on frame ${a.frame} of "${name}": ${clip(pinText)}`, null, meta3);
+      log(tree, at3, name, `Pinned comment on frame ${a.frame} of "${name}": ${clip(pinText)}`, null, meta3);
       return;
     }
     case "resolve_pin": {
@@ -39097,7 +39097,7 @@ function applyPlanning(tree, a, now, meta3) {
       if (!pin2) fail2(`pin not found on frame ${a.frame} of "${name}"`);
       pin2.resolved = a.resolved;
       pin2.resolvedBy = a.resolved ? a.resolvedBy?.trim() || meta3?.actor || "resolved" : null;
-      log(tree, at2, name, `${a.resolved ? "Resolved" : "Reopened"} pin on frame ${a.frame} of "${name}"`, null, meta3);
+      log(tree, at3, name, `${a.resolved ? "Resolved" : "Reopened"} pin on frame ${a.frame} of "${name}"`, null, meta3);
       return;
     }
     case "propose_flow_change": {
@@ -39148,10 +39148,10 @@ function applyPlanning(tree, a, now, meta3) {
         threadId: a.threadId ?? null,
         actor: meta3?.actor ?? null,
         ...meta3?.via ? { via: meta3.via } : {},
-        created: at2
+        created: at3
       };
       proposals.push(proposal);
-      log(tree, at2, flowName, `Proposed flow ${kind} ${id} on "${flowName}"${a.ref ? ` (${a.ref})` : ""}`, null, meta3);
+      log(tree, at3, flowName, `Proposed flow ${kind} ${id} on "${flowName}"${a.ref ? ` (${a.ref})` : ""}`, null, meta3);
       return;
     }
     case "accept_flow_change": {
@@ -39202,7 +39202,7 @@ function applyPlanning(tree, a, now, meta3) {
           imagePath: current.imagePath ?? null,
           viewport: current.viewport ?? null,
           notes: current.notes ?? null,
-          at: at2,
+          at: at3,
           actor: proposal.actor ?? null,
           ref: proposal.ref ?? null
         });
@@ -39217,7 +39217,7 @@ function applyPlanning(tree, a, now, meta3) {
       }
       proposal.state = "accepted";
       proposal.reviewNote = a.reviewNote?.trim() || null;
-      log(tree, at2, proposal.flowName, `Accepted flow ${proposal.kind} ${id} on "${proposal.flowName}"`, null, meta3);
+      log(tree, at3, proposal.flowName, `Accepted flow ${proposal.kind} ${id} on "${proposal.flowName}"`, null, meta3);
       return;
     }
     case "reject_flow_change": {
@@ -39228,7 +39228,7 @@ function applyPlanning(tree, a, now, meta3) {
       if (proposal.state !== "pending") fail2(`flow proposal "${id}" is ${proposal.state}, not pending`);
       proposal.state = "rejected";
       proposal.reviewNote = a.reviewNote?.trim() || null;
-      log(tree, at2, proposal.flowName, `Sent back flow ${proposal.kind} ${id} on "${proposal.flowName}"${proposal.reviewNote ? `: ${clip(proposal.reviewNote)}` : ""}`, null, meta3);
+      log(tree, at3, proposal.flowName, `Sent back flow ${proposal.kind} ${id} on "${proposal.flowName}"${proposal.reviewNote ? `: ${clip(proposal.reviewNote)}` : ""}`, null, meta3);
       return;
     }
     case "restore_frame_version": {
@@ -39249,7 +39249,7 @@ function applyPlanning(tree, a, now, meta3) {
         imagePath: current.imagePath ?? null,
         viewport: current.viewport ?? null,
         notes: current.notes ?? null,
-        at: at2,
+        at: at3,
         actor: meta3?.actor ?? null,
         ref: `restore:v${a.version}`
       });
@@ -39266,7 +39266,7 @@ function applyPlanning(tree, a, now, meta3) {
         driftDetected: false,
         driftNote: null
       };
-      log(tree, at2, flowName, `Restored frame ${a.frameIndex} of "${flowName}" from v${a.version} as v${curVer + 1}`, null, meta3);
+      log(tree, at3, flowName, `Restored frame ${a.frameIndex} of "${flowName}" from v${a.version} as v${curVer + 1}`, null, meta3);
       return;
     }
     case "set_frame_drift": {
@@ -39278,7 +39278,7 @@ function applyPlanning(tree, a, now, meta3) {
       frame.liveImagePath = a.liveImagePath ?? frame.liveImagePath ?? null;
       frame.driftDetected = a.driftDetected;
       frame.driftNote = a.driftNote?.trim() || null;
-      log(tree, at2, flowName, `Frame ${a.frameIndex} of "${flowName}" drift=${a.driftDetected ? "detected" : "cleared"}`, null, meta3);
+      log(tree, at3, flowName, `Frame ${a.frameIndex} of "${flowName}" drift=${a.driftDetected ? "detected" : "cleared"}`, null, meta3);
       return;
     }
     default:
@@ -39287,7 +39287,9 @@ function applyPlanning(tree, a, now, meta3) {
 }
 
 // src/state.ts
+var STALL = 3;
 var PLATEAU = 5;
+var NOTES_STALE_STEPS = 3;
 var BARS = "\u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588";
 var SECRET_KEY_CACHE = /* @__PURE__ */ new Map();
 function isSecretKey(key2) {
@@ -40466,6 +40468,130 @@ function parseLog(text3) {
   }
   return rows;
 }
+function at(time3) {
+  if (!time3) return Number.NaN;
+  const parsed = Date.parse(time3.replace(" ", "T"));
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
+}
+var THRASH_STOP_WORDS = /* @__PURE__ */ new Set([
+  "step",
+  "with",
+  "from",
+  "that",
+  "this",
+  "into",
+  "only",
+  "when",
+  "after",
+  "more",
+  "less",
+  "make",
+  "using",
+  "based",
+  "check",
+  "score",
+  "expect",
+  "expected",
+  "improve",
+  "improved",
+  "increase",
+  "reduce",
+  "update",
+  "updated",
+  "change",
+  "changed",
+  "still",
+  "also",
+  "then",
+  "than",
+  "over",
+  "under",
+  "allow",
+  "handle",
+  "handling",
+  "support",
+  "avoid",
+  "prevent",
+  "better",
+  "attempt",
+  "retry",
+  "fixed",
+  "added",
+  "keep",
+  "kept",
+  "pure",
+  "case",
+  "cases",
+  "edit",
+  "code",
+  "file",
+  "files",
+  "test",
+  "tests"
+]);
+var STARTER_NOTES_MARKERS = [
+  "(profile misses before step 1)",
+  "Record what worked, dead ends, and blockers every ~5 steps."
+];
+function ideaTokens(text3) {
+  const out = /* @__PURE__ */ new Set();
+  for (const m2 of text3.toLowerCase().matchAll(/[a-z][a-z0-9]{3,}/g)) {
+    const word2 = m2[0];
+    if (THRASH_STOP_WORDS.has(word2) || /^step\d*$/.test(word2)) continue;
+    out.add(word2);
+  }
+  return out;
+}
+function detectThrash(steps, bestStep) {
+  const tailSteps = steps.filter((r2) => (r2.step ?? 0) > bestStep && r2.result !== "kept");
+  if (tailSteps.length < STALL) return null;
+  const recent = tailSteps.slice(-STALL);
+  const toks = recent.map((r2) => ideaTokens(r2.idea ?? ""));
+  const [t0, t1, t2] = toks;
+  const commonAll = [...t0].filter((w2) => t1.has(w2) && t2.has(w2)).sort();
+  const jacc = (a, b2) => {
+    const union2 = /* @__PURE__ */ new Set([...a, ...b2]);
+    if (union2.size === 0) return 0;
+    let inter = 0;
+    for (const w2 of a) if (b2.has(w2)) inter += 1;
+    return inter / union2.size;
+  };
+  const j01 = jacc(t0, t1);
+  const j12 = jacc(t1, t2);
+  const fileKeys = recent.map(
+    (r2) => Array.isArray(r2.files) && r2.files.length > 0 ? [...r2.files].sort().join("\0") : ""
+  );
+  const sameFiles = fileKeys.every((k2) => k2 !== "") && new Set(fileKeys).size === 1;
+  const unionAll = /* @__PURE__ */ new Set([...t0, ...t1, ...t2]);
+  const freq2 = [...unionAll].filter((w2) => Number(t0.has(w2)) + Number(t1.has(w2)) + Number(t2.has(w2)) >= 2).sort();
+  if (commonAll.length >= 2 || j01 >= 0.3 && j12 >= 0.3 || sameFiles && freq2.length >= 1) {
+    const terms = (commonAll.length > 0 ? commonAll : freq2).slice(0, 4);
+    const label = terms.length > 0 ? terms.join(", ") : (recent[0]?.files ?? []).slice(0, 3).join(", ");
+    return {
+      streak: tailSteps.length,
+      terms,
+      sameFiles,
+      message: `THRASH DETECTED: last ${STALL} undone steps repeat the same approach (${label}). STOP tweaking this hypothesis \u2014 log it under Dead Ends in notes.md, switch to the largest untouched failure bucket (or check for pending contract relock), or fan out 2-3 parallel orthogonal subagents.`
+    };
+  }
+  return null;
+}
+function notesStaleness(notes, notesMtimeMs, steps) {
+  if (steps.length === 0) return 0;
+  if (notes === null) return notesMtimeMs === void 0 ? 0 : steps.length;
+  let stale = 0;
+  if (typeof notesMtimeMs === "number" && notesMtimeMs > 0) {
+    const mtimeSec = Math.floor(notesMtimeMs / 1e3);
+    for (const row of steps) {
+      const ts = at(row.time);
+      if (Number.isFinite(ts) && Math.floor(ts / 1e3) > mtimeSec) stale += 1;
+    }
+  }
+  if (steps.length >= NOTES_STALE_STEPS && STARTER_NOTES_MARKERS.some((marker) => notes.includes(marker))) {
+    stale = Math.max(stale, steps.length);
+  }
+  return stale;
+}
 function summarize(files, recentLimit = 15, now = Date.now()) {
   const { card, rows, notes, pendingTree } = files;
   const steps = rows.filter((row) => row.kind === "step");
@@ -40515,6 +40641,11 @@ function summarize(files, recentLimit = 15, now = Date.now()) {
       holdoutWarning = `OVERFIT WARNING: visible improved ${number4(card.baseline)} -> ${number4(card.best.score)} (${signed(card.best.score - card.baseline)}) while holdout ${status} ${number4(h0)} -> ${number4(h1)} (${signed(h1 - h0)}). Investigate why gains did not transfer before confirming holdout criteria or merging.`;
     }
   }
+  const thrash = !reached ? detectThrash(steps, card.best.step) : null;
+  const thrashWarning = thrash ? thrash.message : null;
+  const stallWarning = !reached && !thrashWarning && sinceGain >= STALL && sinceGain < PLATEAU ? `STALL: ${sinceGain} steps without gain. Update notes.md Pareto table, pivot to the largest untouched failure bucket (or check for pending contract relock), or fan out 2-3 parallel orthogonal subagents.` : null;
+  const notesStaleSteps = notesStaleness(notes, files.notesMtimeMs, steps);
+  const notesWarning = notesStaleSteps >= NOTES_STALE_STEPS ? `Notes warning: notes.md has not been updated in ${notesStaleSteps} step(s) \u2014 refresh Remaining Misses (Pareto) and Dead Ends so context compaction never resets progress.` : null;
   return {
     name: card.name,
     goal: redactSecrets(card.goal),
@@ -40543,6 +40674,10 @@ function summarize(files, recentLimit = 15, now = Date.now()) {
     holdoutOnce: Boolean(card.holdout_once),
     holdoutGain,
     holdoutWarning,
+    thrashWarning,
+    stallWarning,
+    notesStaleSteps,
+    notesWarning,
     notes: notes === null ? null : redactSecrets(tail(notes, 40)),
     recent
   };
@@ -40602,6 +40737,9 @@ function formatSummary(summary) {
   }
   if (summary.notes !== null) lines.push(`Notes:
 ${summary.notes}`);
+  if (summary.thrashWarning) lines.push(summary.thrashWarning);
+  else if (summary.stallWarning) lines.push(summary.stallWarning);
+  if (summary.notesWarning) lines.push(summary.notesWarning);
   const line = verdictLine(summary);
   if (line !== "") lines.push(line);
   return lines.join("\n");
@@ -40640,6 +40778,9 @@ score: ${pattern}` : command2]);
   });
   if (checks.length > 0 && patterns.length === 0) {
     rows.push(["Score", "the last line of check output must be the number"]);
+  }
+  if (typeof card.probe === "string" && card.probe !== "") {
+    rows.push(["Probe", redactSecrets(card.probe)]);
   }
   const modifiers = [];
   if ((card.runs ?? 1) > 1) modifiers.push(`${card.runs} runs, median`);
@@ -41795,8 +41936,8 @@ function bundledKitFiles() {
 
 // src/repo-ops.ts
 var ENGINE_COMMANDS = [
-  'init <name> --goal "..." --check "<command>" --lock <check files>',
-  'try "<idea>"  [--fix]',
+  'init <name> --goal "..." --check "<command>" [--probe "<fast-cmd>"] --lock <check files>',
+  'try "<idea>"  [--fix] [--probe "<fast-cmd>"] [--guards-first]',
   "status [name]",
   'relock [name] --why "..."',
   'holdout --why "..."',
@@ -41952,13 +42093,15 @@ function readClimb(repoPath, wanted) {
 function readState(repoPath, wanted) {
   const { card, name } = readClimb(repoPath, wanted);
   const base = joinPath(stateDir(repoPath), name);
-  const notes = readLocalFile(joinPath(base, "notes.md"));
+  const notesPath = joinPath(base, "notes.md");
+  const notes = readLocalFile(notesPath);
   const pending = readLocalFile(joinPath(base, "pending-tree"));
   return {
     name,
     card,
     rows: readRows(repoPath, name),
     notes: notes.text,
+    notesMtimeMs: notes.text === null ? null : statMtimeMs(notesPath),
     pendingTree: pending.text !== null
   };
 }
@@ -42094,9 +42237,21 @@ ${drift.hint}` : "";
   };
 }
 function getClimbCard(repoPath, name) {
-  const { card } = readClimb(repoPath, name);
+  const state = readState(repoPath, name);
+  const { card } = state;
+  const summary = summarize(state, 0);
+  const extras = [];
+  if (summary.notes) extras.push(`Notes:
+${summary.notes}`);
+  if (summary.thrashWarning) extras.push(summary.thrashWarning);
+  else if (summary.stallWarning) extras.push(summary.stallWarning);
+  if (summary.notesWarning) extras.push(summary.notesWarning);
+  const baseText = formatRig(card);
+  const text3 = extras.length > 0 ? `${baseText}
+
+${extras.join("\n")}` : baseText;
   return {
-    text: formatRig(card),
+    text: text3,
     data: {
       directory: repoPath,
       name: card.name,
@@ -42104,6 +42259,7 @@ function getClimbCard(repoPath, name) {
       branch: card.branch ?? null,
       base: card.base ?? null,
       check: (Array.isArray(card.check) ? card.check : card.check === void 0 ? [] : [card.check]).map(redactSecrets),
+      probe: card.probe ? redactSecrets(card.probe) : null,
       score: card.score ?? [],
       direction: card.direction,
       target: card.target,
@@ -42121,7 +42277,11 @@ function getClimbCard(repoPath, name) {
       repos: (card.repos ?? []).map((repo) => repo.path),
       maxSteps: card.max_steps ?? null,
       maxHours: card.max_hours ?? null,
-      hard: card.hard ?? false
+      hard: card.hard ?? false,
+      notes: summary.notes,
+      thrashWarning: summary.thrashWarning,
+      stallWarning: summary.stallWarning,
+      notesWarning: summary.notesWarning
     }
   };
 }
@@ -42751,7 +42911,7 @@ function median(values) {
   const middle = Math.floor(sorted.length / 2);
   return sorted.length % 2 === 1 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
 }
-function at(time3) {
+function at2(time3) {
   if (typeof time3 !== "string" || time3 === "") return "";
   return time3;
 }
@@ -43544,7 +43704,7 @@ async function readRepo(files, root, marker) {
   let bestStep = 0;
   for (const row of rows) {
     if (row.kind === "baseline") {
-      trail.push({ id: "baseline", parent: null, score: finite(row.score), label: "baseline", at: at(row.time) });
+      trail.push({ id: "baseline", parent: null, score: finite(row.score), label: "baseline", at: at2(row.time) });
       continue;
     }
     if (row.kind !== "step") continue;
@@ -43555,7 +43715,7 @@ async function readRepo(files, root, marker) {
       parent: bestStep === 0 ? "baseline" : `step-${bestStep}`,
       score: finite(row.score),
       label: typeof row.idea === "string" && row.idea !== "" ? redactSecrets(row.idea) : String(row.result ?? "step"),
-      at: at(row.time)
+      at: at2(row.time)
     });
     if (row.result === "kept") bestStep = step;
   }
@@ -43830,7 +43990,7 @@ function journalCandidates(text3) {
       holdout: bestTrial === null ? null : finite(bestTrial.holdout_score),
       best: row.is_best === true,
       label: [typeof row.operator === "string" ? row.operator : "", typeof row.summary === "string" ? row.summary : ""].filter((part) => part !== "").join(" "),
-      at: at(typeof row.finished_at === "string" ? row.finished_at : typeof row.created_at === "string" ? row.created_at : ""),
+      at: at2(typeof row.finished_at === "string" ? row.finished_at : typeof row.created_at === "string" ? row.created_at : ""),
       island: finite(meta3.island),
       bins: bins.length > 0 ? bins : null,
       parentFitness: finite(meta3.parent_fitness)
@@ -45165,9 +45325,9 @@ function createRuntime(repo, overrides = {}) {
     }
   };
 }
-function mintRunId(at2) {
+function mintRunId(at3) {
   const hex3 = Math.floor(Math.random() * 4294967296).toString(16).padStart(8, "0");
-  return `run_${at2.getTime().toString(36)}${hex3}`;
+  return `run_${at3.getTime().toString(36)}${hex3}`;
 }
 function ancestorsOf(tree, goalKey) {
   const path = [];
@@ -47290,9 +47450,9 @@ function readBundle(text3) {
   };
 }
 function readBundleRecord(value, index) {
-  const at2 = `evidence[${index}]`;
+  const at3 = `evidence[${index}]`;
   const bad = (field, detail) => {
-    throw new HillClimbError(`${at2}.${field}: ${detail}`, {
+    throw new HillClimbError(`${at3}.${field}: ${detail}`, {
       code: "bad_bundle",
       hint: "Regenerate the bundle with the shipped hook; do not hand-edit evidence."
     });
@@ -47816,11 +47976,11 @@ function yamlKeyAt(text3) {
   return null;
 }
 function splitYamlKey(text3, line) {
-  const at2 = yamlKeyAt(text3);
-  if (at2 === null) throw new Error(`expected "key: value" at YAML line ${line + 1}: ${text3}`);
-  const key2 = unquoteYamlString(text3.slice(0, at2).trim());
+  const at3 = yamlKeyAt(text3);
+  if (at3 === null) throw new Error(`expected "key: value" at YAML line ${line + 1}: ${text3}`);
+  const key2 = unquoteYamlString(text3.slice(0, at3).trim());
   if (key2 === "") throw new Error(`empty key at YAML line ${line + 1}`);
-  return { key: key2, rest: text3.slice(at2 + 1).trim() };
+  return { key: key2, rest: text3.slice(at3 + 1).trim() };
 }
 function parseYamlScalar(text3) {
   const trimmed = text3.trim();
@@ -48533,8 +48693,8 @@ function summarizeRows(rows, options = {}) {
     }
     const control = options.control ?? order[0] ?? null;
     if (control !== null && order.includes(control)) {
-      const at2 = order.indexOf(control);
-      order.splice(at2, 1);
+      const at3 = order.indexOf(control);
+      order.splice(at3, 1);
       order.unshift(control);
     }
     const byExperiment = /* @__PURE__ */ new Map();
@@ -50892,7 +51052,7 @@ function createHillClimbServer(repo, runtime) {
     return projects[0]?.id ?? repo.resolveProjectId();
   };
   const server = new McpServer(
-    { name: "hillclimb", version: "0.7.1" },
+    { name: "hillclimb", version: "0.8.0" },
     {
       capabilities: {
         tools: {},
@@ -51409,6 +51569,9 @@ ${drift.hint}` : "";
               engineDrift: st.engineDrift,
               ...st.behindBase > 0 ? { behindBase: st.behindBase } : {},
               ...st.summary.holdoutWarning ? { holdoutWarning: st.summary.holdoutWarning } : {},
+              ...st.summary.thrashWarning ? { thrashWarning: st.summary.thrashWarning } : {},
+              ...st.summary.stallWarning ? { stallWarning: st.summary.stallWarning } : {},
+              ...st.summary.notesWarning ? { notesWarning: st.summary.notesWarning } : {},
               ...contractCheckDrift ? { contractCheckDrift } : {}
             };
           } catch {

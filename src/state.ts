@@ -8,7 +8,9 @@
 
 export type Direction = "min" | "max";
 
+export const STALL = 3;
 export const PLATEAU = 5;
+export const NOTES_STALE_STEPS = 3;
 const BARS = "▁▂▃▄▅▆▇█";
 
 const SECRET_KEY_CACHE = new Map<string, boolean>();
@@ -1403,6 +1405,7 @@ export interface ClimbCard {
   branch?: string;
   base?: string;
   check?: string | string[];
+  probe?: string | null;
   score?: string[];
   score_mode?: "numeric" | "failure-count";
   guards?: string[];
@@ -1433,12 +1436,16 @@ export interface LogRow {
   seconds?: number;
   why?: string;
   gain?: boolean;
+  files?: string[];
+  diff_lines?: number;
+  delta_summary?: string;
 }
 
 export interface ClimbFiles {
   card: ClimbCard;
   rows: LogRow[];
   notes: string | null;
+  notesMtimeMs?: number | null;
   pendingTree: boolean;
 }
 
@@ -1472,6 +1479,10 @@ export interface ClimbSummary {
   holdoutOnce: boolean;
   holdoutGain: number | null;
   holdoutWarning: string | null;
+  thrashWarning: string | null;
+  stallWarning: string | null;
+  notesStaleSteps: number;
+  notesWarning: string | null;
   notes: string | null;
   recent: ClimbSummaryRow[];
 }
@@ -1557,6 +1568,93 @@ function at(time: string | undefined): number {
   return Number.isFinite(parsed) ? parsed : Number.NaN;
 }
 
+const THRASH_STOP_WORDS = new Set([
+  "step", "with", "from", "that", "this", "into", "only", "when", "after", "more", "less",
+  "make", "using", "based", "check", "score", "expect", "expected", "improve", "improved",
+  "increase", "reduce", "update", "updated", "change", "changed", "still", "also", "then",
+  "than", "over", "under", "allow", "handle", "handling", "support", "avoid", "prevent",
+  "better", "attempt", "retry", "fixed", "added", "keep", "kept", "pure", "case", "cases",
+  "edit", "code", "file", "files", "test", "tests",
+]);
+const STARTER_NOTES_MARKERS = [
+  "(profile misses before step 1)",
+  "Record what worked, dead ends, and blockers every ~5 steps.",
+];
+
+function ideaTokens(text: string): Set<string> {
+  const out = new Set<string>();
+  for (const m of text.toLowerCase().matchAll(/[a-z][a-z0-9]{3,}/g)) {
+    const word = m[0];
+    if (THRASH_STOP_WORDS.has(word) || /^step\d*$/.test(word)) continue;
+    out.add(word);
+  }
+  return out;
+}
+
+export function detectThrash(
+  steps: LogRow[],
+  bestStep: number,
+): { streak: number; terms: string[]; sameFiles: boolean; message: string } | null {
+  const tailSteps = steps.filter((r) => (r.step ?? 0) > bestStep && r.result !== "kept");
+  if (tailSteps.length < STALL) return null;
+  const recent = tailSteps.slice(-STALL);
+  const toks = recent.map((r) => ideaTokens(r.idea ?? ""));
+  const [t0, t1, t2] = toks as [Set<string>, Set<string>, Set<string>];
+  const commonAll = [...t0].filter((w) => t1.has(w) && t2.has(w)).sort();
+  const jacc = (a: Set<string>, b: Set<string>): number => {
+    const union = new Set([...a, ...b]);
+    if (union.size === 0) return 0;
+    let inter = 0;
+    for (const w of a) if (b.has(w)) inter += 1;
+    return inter / union.size;
+  };
+  const j01 = jacc(t0, t1);
+  const j12 = jacc(t1, t2);
+  const fileKeys = recent.map((r) =>
+    Array.isArray(r.files) && r.files.length > 0 ? [...r.files].sort().join("\0") : "",
+  );
+  const sameFiles = fileKeys.every((k) => k !== "") && new Set(fileKeys).size === 1;
+  const unionAll = new Set([...t0, ...t1, ...t2]);
+  const freq2 = [...unionAll]
+    .filter((w) => Number(t0.has(w)) + Number(t1.has(w)) + Number(t2.has(w)) >= 2)
+    .sort();
+  if (commonAll.length >= 2 || (j01 >= 0.3 && j12 >= 0.3) || (sameFiles && freq2.length >= 1)) {
+    const terms = (commonAll.length > 0 ? commonAll : freq2).slice(0, 4);
+    const label = terms.length > 0 ? terms.join(", ") : (recent[0]?.files ?? []).slice(0, 3).join(", ");
+    return {
+      streak: tailSteps.length,
+      terms,
+      sameFiles,
+      message:
+        `THRASH DETECTED: last ${STALL} undone steps repeat the same approach (${label}). ` +
+        "STOP tweaking this hypothesis — log it under Dead Ends in notes.md, switch to the largest untouched " +
+        "failure bucket (or check for pending contract relock), or fan out 2-3 parallel orthogonal subagents.",
+    };
+  }
+  return null;
+}
+
+export function notesStaleness(
+  notes: string | null,
+  notesMtimeMs: number | null | undefined,
+  steps: LogRow[],
+): number {
+  if (steps.length === 0) return 0;
+  if (notes === null) return notesMtimeMs === undefined ? 0 : steps.length;
+  let stale = 0;
+  if (typeof notesMtimeMs === "number" && notesMtimeMs > 0) {
+    const mtimeSec = Math.floor(notesMtimeMs / 1000);
+    for (const row of steps) {
+      const ts = at(row.time);
+      if (Number.isFinite(ts) && Math.floor(ts / 1000) > mtimeSec) stale += 1;
+    }
+  }
+  if (steps.length >= NOTES_STALE_STEPS && STARTER_NOTES_MARKERS.some((marker) => notes.includes(marker))) {
+    stale = Math.max(stale, steps.length);
+  }
+  return stale;
+}
+
 /** Mirror of climb.py's `cmd_status`, including its verdict precedence. */
 export function summarize(files: ClimbFiles, recentLimit = 15, now = Date.now()): ClimbSummary {
   const { card, rows, notes, pendingTree } = files;
@@ -1617,6 +1715,20 @@ export function summarize(files: ClimbFiles, recentLimit = 15, now = Date.now())
     }
   }
 
+  const thrash = !reached ? detectThrash(steps, card.best.step) : null;
+  const thrashWarning = thrash ? thrash.message : null;
+  const stallWarning =
+    !reached && !thrashWarning && sinceGain >= STALL && sinceGain < PLATEAU
+      ? `STALL: ${sinceGain} steps without gain. Update notes.md Pareto table, pivot to the largest untouched ` +
+        "failure bucket (or check for pending contract relock), or fan out 2-3 parallel orthogonal subagents."
+      : null;
+  const notesStaleSteps = notesStaleness(notes, files.notesMtimeMs, steps);
+  const notesWarning =
+    notesStaleSteps >= NOTES_STALE_STEPS
+      ? `Notes warning: notes.md has not been updated in ${notesStaleSteps} step(s) — refresh Remaining Misses ` +
+        "(Pareto) and Dead Ends so context compaction never resets progress."
+      : null;
+
   return {
     name: card.name,
     goal: redactSecrets(card.goal),
@@ -1645,6 +1757,10 @@ export function summarize(files: ClimbFiles, recentLimit = 15, now = Date.now())
     holdoutOnce: Boolean(card.holdout_once),
     holdoutGain,
     holdoutWarning,
+    thrashWarning,
+    stallWarning,
+    notesStaleSteps,
+    notesWarning,
     notes: notes === null ? null : redactSecrets(tail(notes, 40)),
     recent,
   };
@@ -1709,6 +1825,9 @@ export function formatSummary(summary: ClimbSummary): string {
     );
   }
   if (summary.notes !== null) lines.push(`Notes:\n${summary.notes}`);
+  if (summary.thrashWarning) lines.push(summary.thrashWarning);
+  else if (summary.stallWarning) lines.push(summary.stallWarning);
+  if (summary.notesWarning) lines.push(summary.notesWarning);
   const line = verdictLine(summary);
   if (line !== "") lines.push(line);
   return lines.join("\n");
@@ -1769,6 +1888,9 @@ export function formatRig(card: ClimbCard): string {
   });
   if (checks.length > 0 && patterns.length === 0) {
     rows.push(["Score", "the last line of check output must be the number"]);
+  }
+  if (typeof card.probe === "string" && card.probe !== "") {
+    rows.push(["Probe", redactSecrets(card.probe)]);
   }
   const modifiers: string[] = [];
   if ((card.runs ?? 1) > 1) modifiers.push(`${card.runs} runs, median`);
