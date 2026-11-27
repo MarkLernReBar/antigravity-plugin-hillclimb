@@ -6,6 +6,7 @@ import {
   applyDocumentTheme,
   applyHostStyleVariables,
 } from "@modelcontextprotocol/ext-apps";
+import { z } from "zod";
 import type { Action } from "./actions.js";
 import type { Outcome, Release, Snapshot } from "./model.js";
 import type { Rig } from "./rig.js";
@@ -84,6 +85,36 @@ const SECONDARY_PAGES: ReadonlyArray<{ id: Page; label: string; desc: string }> 
 ];
 
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+const TOGGLE_AUX_PANE_RESULT = z.object({ isError: z.boolean().optional() }).passthrough();
+
+function resolveLocalFileUri(rawPath: string, baseDir?: string | null): string | null {
+  const trimmed = rawPath.trim();
+  if (!trimmed || /^(?:https?|data|blob):/i.test(trimmed)) return null;
+  if (trimmed.startsWith("file://")) return trimmed;
+  // Strip trailing :line or :line:col suffix (e.g. src/app.tsx:42:10)
+  const clean = trimmed.replace(/:\d+(?::\d+)?$/, "");
+  let fullPath: string;
+  if (clean.startsWith("/")) {
+    fullPath = clean;
+  } else if (/^[A-Za-z]:[\\/]/.test(clean)) {
+    fullPath = `/${clean.replace(/\\/g, "/")}`;
+  } else if (baseDir) {
+    const base = baseDir.replace(/\\/g, "/").replace(/\/+$/, "");
+    const parts = `${base}/${clean.replace(/\\/g, "/")}`.split("/");
+    const stack: string[] = [];
+    for (const part of parts) {
+      if (part === "" || part === ".") continue;
+      if (part === "..") stack.pop();
+      else stack.push(part);
+    }
+    fullPath = `/${stack.join("/")}`;
+  } else {
+    return null;
+  }
+  const encoded = encodeURI(fullPath).replace(/#/g, "%23").replace(/\?/g, "%3F");
+  return `file://${encoded}`;
+}
 
 function unwrapToolResult<T>(result: {
   isError?: boolean;
@@ -232,6 +263,7 @@ function HillClimbApp() {
   const [climbsLoading, setClimbsLoading] = useState(false);
   const [treeError, setTreeError] = useState<string | null>(null);
   const [inboxByProject, setInboxByProject] = useState<Record<string, number>>({});
+  const [attachedContext, setAttachedContext] = useState<{ id: string; label: string } | null>(null);
   const [notice, setNotice] = useState<string>("");
   const [busy, setBusy] = useState(false);
 
@@ -1028,6 +1060,76 @@ function HillClimbApp() {
     }
   }, []);
 
+  const currentProjectDirectory = projects.find((p) => p.id === project)?.directory ?? repoClimbs?.projectDirectory ?? null;
+  const canAttachContext = Boolean(connected && appRef.current?.getHostCapabilities()?.updateModelContext);
+
+  const handleAttachContext = useCallback(
+    async (id: string, label: string, markdown: string) => {
+      const client = appRef.current;
+      if (!client || !client.getHostCapabilities()?.updateModelContext) {
+        setNotice("Attaching context to chat is only available when Hill Climb is open beside a conversation.");
+        return;
+      }
+      try {
+        if (attachedContext?.id === id) {
+          await client.updateModelContext({ content: [] });
+          setAttachedContext(null);
+          setNotice("Cleared attached chat context.");
+          return;
+        }
+        await client.updateModelContext({ content: [{ type: "text", text: markdown }] });
+        setAttachedContext({ id, label });
+        setNotice(`Attached ${label} to your next chat message.`);
+      } catch (e) {
+        setNotice(`Could not update chat context: ${errMsg(e)}`);
+      }
+    },
+    [attachedContext],
+  );
+
+  const handleOpenFile = useCallback(
+    async (filePath: string, baseDir?: string | null) => {
+      const client = appRef.current;
+      if (!client) return;
+      const trimmed = filePath.trim();
+      if (/^https?:\/\//i.test(trimmed)) {
+        if (client.getHostCapabilities()?.openLinks) {
+          try {
+            await client.openLink({ url: trimmed });
+            return;
+          } catch {
+            // fall through to copy
+          }
+        }
+        void navigator.clipboard?.writeText(trimmed).catch(() => {});
+        setNotice(`Copied link: ${trimmed}`);
+        return;
+      }
+      const uri = resolveLocalFileUri(trimmed, baseDir ?? currentProjectDirectory);
+      if (!uri) {
+        setNotice(`Link a local repository to open "${trimmed}".`);
+        return;
+      }
+      try {
+        const result = await client.request(
+          {
+            method: "com.google.antigravity/toggle-aux-pane",
+            params: { tabType: "fileView", uri },
+          } as unknown as Parameters<App["request"]>[0],
+          TOGGLE_AUX_PANE_RESULT,
+        );
+        if (result.isError) {
+          void navigator.clipboard?.writeText(trimmed).catch(() => {});
+          setNotice(`Could not open "${trimmed}" in side pane (available in workspace side-pane view). Path copied.`);
+        }
+      } catch {
+        void navigator.clipboard?.writeText(trimmed).catch(() => {});
+        setNotice(`Path copied: ${trimmed} (direct file open requires Antigravity side-pane host).`);
+      }
+    },
+    [currentProjectDirectory],
+  );
+
   const activeSecondary = SECONDARY_PAGES.find((p) => p.id === page) ?? null;
   const currentInboxCount = tree?.inbox ?? 0;
   const otherPendingProjects = projects
@@ -1364,6 +1466,9 @@ function HillClimbApp() {
                 onToggleAutoTrack={handleToggleAutoTrack}
                 onTrackClimb={handleTrackClimb}
                 onOpenOutcome={handleOpenOutcomeFromClimb}
+                attachedContextId={attachedContext?.id ?? null}
+                onAttachContext={canAttachContext ? handleAttachContext : undefined}
+                onOpenFile={handleOpenFile}
               />
             ) : page === "insights" ? (
               <InsightsView
@@ -1413,6 +1518,10 @@ function HillClimbApp() {
                 configure={configure}
                 live={live}
                 onOpenFlow={handleOpenFlow}
+                projectDirectory={currentProjectDirectory}
+                attachedContextId={attachedContext?.id ?? null}
+                onAttachContext={canAttachContext ? handleAttachContext : undefined}
+                onOpenFile={handleOpenFile}
               />
             ) : null}
           </>

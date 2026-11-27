@@ -599,6 +599,40 @@ body,
   gap: 4px;
 }
 
+.hc-attach-btn.is-attached {
+  background: var(--hc-accent-soft) !important;
+  border-color: var(--hc-accent) !important;
+  color: var(--hc-accent) !important;
+  font-weight: 600;
+}
+
+.hc-file-chip {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  text-align: left;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.hc-file-chip:hover {
+  border-color: var(--hc-accent);
+  background: var(--hc-accent-soft);
+}
+
+.hc-file-link {
+  font-size: 12px;
+  color: var(--hc-accent);
+  white-space: nowrap;
+}
+
+.cl-disclosure-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .hc-attachment-thumb {
   max-width: 240px;
   max-height: 140px;

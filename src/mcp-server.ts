@@ -252,7 +252,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     return projects[0]?.id ?? repo.resolveProjectId();
   };
   const server = new McpServer(
-    { name: "hillclimb", version: "0.5.4" },
+    { name: "hillclimb", version: "0.5.5" },
     {
       capabilities: {
         tools: {},

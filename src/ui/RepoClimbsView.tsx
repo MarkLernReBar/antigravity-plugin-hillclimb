@@ -389,6 +389,27 @@ function StepTimeline({ climb }: { climb: ScannedClimb }) {
   );
 }
 
+function buildClimbContextMarkdown(climb: ScannedClimb): string {
+  const lines = [
+    `Hill Climb Run: ${climb.name}`,
+    `Status: ${statusOf(climb.verdict).label} (${climb.verdict}) | Directory: ${climb.directory}${climb.branch ? ` | Branch: ${climb.branch}` : ""}`,
+    `Score: baseline ${fmtNum(climb.baseline)} → best ${fmtNum(climb.best)}${climb.target !== null ? ` (target ${climb.targetText ?? fmtNum(climb.target)})` : ""} | ${climb.kept}/${climb.steps} edits kept`,
+  ];
+  if (climb.goal) lines.push(`Goal: ${climb.goal}`);
+  if (climb.check.length > 0) lines.push(`Check: ${climb.check.join(" ; ")}`);
+  if (climb.guards.length > 0) lines.push(`Guards: ${climb.guards.join(" ; ")}`);
+  if (climb.locked.length > 0) lines.push(`Locked files: ${climb.locked.join(", ")}`);
+  const recentSteps = climb.rows.filter((r) => r.kind === "step").slice(-5);
+  if (recentSteps.length > 0) {
+    lines.push(
+      "",
+      "Recent steps:",
+      ...recentSteps.map((s) => `- [${s.result ?? "?"}] score=${fmtNum(s.score)}: ${s.idea ?? ""}`),
+    );
+  }
+  return lines.join("\n");
+}
+
 export function RepoClimbsView({
   payload,
   loading,
@@ -396,6 +417,9 @@ export function RepoClimbsView({
   onToggleAutoTrack,
   onTrackClimb,
   onOpenOutcome,
+  attachedContextId,
+  onAttachContext,
+  onOpenFile,
 }: {
   payload: RepoClimbsPayload | null;
   loading: boolean;
@@ -403,6 +427,9 @@ export function RepoClimbsView({
   onToggleAutoTrack?: (enabled: boolean) => Promise<void> | void;
   onTrackClimb?: (climbId: string) => Promise<void> | void;
   onOpenOutcome?: (outcomeKey: string) => void;
+  attachedContextId?: string | null;
+  onAttachContext?: (id: string, label: string, markdown: string) => Promise<void>;
+  onOpenFile?: (filePath: string, baseDir?: string | null) => Promise<void>;
 }) {
   const [scope, setScope] = useState<"current" | "all">("current");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -599,6 +626,17 @@ export function RepoClimbsView({
                   </p>
                 </div>
                 <div className="cl-detail-actions">
+                  {onAttachContext ? (
+                    <button
+                      type="button"
+                      className={`hill-action-btn hc-attach-btn${attachedContextId === `climb:${chosen.id}` ? " is-attached" : ""}`}
+                      aria-pressed={attachedContextId === `climb:${chosen.id}`}
+                      title="Attach this climb's score and steps as context for your next chat message"
+                      onClick={() => void onAttachContext(`climb:${chosen.id}`, `climb "${chosen.name}"`, buildClimbContextMarkdown(chosen))}
+                    >
+                      {attachedContextId === `climb:${chosen.id}` ? "Attached ✓" : "Attach to chat"}
+                    </button>
+                  ) : null}
                   {chosen.outcomeKey ? (
                     <button
                       type="button"
@@ -639,7 +677,17 @@ export function RepoClimbsView({
                     <ul className="cl-file-list">
                       {chosen.preparedSampleFiles.map((f) => (
                         <li key={f}>
-                          <code>.hill-climb/{chosen.name}/{f}</code>
+                          {onOpenFile ? (
+                            <button
+                              type="button"
+                              className="hc-link hc-file-link"
+                              onClick={() => void onOpenFile(`.hill-climb/${chosen.name}/${f}`, chosen.directory)}
+                            >
+                              <code>.hill-climb/{chosen.name}/{f}</code> ↗
+                            </button>
+                          ) : (
+                            <code>.hill-climb/{chosen.name}/{f}</code>
+                          )}
                         </li>
                       ))}
                     </ul>
@@ -692,13 +740,43 @@ export function RepoClimbsView({
 
                   {chosen.notes ? (
                     <details className="cl-disclosure">
-                      <summary>Agent notes (notes.md)</summary>
+                      <summary className="cl-disclosure-row">
+                        <span>Agent notes (notes.md)</span>
+                        {onOpenFile ? (
+                          <button
+                            type="button"
+                            className="hc-link hc-file-link"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              void onOpenFile(`.hill-climb/${chosen.name}/notes.md`, chosen.directory);
+                            }}
+                          >
+                            Open file ↗
+                          </button>
+                        ) : null}
+                      </summary>
                       <pre className="cl-pre">{chosen.notes}</pre>
                     </details>
                   ) : null}
 
                   <details className="cl-disclosure">
-                    <summary>How it scores &amp; guardrails</summary>
+                    <summary className="cl-disclosure-row">
+                      <span>How it scores &amp; guardrails</span>
+                      {onOpenFile ? (
+                        <button
+                          type="button"
+                          className="hc-link hc-file-link"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            void onOpenFile(`.hill-climb/${chosen.name}/card.json`, chosen.directory);
+                          }}
+                        >
+                          Open card.json ↗
+                        </button>
+                      ) : null}
+                    </summary>
                     <dl className="cl-kv">
                       <dt>Scoring check</dt>
                       <dd><code>{chosen.check.join(" ; ") || "—"}</code></dd>
@@ -709,7 +787,26 @@ export function RepoClimbsView({
                       <dt>Holdout check</dt>
                       <dd><code>{chosen.holdout ?? "none"}</code></dd>
                       <dt>Locked files</dt>
-                      <dd><code>{chosen.locked.join(", ") || "none"}</code></dd>
+                      <dd>
+                        {chosen.locked.length === 0 ? (
+                          <code>none</code>
+                        ) : onOpenFile ? (
+                          <span className="hc-inline-group">
+                            {chosen.locked.map((file) => (
+                              <button
+                                key={file}
+                                type="button"
+                                className="hc-chip hc-file-chip"
+                                onClick={() => void onOpenFile(file, chosen.directory)}
+                              >
+                                <code>{file}</code> ↗
+                              </button>
+                            ))}
+                          </span>
+                        ) : (
+                          <code>{chosen.locked.join(", ")}</code>
+                        )}
+                      </dd>
                       <dt>Worktree path</dt>
                       <dd><code>{chosen.directory}</code></dd>
                     </dl>

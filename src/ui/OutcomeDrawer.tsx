@@ -1096,8 +1096,52 @@ const TABS: Array<{ id: DrawerTab; label: string }> = [
   { id: 'plan', label: 'Plan & Notes' },
 ]
 
+function extractLocalPath(raw: string): string | null {
+  const match = raw.match(/(?:^|[\s(:`])((?:\/|[A-Za-z0-9._-]+\/)[A-Za-z0-9._/-]+\.[A-Za-z0-9]{1,8}(?::\d+(?::\d+)?)?)/)
+  if (!match?.[1]) return null
+  const candidate = match[1]
+  if (/^https?:\/\//i.test(candidate)) return null
+  return candidate
+}
+
+function buildOutcomeContextMarkdown(
+  outcome: Outcome | undefined,
+  goal: Goal | undefined,
+  signal: string,
+  track: string,
+  evidence: Evidence[],
+  plans: Plan[],
+): string {
+  if (outcome) {
+    const lines = [
+      `Hill Climb Outcome: ${outcome.key} — ${outcome.title}`,
+      `Status: ${signal} | Version: v${outcome.version} | Track: ${track}${outcome.availability && outcome.availability !== 'active' ? ` | Availability: ${outcome.availability}` : ''}`,
+      '',
+      `Story: ${outcome.story}`,
+      '',
+      'Acceptance criteria:',
+      ...outcome.criteria.map((c) => `- ${c.id}: Given ${c.given}, when ${c.when}, then ${c.then}.`),
+    ]
+    if (plans[0]) {
+      lines.push('', `Latest plan (v${plans[0].version}):`, plans[0].body.slice(0, 1200))
+    }
+    if (evidence.length > 0) {
+      lines.push(
+        '',
+        'Recent proof:',
+        ...evidence.slice(0, 4).map((e) => `- [${e.kind}] (${e.source}): ${e.text.slice(0, 300)}`),
+      )
+    }
+    return lines.join('\n')
+  }
+  if (goal) {
+    return [`Hill Climb Goal: ${goal.key} — ${goal.title}`, `Brief: ${goal.brief}`].join('\n')
+  }
+  return ''
+}
+
 export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
-  const { data, track, selected, select, act, dispatch, live } = props
+  const { data, track, selected, select, act, dispatch, live, projectDirectory, attachedContextId, onAttachContext, onOpenFile } = props
   const outcome = useMemo(
     () => (selected === null ? undefined : data.outcomes.find((row) => row.key === selected)),
     [data.outcomes, selected],
@@ -1421,6 +1465,20 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
           </p>
         </div>
         <div className="hc-drawer-actions">
+          {onAttachContext ? (
+            <button
+              type="button"
+              className={`hc-btn hc-attach-btn${attachedContextId === `item:${selected}` ? ' is-attached' : ''}`}
+              aria-pressed={attachedContextId === `item:${selected}`}
+              title="Attach this item as context for your next chat message"
+              onClick={() => {
+                const md = buildOutcomeContextMarkdown(outcome, goal, signal, track, evidence, plans)
+                void onAttachContext(`item:${selected}`, selected, md)
+              }}
+            >
+              {attachedContextId === `item:${selected}` ? 'Attached ✓' : 'Attach to chat'}
+            </button>
+          ) : null}
           <button type="button" className="hc-icon-btn" onClick={() => select(null)} aria-label="Close the drawer">
             ×
           </button>
@@ -1999,19 +2057,53 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
                       <p className="hc-hint">
                         {row.source}
                         {row.actor ? ` · ${row.actor}${row.via ? ` (${row.via})` : ''}` : ''}
+                        {(() => {
+                          if (!onOpenFile) return null
+                          const detected = extractLocalPath(row.source) ?? extractLocalPath(row.text)
+                          if (!detected || (!detected.startsWith('/') && !projectDirectory)) return null
+                          return (
+                            <>
+                              {' · '}
+                              <button
+                                type="button"
+                                className="hc-link hc-file-link"
+                                onClick={() => void onOpenFile(detected, projectDirectory)}
+                              >
+                                Open {detected.split('/').pop()} ↗
+                              </button>
+                            </>
+                          )
+                        })()}
                       </p>
                       {row.attachments && row.attachments.length > 0 ? (
                         <div className="hc-attachments">
-                          {row.attachments.map((att, idx) => (
-                            <div key={`${row.id}:att:${idx}`} className="hc-attachment-item">
-                              <span className="hc-chip" title={att.path}>
-                                📎 {att.label}: <code>{att.path.slice(0, 60)}{att.path.length > 60 ? '…' : ''}</code>
-                              </span>
-                              {att.path.startsWith('data:image/') ? (
-                                <img src={att.path} alt={att.label} className="hc-attachment-thumb" />
-                              ) : null}
-                            </div>
-                          ))}
+                          {row.attachments.map((att, idx) => {
+                            const canOpen =
+                              Boolean(onOpenFile) &&
+                              !att.path.startsWith('data:') &&
+                              (/^https?:\/\//i.test(att.path) || att.path.startsWith('/') || Boolean(projectDirectory))
+                            return (
+                              <div key={`${row.id}:att:${idx}`} className="hc-attachment-item">
+                                {canOpen ? (
+                                  <button
+                                    type="button"
+                                    className="hc-chip hc-file-chip"
+                                    title={`Open ${att.path}`}
+                                    onClick={() => void onOpenFile?.(att.path, projectDirectory)}
+                                  >
+                                    📎 {att.label}: <code>{att.path.slice(0, 56)}{att.path.length > 56 ? '…' : ''}</code> ↗
+                                  </button>
+                                ) : (
+                                  <span className="hc-chip" title={att.path}>
+                                    📎 {att.label}: <code>{att.path.slice(0, 60)}{att.path.length > 60 ? '…' : ''}</code>
+                                  </span>
+                                )}
+                                {att.path.startsWith('data:image/') ? (
+                                  <img src={att.path} alt={att.label} className="hc-attachment-thumb" />
+                                ) : null}
+                              </div>
+                            )
+                          })}
                         </div>
                       ) : null}
                       {outcome !== undefined && row.version !== outcome.version ? (

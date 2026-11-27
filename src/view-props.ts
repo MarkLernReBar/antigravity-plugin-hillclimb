@@ -217,4 +217,8 @@ export interface ViewProps {
   onOpenFlow?: (flowName: string) => void
   onOpenInbox?: () => void
   onOpenImport?: () => void
+  projectDirectory?: string | null
+  attachedContextId?: string | null
+  onAttachContext?: (id: string, label: string, markdown: string) => Promise<void>
+  onOpenFile?: (filePath: string, baseDir?: string | null) => Promise<void>
 }
