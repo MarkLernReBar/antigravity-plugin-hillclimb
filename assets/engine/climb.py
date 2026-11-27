@@ -96,9 +96,28 @@ def resolve(name):
             raise Fail(f"No climb named {name!r}. Run: climb.py list")
         return folder
     found = sorted(path.parent for path in climbs_dir().glob("*/card.json"))
-    if len(found) != 1:
-        raise Fail("Name the climb. Run: climb.py list" if found else "No climb yet. Run: climb.py init")
-    return found[0]
+    if len(found) == 1:
+        return found[0]
+    if len(found) > 1:
+        branch = git("branch", "--show-current", check=False)
+        if branch:
+            if branch.startswith("climb/"):
+                candidate = climbs_dir() / branch[len("climb/"):]
+                if (candidate / "card.json").is_file():
+                    return candidate
+            matching = []
+            for folder in found:
+                try:
+                    card = json.loads((folder / "card.json").read_text())
+                    if card.get("branch") == branch:
+                        matching.append(folder)
+                except (OSError, json.JSONDecodeError):
+                    pass
+            if len(matching) == 1:
+                return matching[0]
+        names = ", ".join(folder.name for folder in found)
+        raise Fail(f"Name the climb ({names}). Run: climb.py list")
+    raise Fail("No climb yet. Run: climb.py init")
 
 
 def score_mode(card):
@@ -148,6 +167,49 @@ def rows(folder):
 
 def tail(text, lines=15):
     return "\n".join(text.strip().splitlines()[-lines:])
+
+
+_ERROR_SIGNAL_RE = re.compile(
+    r"\b(?:INFRA_INVALID|INTEGRITY_FAIL|OVERALL_FLOOR_FAIL|ERROR|FAIL(?:ED)?|EXCEPTION|TRACEBACK|ASSERTIONERROR|TIMEOUT|TIMED\s+OUT|INVALID)\b",
+    re.IGNORECASE,
+)
+
+
+def _clean_lines(text):
+    clean = ANSI.sub("", text or "")
+    out = []
+    for line in clean.splitlines():
+        part = line.rstrip("\r").split("\r")[-1].strip()
+        if part:
+            out.append(part)
+    return out
+
+
+def _pick_reason_line(stdout, stderr):
+    """Pick the highest-signal error line (preferring structured stdout diagnostics over noisy stderr logs)."""
+    out_lines = _clean_lines(stdout)
+    err_lines = _clean_lines(stderr)
+    for bucket in (out_lines, err_lines):
+        for line in reversed(bucket):
+            if NUMBER.fullmatch(line):
+                continue
+            if _ERROR_SIGNAL_RE.search(line):
+                return line[:160]
+    for line in reversed(out_lines):
+        if not NUMBER.fullmatch(line):
+            return line[:160]
+    for line in reversed(err_lines):
+        if not NUMBER.fullmatch(line):
+            return line[:160]
+    return ""
+
+
+def failure_excerpt(result, lines=12):
+    out_tail = tail(ANSI.sub("", result.stdout or ""), lines)
+    err_tail = tail(ANSI.sub("", result.stderr or ""), lines)
+    if out_tail and err_tail:
+        return f"[stderr]\n{err_tail}\n[stdout]\n{out_tail}"
+    return out_tail or err_tail
 
 
 def _decode_pipe(data):
@@ -218,7 +280,9 @@ def read_score(result, pattern, mode=LEGACY_SCORE_MODE):
     numeric = mode == "numeric"
     text = ANSI.sub("", result.stdout + result.stderr)
     if numeric and result.returncode:
-        raise Fail(f"check exited {result.returncode}, so the run cannot win under --score-mode numeric\n{tail(text)}")
+        reason = _pick_reason_line(result.stdout, result.stderr)
+        headline = f"check exited {result.returncode}: {reason}" if reason else f"check exited {result.returncode}"
+        raise Fail(f"{headline} (cannot win under --score-mode numeric)\n{failure_excerpt(result)}")
     if pattern:
         raw_lines = [line.rstrip("\r").split("\r")[-1] for line in text.split("\n")]
         lines = [line for line in raw_lines if re.search(pattern, line)]
@@ -242,12 +306,16 @@ def read_score(result, pattern, mode=LEGACY_SCORE_MODE):
                 raise Fail(
                     f"check exited 0 and printed nothing that matches --score. Under --score-mode numeric a "
                     f"missing measurement is a failed run, not 0. Print the measurement, or use "
-                    f"--score-mode failure-count for a count of failures.\n{tail(text)}"
+                    f"--score-mode failure-count for a count of failures.\n{failure_excerpt(result)}"
                 )
             return 0.0
-        raise Fail(f"check exited {result.returncode} and printed nothing that matches --score\n{tail(text)}")
+        reason = _pick_reason_line(result.stdout, result.stderr)
+        headline = f"check exited {result.returncode} (no --score match): {reason}" if reason else f"check exited {result.returncode} and printed nothing that matches --score"
+        raise Fail(f"{headline}\n{failure_excerpt(result)}")
     if result.returncode:
-        raise Fail(f"check exited {result.returncode}\n{tail(text)}")
+        reason = _pick_reason_line(result.stdout, result.stderr)
+        headline = f"check exited {result.returncode}: {reason}" if reason else f"check exited {result.returncode}"
+        raise Fail(f"{headline}\n{failure_excerpt(result)}")
     raw_out = ANSI.sub("", result.stdout)
     lines = [
         part
@@ -256,7 +324,7 @@ def read_score(result, pattern, mode=LEGACY_SCORE_MODE):
         if part
     ]
     if not lines or not NUMBER.fullmatch(lines[-1]):
-        raise Fail(f"the last line of check output must be the score\n{tail(text)}")
+        raise Fail(f"the last line of check output must be the score\n{failure_excerpt(result)}")
     score = float(lines[-1])
     if not math.isfinite(score):
         raise Fail(f"the last line of check output is not a finite number: {lines[-1]!r}")
@@ -750,14 +818,29 @@ def cmd_init(args):
     card["baseline"] = score
     card["best"] = {"score": score, "commit": card["start_commit"], "step": 0}
     save(folder, card)
+    notes_path = folder / "notes.md"
+    if not notes_path.exists():
+        notes_path.write_text(
+            f"# {args.name} notes\n\nGoal: {args.goal}\n\n"
+            "Record what worked, dead ends, and blockers every ~5 steps.\n"
+        )
     append(folder, {"kind": "baseline", "score": score, "spread": spread, "seconds": round(seconds, 2)})
-    holdout = None if card["holdout_once"] else run_holdout(folder, card, "baseline")
+    holdout = None
+    holdout_error = None
+    if card["holdout"] and not card["holdout_once"]:
+        try:
+            holdout = run_holdout(folder, card, "baseline")
+        except Fail as error:
+            holdout_error = str(error).splitlines()[0]
     also = f" in {len(roots)} repos" if len(roots) > 1 else ""
     print(f"Climb {args.name} started on {card['branch']}{also}. Check output: {folder / 'best.txt'}")
     print(save_kit(folder, card))
     print(f"Baseline {number(score)} ({args.direction}), check takes {seconds:.1f}s.")
     if holdout is not None:
         print(f"Holdout baseline {number(holdout)}.")
+    elif holdout_error is not None:
+        print(f"Warning: holdout baseline failed ({holdout_error}). Dev baseline is saved.")
+        print(f"Do not inspect holdout files; record the blind baseline first with: climb.py holdout {args.name} --why baseline")
     step_seconds = seconds * (2 * (args.runs + args.runs % 2) if args.paired else args.runs + (args.runs > 1))
     if step_seconds > SLOW_STEP:
         print(
@@ -825,8 +908,13 @@ def cmd_try(args):
         except Fail as error:
             undo(card)
             (folder / "pending-tree").unlink(missing_ok=True)
-            lines = str(error).splitlines()
-            why = lines[0] if len(lines) == 1 else f"{lines[0]}: {lines[-1].strip()[:120]}"
+            lines = [ln.strip() for ln in str(error).splitlines() if ln.strip()]
+            if not lines:
+                why = "check failed"
+            elif len(lines) == 1 or ": " in lines[0]:
+                why = lines[0][:180]
+            else:
+                why = f"{lines[0]}: {lines[-1][:140]}"[:180]
             append(folder, {**row, "result": "broke", "why": why})
             print(f"step {step} broke   {args.idea}\n{error}\nUndone. Full output: {folder / 'last.txt'}")
             return
@@ -913,6 +1001,8 @@ def cmd_status(args):
     holdouts = [row for row in log if row["kind"] == "holdout"]
     if holdouts:
         print("Holdout " + ", ".join(f"{number(row['score'])} ({row['why']})" for row in holdouts))
+    elif card.get("holdout") and not card.get("holdout_once"):
+        print(f"Holdout baseline missing — do not inspect holdout files; run: climb.py holdout {card['name']} --why baseline")
     for row in log[-args.last:]:
         if row["kind"] == "step":
             score = number(row["score"]) if "score" in row else "-"

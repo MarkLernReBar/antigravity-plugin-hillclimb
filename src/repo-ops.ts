@@ -310,15 +310,48 @@ export function formatSetupText(result: ReturnType<typeof installEngine>, repoPa
   return lines.join("\n");
 }
 
+export function checkEngineDrift(repoPath: string): {
+  status: "current" | "missing" | "diverged";
+  hint: string | null;
+} {
+  const installed = readLocalFile(engineFile(repoPath, "climb.py"));
+  if (installed.text === null) {
+    return {
+      status: "missing",
+      hint: "Engine not installed in this repo; run hillclimb_setup.",
+    };
+  }
+  try {
+    const bundled = readEngineSource("climb.py").replace(/\r\n/g, "\n");
+    const local = installed.text.replace(/\r\n/g, "\n");
+    if (local === bundled) return { status: "current", hint: null };
+    return {
+      status: "diverged",
+      hint: "Note: .hill-climb/engine/climb.py differs from the bundled Hill Climb plugin engine (may be older or locally patched). Run hillclimb_setup if you want to upgrade it.",
+    };
+  } catch {
+    return { status: "current", hint: null };
+  }
+}
+
 export function getClimbStatus(repoPath: string, name?: string, last = 15) {
   const state = readState(repoPath, name);
   const summary = summarize(state, last);
   const text = formatSummary(summary);
+  const drift = checkEngineDrift(repoPath);
   const next =
     summary.verdict === "bar-reached"
       ? `\n\nNext: run the holdout, then the final review — ${climbCommand(repoPath)} holdout --why final`
       : `\n\nNext step in your shell: ${climbCommand(repoPath)} try "<idea>"`;
-  return { summary, text, textWithNext: `${text}${next}`, directory: repoPath, engine: engineDir(repoPath) };
+  const driftNote = drift.status === "diverged" && drift.hint ? `\n${drift.hint}` : "";
+  return {
+    summary,
+    text,
+    textWithNext: `${text}${next}${driftNote}`,
+    directory: repoPath,
+    engine: engineDir(repoPath),
+    engineDrift: drift.status,
+  };
 }
 
 export function getClimbCard(repoPath: string, name?: string) {

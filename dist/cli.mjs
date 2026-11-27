@@ -22778,6 +22778,7 @@ function summarize(files, recentLimit = 15, now = Date.now()) {
     maxHours: card.max_hours ?? null,
     pendingTree,
     hasHoldout: typeof card.holdout === "string" && card.holdout !== "",
+    holdoutOnce: Boolean(card.holdout_once),
     notes: notes === null ? null : redactSecrets(tail(notes, 40)),
     recent
   };
@@ -22814,6 +22815,10 @@ function formatSummary(summary) {
   for (const raised of summary.raises) lines.push(`Raised ${raised}`);
   if (summary.holdouts.length > 0) {
     lines.push(`Holdout ${summary.holdouts.map((row) => `${number4(row.score)} (${row.why})`).join(", ")}`);
+  } else if (summary.hasHoldout && !summary.holdoutOnce) {
+    lines.push(
+      `Holdout baseline missing \u2014 do not inspect holdout files; run: climb.py holdout ${summary.name} --why baseline`
+    );
   }
   for (const row of summary.recent) {
     if (row.kind === "step") {
@@ -24254,16 +24259,46 @@ function formatSetupText(result, repoPath) {
   if (result.warning !== null) lines.push("", `Warning: ${result.warning}`);
   return lines.join("\n");
 }
+function checkEngineDrift(repoPath) {
+  const installed = readLocalFile(engineFile(repoPath, "climb.py"));
+  if (installed.text === null) {
+    return {
+      status: "missing",
+      hint: "Engine not installed in this repo; run hillclimb_setup."
+    };
+  }
+  try {
+    const bundled = readEngineSource("climb.py").replace(/\r\n/g, "\n");
+    const local = installed.text.replace(/\r\n/g, "\n");
+    if (local === bundled) return { status: "current", hint: null };
+    return {
+      status: "diverged",
+      hint: "Note: .hill-climb/engine/climb.py differs from the bundled Hill Climb plugin engine (may be older or locally patched). Run hillclimb_setup if you want to upgrade it."
+    };
+  } catch {
+    return { status: "current", hint: null };
+  }
+}
 function getClimbStatus(repoPath, name, last = 15) {
   const state = readState(repoPath, name);
   const summary = summarize(state, last);
   const text3 = formatSummary(summary);
+  const drift = checkEngineDrift(repoPath);
   const next = summary.verdict === "bar-reached" ? `
 
 Next: run the holdout, then the final review \u2014 ${climbCommand(repoPath)} holdout --why final` : `
 
 Next step in your shell: ${climbCommand(repoPath)} try "<idea>"`;
-  return { summary, text: text3, textWithNext: `${text3}${next}`, directory: repoPath, engine: engineDir(repoPath) };
+  const driftNote = drift.status === "diverged" && drift.hint ? `
+${drift.hint}` : "";
+  return {
+    summary,
+    text: text3,
+    textWithNext: `${text3}${next}${driftNote}`,
+    directory: repoPath,
+    engine: engineDir(repoPath),
+    engineDrift: drift.status
+  };
 }
 function getClimbCard(repoPath, name) {
   const { card } = readClimb(repoPath, name);

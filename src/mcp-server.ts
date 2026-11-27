@@ -14,6 +14,7 @@ import { createRepository, defaultDataDir, openDatabase, type Repository } from 
 import { createRuntime, type Runtime } from "./runtime.js";
 import { createAutoTracker } from "./auto-track.js";
 import {
+  checkEngineDrift,
   formatSetupText,
   getClimbCard,
   getClimbList,
@@ -274,7 +275,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     return projects[0]?.id ?? repo.resolveProjectId();
   };
   const server = new McpServer(
-    { name: "hillclimb", version: "0.6.3" },
+    { name: "hillclimb", version: "0.6.4" },
     {
       capabilities: {
         tools: {},
@@ -411,28 +412,40 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
         try {
           const res = getClimbStatus(dir, name, rowCount);
           if (format === "full") {
-            return jsonResult({ directory: dir, engine: res.engine, ...res.summary }, res.textWithNext);
+            return jsonResult(
+              { directory: dir, engine: res.engine, engineDrift: res.engineDrift, ...res.summary },
+              res.textWithNext,
+            );
           }
           const { recent: _recent, ...compactSummary } = res.summary;
           return jsonResult(
-            { directory: dir, engine: res.engine, ...compactSummary, recentCount: res.summary.recent.length },
+            {
+              directory: dir,
+              engine: res.engine,
+              engineDrift: res.engineDrift,
+              ...compactSummary,
+              recentCount: res.summary.recent.length,
+            },
             res.textWithNext,
           );
         } catch (err) {
           if (name === undefined && err instanceof HillClimbError && err.code === "ambiguous_climb") {
             const list = getClimbList(dir);
             const branch = readWorktreeBranch(dir);
+            const drift = checkEngineDrift(dir);
             const header = `Multiple climbs in ${dir}${branch ? ` (branch: ${branch})` : ""}. Pass \`name\` to hillclimb_status for one climb's full trail:\n`;
+            const driftNote = drift.status === "diverged" && drift.hint ? `\n\n${drift.hint}` : "";
             return jsonResult(
               {
                 directory: dir,
                 multiple: true,
                 branch,
+                engineDrift: drift.status,
                 climbs: list.climbs,
                 prepared: list.prepared,
                 next: "Pass `name` to hillclimb_status for one climb's full score, trail, and verdict.",
               },
-              `${header}${list.text}`,
+              `${header}${list.text}${driftNote}`,
             );
           }
           throw err;

@@ -1409,6 +1409,7 @@ export interface ClimbCard {
   lock?: string[];
   fingerprint?: string | null;
   holdout?: string | null;
+  holdout_once?: boolean;
   timeout?: number;
   repos?: Array<{ path: string; base?: string; branch?: string }>;
   runs?: number;
@@ -1468,6 +1469,7 @@ export interface ClimbSummary {
   maxHours: number | null;
   pendingTree: boolean;
   hasHoldout: boolean;
+  holdoutOnce: boolean;
   notes: string | null;
   recent: ClimbSummaryRow[];
 }
@@ -1620,6 +1622,7 @@ export function summarize(files: ClimbFiles, recentLimit = 15, now = Date.now())
     maxHours: card.max_hours ?? null,
     pendingTree,
     hasHoldout: typeof card.holdout === "string" && card.holdout !== "",
+    holdoutOnce: Boolean(card.holdout_once),
     notes: notes === null ? null : redactSecrets(tail(notes, 40)),
     recent,
   };
@@ -1662,6 +1665,10 @@ export function formatSummary(summary: ClimbSummary): string {
   for (const raised of summary.raises) lines.push(`Raised ${raised}`);
   if (summary.holdouts.length > 0) {
     lines.push(`Holdout ${summary.holdouts.map((row) => `${number(row.score)} (${row.why})`).join(", ")}`);
+  } else if (summary.hasHoldout && !summary.holdoutOnce) {
+    lines.push(
+      `Holdout baseline missing — do not inspect holdout files; run: climb.py holdout ${summary.name} --why baseline`,
+    );
   }
   for (const row of summary.recent) {
     if (row.kind === "step") {

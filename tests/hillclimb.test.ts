@@ -1955,4 +1955,100 @@ experiments:
       rmSync(dataDir, { recursive: true, force: true });
     }
   });
+
+  it("v0.6.4 inner-loop ergonomics: climb.py branch auto-resolution, stdout-first failure headline, graceful holdout init failure, starter notes.md, and engine-drift warning", async () => {
+    const repoDir = tempDir("hc-v064-repo-");
+    const dataDir = tempDir("hc-v064-data-");
+    try {
+      initGitRepo(repoDir);
+      installEngine(repoDir);
+      const climbPy = join(repoDir, ".hill-climb", "engine", "climb.py");
+
+      writeFileSync(
+        join(repoDir, "check_metric.py"),
+        [
+          "import sys, app",
+          "mode = sys.argv[1] if len(sys.argv) > 1 else 'dev'",
+          "if mode == 'holdout':",
+          "    print('INFRA_INVALID: valid=3/4 invalid=[case_x]')",
+          "    print('0.0000')",
+          "    print('2026-11-27 12:01:00 INFO noisy stderr log line', file=sys.stderr)",
+          "    sys.exit(2)",
+          "val = app.value()",
+          "if val < 0:",
+          "    print('INFRA_INVALID: valid=4/5 invalid=[case_b]')",
+          "    print('0.0000')",
+          "    for i in range(8):",
+          "        print(f'2026-11-27 12:28:0{i} INFO HTTP Request: GET https://example.test/item/{i}', file=sys.stderr)",
+          "    sys.exit(2)",
+          "print(val)",
+        ].join("\n") + "\n",
+        "utf8",
+      );
+      execFileSync("git", ["add", "check_metric.py"], { cwd: repoDir });
+      execFileSync("git", ["commit", "-q", "-m", "add check_metric"], { cwd: repoDir });
+
+      // 1. Initialize first climb on climb/first, then return to main and init second climb with failing holdout
+      execFileSync(
+        "python3",
+        [
+          climbPy, "init", "first",
+          "--goal", "lower value on first",
+          "--check", "python3 -B check_metric.py dev",
+          "--direction", "min",
+          "--target", "0",
+          "--lock", "check_metric.py",
+        ],
+        { cwd: repoDir, encoding: "utf8" },
+      );
+      execFileSync("git", ["switch", "-q", "main"], { cwd: repoDir });
+      const initSecondOut = execFileSync(
+        "python3",
+        [
+          climbPy, "init", "second",
+          "--goal", "lower value on second",
+          "--check", "python3 -B check_metric.py dev",
+          "--holdout", "python3 -B check_metric.py holdout",
+          "--direction", "min",
+          "--target", "0",
+          "--lock", "check_metric.py",
+        ],
+        { cwd: repoDir, encoding: "utf8" },
+      );
+      // Graceful holdout init failure: exit 0, warns with stdout-first headline, gives recovery command, seeds notes.md
+      assert.match(initSecondOut, /Warning: holdout baseline failed \(check exited 2: INFRA_INVALID: valid=3\/4 invalid=\[case_x\]/);
+      assert.match(initSecondOut, /climb\.py holdout second --why baseline/);
+      assert.ok(existsSync(join(repoDir, ".hill-climb", "second", "notes.md")), "init should seed starter notes.md");
+
+      // 2. Checked out on climb/second in a 2-climb repo: climb.py status and climb.py try auto-resolve WITHOUT --name!
+      const pyStatusOut = execFileSync("python3", [climbPy, "status"], { cwd: repoDir, encoding: "utf8" });
+      assert.match(pyStatusOut, /^Climb second on climb\/second:/);
+      assert.match(pyStatusOut, /Holdout baseline missing — do not inspect holdout files; run: climb\.py holdout second --why baseline/);
+
+      // Trigger a failing step (val = -1) with stdout INFRA_INVALID + noisy stderr logs
+      writeFileSync(join(repoDir, "app.py"), "def value():\n    return -1\n", "utf8");
+      const tryOut = execFileSync("python3", [climbPy, "try", "trigger infra error"], { cwd: repoDir, encoding: "utf8" });
+      assert.match(tryOut, /step 1 broke/);
+      assert.match(tryOut, /check exited 2: INFRA_INVALID: valid=4\/5 invalid=\[case_b\]/);
+
+      // Verify log.jsonl and TS getClimbStatus capture the real stdout INFRA_INVALID headline, not noisy stderr
+      const statusNow = getClimbStatus(repoDir);
+      assert.equal(statusNow.summary.name, "second");
+      assert.equal(statusNow.engineDrift, "current");
+      assert.match(statusNow.text, /Holdout baseline missing/);
+      assert.match(statusNow.text, /INFRA_INVALID: valid=4\/5 invalid=\[case_b\]/);
+      assert.doesNotMatch(statusNow.text, /HTTP Request: GET/);
+
+      // 3. Engine drift detection: locally modifying climb.py triggers engineDrift === "diverged"
+      const origEngine = readFileSync(climbPy, "utf8");
+      writeFileSync(climbPy, `${origEngine}\n# local drift test\n`, "utf8");
+      const drifted = getClimbStatus(repoDir);
+      assert.equal(drifted.engineDrift, "diverged");
+      assert.match(drifted.textWithNext, /differs from the bundled Hill Climb plugin engine/);
+      assert.doesNotMatch(drifted.text, /differs from the bundled Hill Climb plugin engine/, "raw status text stays parity-clean");
+    } finally {
+      rmSync(repoDir, { recursive: true, force: true });
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
 });
