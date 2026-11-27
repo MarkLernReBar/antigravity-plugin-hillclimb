@@ -57,6 +57,15 @@ Present review findings one row at a time (`yes`/`no`), most valuable first (`O6
 7. **Record:** `hillclimb_add_evidence` with exact commands, output, links, `criterionIds`, and checked `version`, then `hillclimb_set_status` (`verified` citing `evidenceIds`, or `broken` with `denies` text).
 8. **Release & clear inbox:** `hillclimb_release` and check `hillclimb_inbox` before finishing.
 
+### Design with Agents (Visual Flows, right in chat)
+
+When an outcome changes UI or the user asks to design/mock up a screen, use **`hillclimb_design`** so the review happens visually right inside the conversation thread (and stays synced in the **Flows** and **Decisions** tabs):
+
+1. **Pull real UI components & CSS tokens first:** Call `hillclimb_design(mode="kit")` (optionally `componentQuery` to search and `readComponent` to read exact markup/styles of key components). Reuse the returned `tokenStyleBlock` and component structure so mockups look like the user's real product—never generic placeholder wireframes.
+2. **Propose visually inline:** Call `hillclimb_design(mode="propose", flowName=..., frames=[...], componentRefs=[...])` (or `kind="change"`, `frameIndex=...`, `frame={...}` for a Before/After update against an approved frame). Both sandboxed self-contained HTML mockups and workspace screenshot paths (`imagePath`, automatically encoded safely) are supported.
+3. **Wait for human visual review:** The tool renders an interactive review card inline in chat with Before/After compare, viewport toggle, clickable `componentRefs`, drag-to-draw annotation tools (`Pin`, `Box`, `Arrow`, `Draw`), and **Accept design / Send back** buttons that reply directly into the thread.
+4. **Iterate & resolve pins:** If the user sends back visual annotations, revise and call `hillclimb_design(mode="propose")` again. Once accepted, implement the UI in code, check any open agent pins via `hillclimb_design(mode="inspect", flowName=...)`, and close addressed pins with `hillclimb_design(mode="resolve_pin", ...)`.
+
 ### UI dispatch, verifier rigs & `relock`
 
 In the Outcome Drawer **Live** tab (`hillclimb_open`), a person clicks **Configure verifier** and **Dispatch to repo** / **Dispatch to search** (authorizing the outcome, check, and bar). Agents can also inspect/save rigs with `hillclimb_rig`, dispatch with `hillclimb_search_start`, monitor via `hillclimb_search_status`, and reconcile/verify receipts via `hillclimb_search_summit` (which checks the binding marker and `receipt.py` proof against the contract `version` and `criterionIds`).
@@ -234,11 +243,12 @@ Blockers: <exact blocker, or "none">
 | `kits [words]` | Search saved kits across repos |
 | `reuse <name or repo/name>` | Restore kit and print its `init` command |
 
-### Plugin MCP tools (33) & CLI (`hillclimb <cmd>`)
+### Plugin MCP tools (34) & CLI (`hillclimb <cmd>`)
 
 | MCP Tool | CLI Equivalent | Purpose |
 | --- | --- | --- |
 | `hillclimb_open` | — | Open interactive UI (`tree` / `climbs` / `inbox` / `roadmap` / `flows` / `insights` / `reports`) |
+| `hillclimb_design` | — | Chat-first Design with Agents: scan repo UI components/tokens (`kit`), propose inline visual flow mockups/screenshots (`propose`), inspect approved flows (`inspect`), resolve visual pins (`resolve_pin`) |
 | `hillclimb_setup` | `setup [--dir]` | Install `climb.py`, `judge.py`, and 5 kits into `.hill-climb/` |
 | `hillclimb_status` | `status [--name] [--dir] [--last N] [--json]` | Read `card.json` + `log.jsonl` (score, bar, trail, verdict) |
 | `hillclimb_card` | `card [--name] [--dir] [--json]` | Read rig, guards, holdout, lock hash, fingerprint |

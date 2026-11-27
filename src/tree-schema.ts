@@ -90,6 +90,7 @@ const flowProposalFrame = z.object({
   imagePath: s.nullable().optional(),
   viewport: viewport.nullable().optional(),
   notes: s.nullable().optional(),
+  componentRefs: strings.optional(),
 });
 
 const flowProposal = z.object({
@@ -102,6 +103,7 @@ const flowProposal = z.object({
   basedOnVersion: n.nullable(),
   frame: flowProposalFrame.nullable().optional(),
   frames: flowProposalFrame.array().nullable().optional(),
+  componentRefs: strings.optional(),
   selfGrade: s.nullable().optional(),
   ref: s.nullable().optional(),
   spot: z.object({ x: n, y: n }).nullable().optional(),
@@ -173,6 +175,7 @@ export const treeSchema = z.object({
           liveImagePath: s.nullable().optional(),
           driftDetected: b.optional(),
           driftNote: s.nullable().optional(),
+          componentRefs: strings.optional(),
           pins: pin.array(),
         })
         .array(),

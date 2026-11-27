@@ -813,3 +813,56 @@ html.hill-inline-mode #root {
   color: var(--hc-bad);
   font-size: 12px;
 }
+
+.hill-inline-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hill-inline-note-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.hill-inline-note-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: var(--hc-surface-subtle);
+  border: 1px solid var(--hc-line);
+}
+
+.pf-frame-canvas-inline {
+  height: 300px;
+}
+
+.pf-dropzone {
+  border: 1px dashed var(--hc-line-strong);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--hc-bg);
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--hc-muted);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.pf-dropzone:hover {
+  border-color: var(--hc-accent);
+  color: var(--hc-ink);
+}

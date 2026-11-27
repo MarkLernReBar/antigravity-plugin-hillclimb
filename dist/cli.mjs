@@ -19770,7 +19770,8 @@ var frameInput = external_exports.object({
   kind: external_exports.enum(["html", "image"]).optional(),
   imagePath: optionalWord.optional(),
   viewport: viewport.nullable().optional(),
-  notes: optionalWord.optional()
+  notes: optionalWord.optional(),
+  componentRefs: external_exports.array(word).max(20).optional()
 });
 var coreActions = external_exports.discriminatedUnion("op", [
   external_exports.object({
@@ -19918,6 +19919,7 @@ var planningActions = external_exports.discriminatedUnion("op", [
     basedOnVersion: external_exports.number().int().positive().nullable().optional(),
     frame: frameInput.nullable().optional(),
     frames: external_exports.array(frameInput).min(1).nullable().optional(),
+    componentRefs: external_exports.array(word).max(20).optional(),
     selfGrade: optionalWord.optional(),
     ref: optionalWord.optional(),
     spot: external_exports.object({ x: external_exports.number().min(0).max(1), y: external_exports.number().min(0).max(1) }).nullable().optional(),
@@ -20037,7 +20039,8 @@ var flowProposalFrame = external_exports.object({
   kind: external_exports.enum(["html", "image"]).optional(),
   imagePath: s.nullable().optional(),
   viewport: viewport2.nullable().optional(),
-  notes: s.nullable().optional()
+  notes: s.nullable().optional(),
+  componentRefs: strings.optional()
 });
 var flowProposal = external_exports.object({
   id: s,
@@ -20049,6 +20052,7 @@ var flowProposal = external_exports.object({
   basedOnVersion: n.nullable(),
   frame: flowProposalFrame.nullable().optional(),
   frames: flowProposalFrame.array().nullable().optional(),
+  componentRefs: strings.optional(),
   selfGrade: s.nullable().optional(),
   ref: s.nullable().optional(),
   spot: external_exports.object({ x: n, y: n }).nullable().optional(),
@@ -20113,6 +20117,7 @@ var treeSchema = external_exports.object({
       liveImagePath: s.nullable().optional(),
       driftDetected: b.optional(),
       driftNote: s.nullable().optional(),
+      componentRefs: strings.optional(),
       pins: pin.array()
     }).array()
   }).array(),
@@ -21099,6 +21104,7 @@ function normalizeFrameInput(tree, step, label) {
     ...imagePath ? { imagePath } : {},
     ...step.viewport ? { viewport: step.viewport } : {},
     ...step.notes?.trim() ? { notes: step.notes.trim() } : {},
+    ...step.componentRefs && step.componentRefs.length > 0 ? { componentRefs: [...new Set(step.componentRefs)] } : {},
     version: 1,
     history: [],
     pins: []
@@ -21384,6 +21390,7 @@ function applyPlanning(tree, a, now, meta3) {
         basedOnVersion: a.basedOnVersion ?? null,
         frame: a.frame ?? null,
         frames: a.frames ?? null,
+        ...a.componentRefs && a.componentRefs.length > 0 ? { componentRefs: [...new Set(a.componentRefs)] } : {},
         selfGrade: a.selfGrade ?? null,
         ref: a.ref ?? null,
         spot: a.spot ?? null,

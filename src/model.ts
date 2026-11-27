@@ -150,6 +150,7 @@ export interface Frame {
   liveImagePath?: string | null;
   driftDetected?: boolean;
   driftNote?: string | null;
+  componentRefs?: string[];
   pins: Pin[];
 }
 export interface Flow {
@@ -167,6 +168,7 @@ export interface FlowProposalFrameInput {
   imagePath?: string | null;
   viewport?: FrameViewport | null;
   notes?: string | null;
+  componentRefs?: string[];
 }
 export interface FlowProposal {
   id: string;
@@ -178,6 +180,7 @@ export interface FlowProposal {
   basedOnVersion: number | null;
   frame?: FlowProposalFrameInput | null;
   frames?: FlowProposalFrameInput[] | null;
+  componentRefs?: string[];
   selfGrade?: string | null;
   ref?: string | null;
   spot?: { x: number; y: number } | null;

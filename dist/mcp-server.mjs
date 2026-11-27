@@ -4576,7 +4576,7 @@ function isRef(value) {
 function cloneIssues(issues) {
   return issues.map((iss) => iss.path ? { ...iss, path: iss.path.slice() } : { ...iss });
 }
-function isRecursive(inst, stack, resolve8) {
+function isRecursive(inst, stack, resolve9) {
   const cached2 = recursive.get(inst);
   if (cached2 !== void 0)
     return cached2 ? PROVEN : NONE;
@@ -4586,7 +4586,7 @@ function isRecursive(inst, stack, resolve8) {
   let result = NONE;
   const check2 = (child) => {
     if (result !== PROVEN && child?._zod) {
-      const answer = isRecursive(child, stack, resolve8);
+      const answer = isRecursive(child, stack, resolve9);
       if (answer > result)
         result = answer;
     }
@@ -4597,7 +4597,7 @@ function isRecursive(inst, stack, resolve8) {
       const desc = Object.getOwnPropertyDescriptor(sh, key2);
       if (spread2 && !desc.enumerable)
         continue;
-      const child = desc.get ? ASSUMED : desc.value?._zod ? isRecursive(desc.value, stack, resolve8) : NONE;
+      const child = desc.get ? ASSUMED : desc.value?._zod ? isRecursive(desc.value, stack, resolve9) : NONE;
       if (child > answer)
         answer = child;
     }
@@ -4661,7 +4661,7 @@ function isRecursive(inst, stack, resolve8) {
       break;
     // `$ZodLazy` caches its inner on the def, so a resolved edge is followed exactly
     case "lazy": {
-      const inner = def._cachedInner ?? (resolve8 ? inst._zod.innerType : void 0);
+      const inner = def._cachedInner ?? (resolve9 ? inst._zod.innerType : void 0);
       merge2(inner ? isRecursive(inner, stack, false) : ASSUMED);
       break;
     }
@@ -23405,7 +23405,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve8.call(this, root, ref);
+      let _sch = resolve9.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a3 = root.localRefs) === null || _a3 === void 0 ? void 0 : _a3[ref];
         const { schemaId } = this.opts;
@@ -23432,7 +23432,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve8(root, ref) {
+    function resolve9(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -24296,7 +24296,7 @@ var require_fast_uri = __commonJS({
       }
       return uri;
     }
-    function resolve8(baseURI, relativeURI, options) {
+    function resolve9(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
       const {
         parsed: baseParsed,
@@ -24332,50 +24332,50 @@ var require_fast_uri = __commonJS({
       schemelessOptions.skipEscape = true;
       return serialize(resolved, schemelessOptions);
     }
-    function resolveComponent(base, relative2, options, skipNormalization) {
+    function resolveComponent(base, relative3, options, skipNormalization) {
       const target = {};
       if (!skipNormalization) {
         base = parse3(serialize(base, options), options);
-        relative2 = parse3(serialize(relative2, options), options);
+        relative3 = parse3(serialize(relative3, options), options);
       }
       options = options || {};
-      if (!options.tolerant && relative2.scheme) {
-        target.scheme = relative2.scheme;
-        target.userinfo = relative2.userinfo;
-        target.host = relative2.host;
-        target.port = relative2.port;
-        target.path = removeDotSegments(relative2.path || "");
-        target.query = relative2.query;
+      if (!options.tolerant && relative3.scheme) {
+        target.scheme = relative3.scheme;
+        target.userinfo = relative3.userinfo;
+        target.host = relative3.host;
+        target.port = relative3.port;
+        target.path = removeDotSegments(relative3.path || "");
+        target.query = relative3.query;
       } else {
-        if (relative2.userinfo !== void 0 || relative2.host !== void 0 || relative2.port !== void 0) {
-          target.userinfo = relative2.userinfo;
-          target.host = relative2.host;
-          target.port = relative2.port;
-          target.path = removeDotSegments(relative2.path || "");
-          target.query = relative2.query;
+        if (relative3.userinfo !== void 0 || relative3.host !== void 0 || relative3.port !== void 0) {
+          target.userinfo = relative3.userinfo;
+          target.host = relative3.host;
+          target.port = relative3.port;
+          target.path = removeDotSegments(relative3.path || "");
+          target.query = relative3.query;
         } else {
-          if (!relative2.path) {
+          if (!relative3.path) {
             target.path = base.path;
-            if (relative2.query !== void 0) {
-              target.query = relative2.query;
+            if (relative3.query !== void 0) {
+              target.query = relative3.query;
             } else {
               target.query = base.query;
             }
           } else {
-            if (relative2.path[0] === "/") {
-              target.path = removeDotSegments(relative2.path);
+            if (relative3.path[0] === "/") {
+              target.path = removeDotSegments(relative3.path);
             } else {
               const baseHasAuthority = base.userinfo !== void 0 || base.host !== void 0 || base.port !== void 0;
               if (baseHasAuthority && !base.path) {
-                target.path = "/" + relative2.path;
+                target.path = "/" + relative3.path;
               } else if (!base.path) {
-                target.path = relative2.path;
+                target.path = relative3.path;
               } else {
-                target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative2.path;
+                target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative3.path;
               }
               target.path = base.scheme === void 0 && !baseHasAuthority && target.path[0] !== "/" ? removeDotSegmentsRelative(target.path) : removeDotSegments(target.path);
             }
-            target.query = relative2.query;
+            target.query = relative3.query;
           }
           target.userinfo = base.userinfo;
           target.host = base.host;
@@ -24383,7 +24383,7 @@ var require_fast_uri = __commonJS({
         }
         target.scheme = base.scheme;
       }
-      target.fragment = relative2.fragment;
+      target.fragment = relative3.fragment;
       return target;
     }
     function equal(uriA, uriB, options) {
@@ -24687,7 +24687,7 @@ var require_fast_uri = __commonJS({
     var fastUri = {
       SCHEMES,
       normalize: normalize2,
-      resolve: resolve8,
+      resolve: resolve9,
       resolveComponent,
       equal,
       serialize,
@@ -27677,8 +27677,8 @@ var require_dist = __commonJS({
 });
 
 // src/mcp-server.ts
-import { readFileSync as readFileSync7, realpathSync as realpathSync3 } from "node:fs";
-import { dirname as dirname6, join as join8, resolve as resolve7 } from "node:path";
+import { readFileSync as readFileSync8, realpathSync as realpathSync4 } from "node:fs";
+import { dirname as dirname6, join as join9, resolve as resolve8 } from "node:path";
 import { fileURLToPath as fileURLToPath4 } from "node:url";
 
 // ../../../config/plugins/hillclimb/node_modules/zod/v3/helpers/util.js
@@ -35200,7 +35200,7 @@ var Protocol = class {
           return;
         }
         const pollInterval = task2.pollInterval ?? this._options?.defaultTaskPollInterval ?? 1e3;
-        await new Promise((resolve8) => setTimeout(resolve8, pollInterval));
+        await new Promise((resolve9) => setTimeout(resolve9, pollInterval));
         options?.signal?.throwIfAborted();
       }
     } catch (error62) {
@@ -35217,7 +35217,7 @@ var Protocol = class {
    */
   request(request, resultSchema, options) {
     const { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options ?? {};
-    return new Promise((resolve8, reject) => {
+    return new Promise((resolve9, reject) => {
       const earlyReject = (error62) => {
         reject(error62);
       };
@@ -35295,7 +35295,7 @@ var Protocol = class {
           if (!parseResult.success) {
             reject(parseResult.error);
           } else {
-            resolve8(parseResult.data);
+            resolve9(parseResult.data);
           }
         } catch (error62) {
           reject(error62);
@@ -35557,12 +35557,12 @@ var Protocol = class {
       }
     } catch {
     }
-    return new Promise((resolve8, reject) => {
+    return new Promise((resolve9, reject) => {
       if (signal2.aborted) {
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
         return;
       }
-      const timeoutId = setTimeout(resolve8, interval);
+      const timeoutId = setTimeout(resolve9, interval);
       signal2.addEventListener("abort", () => {
         clearTimeout(timeoutId);
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
@@ -36706,7 +36706,7 @@ var McpServer = class {
     let task = createTaskResult.task;
     const pollInterval = task.pollInterval ?? 5e3;
     while (task.status !== "completed" && task.status !== "failed" && task.status !== "cancelled") {
-      await new Promise((resolve8) => setTimeout(resolve8, pollInterval));
+      await new Promise((resolve9) => setTimeout(resolve9, pollInterval));
       const updatedTask = await extra.taskStore.getTask(taskId);
       if (!updatedTask) {
         throw new McpError(ErrorCode.InternalError, `Task ${taskId} not found during polling`);
@@ -37370,12 +37370,12 @@ var StdioServerTransport = class {
     this.onclose?.();
   }
   send(message2) {
-    return new Promise((resolve8) => {
+    return new Promise((resolve9) => {
       const json2 = serializeMessage(message2);
       if (this._stdout.write(json2)) {
-        resolve8();
+        resolve9();
       } else {
-        this._stdout.once("drain", resolve8);
+        this._stdout.once("drain", resolve9);
       }
     });
   }
@@ -37518,7 +37518,8 @@ var frameInput = external_exports.object({
   kind: external_exports.enum(["html", "image"]).optional(),
   imagePath: optionalWord.optional(),
   viewport: viewport.nullable().optional(),
-  notes: optionalWord.optional()
+  notes: optionalWord.optional(),
+  componentRefs: external_exports.array(word).max(20).optional()
 });
 var coreActions = external_exports.discriminatedUnion("op", [
   external_exports.object({
@@ -37666,6 +37667,7 @@ var planningActions = external_exports.discriminatedUnion("op", [
     basedOnVersion: external_exports.number().int().positive().nullable().optional(),
     frame: frameInput.nullable().optional(),
     frames: external_exports.array(frameInput).min(1).nullable().optional(),
+    componentRefs: external_exports.array(word).max(20).optional(),
     selfGrade: optionalWord.optional(),
     ref: optionalWord.optional(),
     spot: external_exports.object({ x: external_exports.number().min(0).max(1), y: external_exports.number().min(0).max(1) }).nullable().optional(),
@@ -37785,7 +37787,8 @@ var flowProposalFrame = external_exports.object({
   kind: external_exports.enum(["html", "image"]).optional(),
   imagePath: s.nullable().optional(),
   viewport: viewport2.nullable().optional(),
-  notes: s.nullable().optional()
+  notes: s.nullable().optional(),
+  componentRefs: strings.optional()
 });
 var flowProposal = external_exports.object({
   id: s,
@@ -37797,6 +37800,7 @@ var flowProposal = external_exports.object({
   basedOnVersion: n.nullable(),
   frame: flowProposalFrame.nullable().optional(),
   frames: flowProposalFrame.array().nullable().optional(),
+  componentRefs: strings.optional(),
   selfGrade: s.nullable().optional(),
   ref: s.nullable().optional(),
   spot: external_exports.object({ x: n, y: n }).nullable().optional(),
@@ -37861,6 +37865,7 @@ var treeSchema = external_exports.object({
       liveImagePath: s.nullable().optional(),
       driftDetected: b.optional(),
       driftNote: s.nullable().optional(),
+      componentRefs: strings.optional(),
       pins: pin.array()
     }).array()
   }).array(),
@@ -38164,7 +38169,7 @@ function effectiveRankPaths(tree) {
   }
   const resolved = /* @__PURE__ */ new Map();
   const visiting = /* @__PURE__ */ new Set();
-  const resolve8 = (key2) => {
+  const resolve9 = (key2) => {
     const cached2 = resolved.get(key2);
     if (cached2 !== void 0) return cached2;
     const self = own2.get(key2) ?? [100];
@@ -38172,14 +38177,14 @@ function effectiveRankPaths(tree) {
     visiting.add(key2);
     let best = self;
     for (const dependent of dependents.get(key2) ?? []) {
-      const candidate = resolve8(dependent);
+      const candidate = resolve9(dependent);
       if (comparePaths(candidate, best) < 0) best = candidate;
     }
     visiting.delete(key2);
     resolved.set(key2, best);
     return best;
   };
-  for (const outcome2 of tree.outcomes) resolve8(outcome2.key);
+  for (const outcome2 of tree.outcomes) resolve9(outcome2.key);
   return resolved;
 }
 function liveClaim(tree, key2, nowMs) {
@@ -38847,6 +38852,7 @@ function normalizeFrameInput(tree, step, label) {
     ...imagePath ? { imagePath } : {},
     ...step.viewport ? { viewport: step.viewport } : {},
     ...step.notes?.trim() ? { notes: step.notes.trim() } : {},
+    ...step.componentRefs && step.componentRefs.length > 0 ? { componentRefs: [...new Set(step.componentRefs)] } : {},
     version: 1,
     history: [],
     pins: []
@@ -39132,6 +39138,7 @@ function applyPlanning(tree, a, now, meta3) {
         basedOnVersion: a.basedOnVersion ?? null,
         frame: a.frame ?? null,
         frames: a.frames ?? null,
+        ...a.componentRefs && a.componentRefs.length > 0 ? { componentRefs: [...new Set(a.componentRefs)] } : {},
         selfGrade: a.selfGrade ?? null,
         ref: a.ref ?? null,
         spot: a.spot ?? null,
@@ -41702,9 +41709,9 @@ function climbCommand(repoPath) {
 function stateDir(repoPath) {
   return joinPath(repoPath, STATE_DIR);
 }
-function resolvePath(base, relative2) {
-  if (isAbsolute(relative2)) return normalize(relative2);
-  return normalize(join2(base, relative2));
+function resolvePath(base, relative3) {
+  if (isAbsolute(relative3)) return normalize(relative3);
+  return normalize(join2(base, relative3));
 }
 function hasIgnoreRule(excludeText) {
   if (excludeText === null) return false;
@@ -41751,10 +41758,10 @@ function readEngineSource(name) {
 function bundledKitFiles() {
   readEngineSource("climb.py");
   const root = join2(cachedRoot, "..", "kits");
-  function collect(relative2) {
-    const entries = readdirSync2(join2(root, relative2), { withFileTypes: true });
+  function collect(relative3) {
+    const entries = readdirSync2(join2(root, relative3), { withFileTypes: true });
     return entries.sort((a, b2) => a.name.localeCompare(b2.name)).flatMap((entry) => {
-      const path = relative2 ? relative2 + "/" + entry.name : entry.name;
+      const path = relative3 ? relative3 + "/" + entry.name : entry.name;
       if (entry.isDirectory() && entry.name !== "__pycache__") return collect(path);
       if (!entry.isFile() || entry.name.startsWith(".") || !/\.(py|md|json|jsonl)$/.test(entry.name)) return [];
       return [{ path, content: readFileSync2(join2(root, path), "utf8") }];
@@ -43413,8 +43420,8 @@ function receiptSource(marker, state, line) {
   return `${state.identity} \xB7 ${redactSecrets(line.command)}${verified} \xB7 binding ${marker.binding.digest.slice(0, 12)}`;
 }
 async function readRepo(files, root, marker) {
-  const relative2 = marker.runDir !== "" ? marker.runDir : `.hill-climb/${climbNameFor(marker.runId)}`;
-  const base = joinPath(root, relative2);
+  const relative3 = marker.runDir !== "" ? marker.runDir : `.hill-climb/${climbNameFor(marker.runId)}`;
+  const base = joinPath(root, relative3);
   const cardText = await files.read(`${base}/card.json`);
   let card = null;
   try {
@@ -43423,7 +43430,7 @@ async function readRepo(files, root, marker) {
     card = null;
   }
   if (card === null) {
-    return { live: emptyLive(), holdout: null, identity: "", reason: `no card.json under ${relative2}: init never completed` };
+    return { live: emptyLive(), holdout: null, identity: "", reason: `no card.json under ${relative3}: init never completed` };
   }
   const rows = parseLog(await files.read(`${base}/log.jsonl`) ?? "");
   const holdouts = rows.filter((row) => row.kind === "holdout" && finite(row.score) !== null);
@@ -47420,8 +47427,8 @@ function isWithin(root, candidate) {
   const base = stripTrailing(root);
   const target = stripTrailing(candidate);
   if (target === base) return true;
-  const relative2 = posix.relative(base, target);
-  return relative2 !== "" && relative2 !== ".." && !relative2.startsWith("../") && !posix.isAbsolute(relative2);
+  const relative3 = posix.relative(base, target);
+  return relative3 !== "" && relative3 !== ".." && !relative3.startsWith("../") && !posix.isAbsolute(relative3);
 }
 function assertWithin(root, candidate, operation) {
   void operation;
@@ -50021,7 +50028,7 @@ function parseMarkdownImport(markdown, opts) {
 import { createHmac } from "node:crypto";
 import { execFile } from "node:child_process";
 function runShellHook(command2, payload) {
-  return new Promise((resolve8, reject) => {
+  return new Promise((resolve9, reject) => {
     execFile(
       "/bin/sh",
       ["-c", command2],
@@ -50035,7 +50042,7 @@ function runShellHook(command2, payload) {
           HILLCLIMB_EVENT_JSON: JSON.stringify(payload)
         }
       },
-      (err) => err ? reject(err) : resolve8()
+      (err) => err ? reject(err) : resolve9()
     );
   });
 }
@@ -50043,12 +50050,12 @@ function runMacNotify(title, message2) {
   if (process.platform !== "darwin") return Promise.resolve();
   const safeTitle = title.replace(/["\\]/g, " ").slice(0, 80);
   const safeMsg = message2.replace(/["\\]/g, " ").slice(0, 180);
-  return new Promise((resolve8) => {
+  return new Promise((resolve9) => {
     execFile(
       "osascript",
       ["-e", `display notification "${safeMsg}" with title "${safeTitle}"`],
       { timeout: 5e3 },
-      () => resolve8()
+      () => resolve9()
     );
   });
 }
@@ -50245,6 +50252,261 @@ Resume work on outcome ${payload.key} in ${dir ?? "this project"}.`
   };
 }
 
+// src/design-kit.ts
+import { existsSync as existsSync3, readdirSync as readdirSync5, readFileSync as readFileSync7, realpathSync as realpathSync3, statSync as statSync3 } from "node:fs";
+import { basename as basename6, extname, isAbsolute as isAbsolute5, join as join8, relative as relative2, resolve as resolve7 } from "node:path";
+var SKIP_DIRS = /* @__PURE__ */ new Set([
+  "node_modules",
+  ".git",
+  "dist",
+  "build",
+  ".next",
+  ".nuxt",
+  ".svelte-kit",
+  "coverage",
+  ".hill-climb",
+  ".hillclimb",
+  "__pycache__",
+  ".venv",
+  "venv",
+  "target",
+  "vendor"
+]);
+var COMPONENT_EXTS = /* @__PURE__ */ new Set([".tsx", ".jsx", ".vue", ".svelte"]);
+var STYLE_EXTS = /* @__PURE__ */ new Set([".css", ".scss"]);
+var COMPONENT_DIR_HINTS = [
+  "src/components",
+  "components",
+  "src/ui",
+  "ui",
+  "app/components",
+  "packages/ui/src",
+  "packages/ui/components",
+  "lib/components",
+  "frontend/src/components",
+  "web/src/components"
+];
+var IMAGE_MIMES = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+  ".gif": "image/gif",
+  ".svg": "image/svg+xml"
+};
+var MAX_IMAGE_BYTES = 3 * 1024 * 1024;
+function walkFiles(root, maxFiles, maxDepth, filter) {
+  const out = [];
+  const stack = [{ dir: root, depth: 0 }];
+  while (stack.length > 0 && out.length < maxFiles) {
+    const cur = stack.pop();
+    let entries;
+    try {
+      entries = readdirSync5(cur.dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const ent of entries) {
+      if (out.length >= maxFiles) break;
+      if (ent.name.startsWith(".") && ent.name !== ".storybook") continue;
+      const full = join8(cur.dir, ent.name);
+      if (ent.isDirectory()) {
+        if (SKIP_DIRS.has(ent.name)) continue;
+        if (cur.depth < maxDepth) stack.push({ dir: full, depth: cur.depth + 1 });
+      } else if (ent.isFile()) {
+        const rel = relative2(root, full).replace(/\\/g, "/");
+        if (filter(rel, ent.name)) out.push(rel);
+      }
+    }
+  }
+  return out.sort();
+}
+function parseComponentFile(repoDir, relPath) {
+  let content;
+  try {
+    const st = statSync3(join8(repoDir, relPath));
+    if (st.size > 2e5) return null;
+    content = readFileSync7(join8(repoDir, relPath), "utf8");
+  } catch {
+    return null;
+  }
+  const exports = /* @__PURE__ */ new Set();
+  const fnRe = /export\s+(?:default\s+)?(?:async\s+)?function\s+([A-Z][A-Za-z0-9_]*)/g;
+  for (const m2 of content.matchAll(fnRe)) {
+    if (m2[1]) exports.add(m2[1]);
+  }
+  const constRe = /export\s+(?:const|let|class)\s+([A-Z][A-Za-z0-9_]*)\b/g;
+  for (const m2 of content.matchAll(constRe)) {
+    if (m2[1]) exports.add(m2[1]);
+  }
+  const baseName = basename6(relPath, extname(relPath));
+  if (exports.size === 0 && /^[A-Z]/.test(baseName)) {
+    exports.add(baseName);
+  }
+  if (exports.size === 0) return null;
+  const propsHint = [];
+  const propsBlock = content.match(/(?:interface|type)\s+[A-Za-z0-9_]*Props[^{=]*[={]\s*\{([\s\S]{1,1200}?)\}/);
+  if (propsBlock?.[1]) {
+    for (const line of propsBlock[1].split(/\r?\n/)) {
+      const pm = line.trim().match(/^([a-zA-Z_][a-zA-Z0-9_]*)\??\s*:/);
+      if (pm?.[1] && propsHint.length < 10) propsHint.push(pm[1]);
+    }
+  }
+  const styleImports = [];
+  for (const m2 of content.matchAll(/import\s+(?:[^'"]+\s+from\s+)?['"]([^'"]+\.(?:css|scss))['"]/g)) {
+    if (m2[1] && styleImports.length < 4) styleImports.push(m2[1]);
+  }
+  return {
+    name: [...exports][0] ?? baseName,
+    path: relPath,
+    exports: [...exports].slice(0, 6),
+    propsHint,
+    styleImports
+  };
+}
+function extractCssTokens(repoDir, stylesheets) {
+  const tokens = {};
+  const maxTokens = 120;
+  for (const rel of stylesheets.slice(0, 14)) {
+    if (Object.keys(tokens).length >= maxTokens) break;
+    let css;
+    try {
+      const st = statSync3(join8(repoDir, rel));
+      if (st.size > 3e5) continue;
+      css = readFileSync7(join8(repoDir, rel), "utf8");
+    } catch {
+      continue;
+    }
+    for (const m2 of css.matchAll(/(--[a-zA-Z0-9_-]{2,50})\s*:\s*([^;{}\n]{1,90});/g)) {
+      const key2 = m2[1]?.trim();
+      const val = m2[2]?.trim();
+      if (!key2 || !val || tokens[key2] !== void 0) continue;
+      tokens[key2] = val;
+      if (Object.keys(tokens).length >= maxTokens) break;
+    }
+  }
+  return tokens;
+}
+function scanDesignKit(repoDir, opts) {
+  const root = realpathSync3(repoDir);
+  const designDocs = [];
+  for (const candidate of ["DESIGN.md", "design.md", "docs/DESIGN.md", "docs/design-system.md", "tokens.json"]) {
+    const full = join8(root, candidate);
+    if (existsSync3(full)) {
+      try {
+        const raw = readFileSync7(full, "utf8");
+        designDocs.push({
+          path: candidate,
+          excerpt: raw.length > 2400 ? `${raw.slice(0, 2400)}
+\u2026[truncated]` : raw
+        });
+      } catch {
+      }
+    }
+  }
+  const tailwindDetected = existsSync3(join8(root, "tailwind.config.js")) || existsSync3(join8(root, "tailwind.config.ts")) || existsSync3(join8(root, "tailwind.config.mjs")) || existsSync3(join8(root, "tailwind.config.cjs"));
+  const stylesheets = walkFiles(root, 40, 4, (rel, name) => {
+    const ext = extname(name).toLowerCase();
+    if (!STYLE_EXTS.has(ext)) return false;
+    return !rel.includes(".min.");
+  });
+  stylesheets.sort((a, b2) => {
+    const score = (p2) => /(theme|token|global|variables|root|design|shell|index|app)\./i.test(p2) ? 0 : 1;
+    return score(a) - score(b2) || a.localeCompare(b2);
+  });
+  const tokens = extractCssTokens(root, stylesheets);
+  const tokenEntries = Object.entries(tokens);
+  const tokenStyleBlock = tokenEntries.length > 0 ? `:root {
+${tokenEntries.map(([k2, v2]) => `  ${k2}: ${v2};`).join("\n")}
+}` : "";
+  const candidateFiles = /* @__PURE__ */ new Set();
+  for (const hint of COMPONENT_DIR_HINTS) {
+    const dir = join8(root, hint);
+    if (!existsSync3(dir)) continue;
+    for (const rel of walkFiles(dir, 120, 4, (_r, name) => COMPONENT_EXTS.has(extname(name).toLowerCase()))) {
+      candidateFiles.add(join8(hint, rel).replace(/\\/g, "/"));
+    }
+  }
+  if (candidateFiles.size === 0) {
+    for (const rel of walkFiles(root, 80, 4, (_r, name) => COMPONENT_EXTS.has(extname(name).toLowerCase()))) {
+      candidateFiles.add(rel);
+    }
+  }
+  const query = opts?.componentQuery?.trim().toLowerCase() ?? "";
+  const limit = Math.min(Math.max(opts?.limit ?? 35, 1), 80);
+  const components = [];
+  for (const rel of [...candidateFiles].sort()) {
+    if (rel.includes(".test.") || rel.includes(".spec.") || rel.includes(".stories.")) continue;
+    const parsed = parseComponentFile(root, rel);
+    if (!parsed) continue;
+    if (query) {
+      const hay = `${parsed.name} ${parsed.path} ${parsed.exports.join(" ")} ${parsed.propsHint.join(" ")}`.toLowerCase();
+      if (!hay.includes(query)) continue;
+    }
+    components.push(parsed);
+    if (components.length >= limit) break;
+  }
+  let componentSnippet = null;
+  if (opts?.readComponent) {
+    const resolvedPath = resolveSafeWorkspacePath(root, opts.readComponent);
+    if (resolvedPath && existsSync3(resolvedPath)) {
+      try {
+        const raw = readFileSync7(resolvedPath, "utf8");
+        const maxChars = 6e3;
+        componentSnippet = {
+          path: relative2(root, resolvedPath).replace(/\\/g, "/"),
+          content: raw.length > maxChars ? raw.slice(0, maxChars) : raw,
+          truncated: raw.length > maxChars
+        };
+      } catch {
+        componentSnippet = null;
+      }
+    }
+  }
+  return {
+    directory: root,
+    designDocs,
+    stylesheets: stylesheets.slice(0, 15),
+    tokens,
+    tokenStyleBlock,
+    tailwindDetected,
+    components,
+    ...opts?.readComponent ? { componentSnippet } : {}
+  };
+}
+function resolveSafeWorkspacePath(repoDir, inputPath) {
+  try {
+    const root = realpathSync3(repoDir);
+    const cleaned = inputPath.trim().replace(/^file:\/\//, "");
+    const target = isAbsolute5(cleaned) ? resolve7(cleaned) : resolve7(root, cleaned);
+    const realTarget = existsSync3(target) ? realpathSync3(target) : target;
+    const rel = relative2(root, realTarget);
+    if (rel.startsWith("..") || isAbsolute5(rel)) return null;
+    return realTarget;
+  } catch {
+    return null;
+  }
+}
+function readWorkspaceImageDataUri(repoDir, imagePath) {
+  const trimmed = imagePath.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith("data:image/")) return trimmed;
+  if (!repoDir) return null;
+  const resolved = resolveSafeWorkspacePath(repoDir, trimmed);
+  if (!resolved || !existsSync3(resolved)) return null;
+  const ext = extname(resolved).toLowerCase();
+  const mime = IMAGE_MIMES[ext];
+  if (!mime) return null;
+  try {
+    const st = statSync3(resolved);
+    if (!st.isFile() || st.size > MAX_IMAGE_BYTES) return null;
+    const buf = readFileSync7(resolved);
+    return `data:${mime};base64,${buf.toString("base64")}`;
+  } catch {
+    return null;
+  }
+}
+
 // src/mcp-server.ts
 var APP_URI = "ui://hillclimb/app.html";
 var OUTPUT_LIMIT2 = 24e3;
@@ -50282,12 +50544,12 @@ function resolveAppHtml() {
   const here = dirname6(fileURLToPath4(import.meta.url));
   const candidates2 = [
     ...envPath ? [envPath] : [],
-    join8(here, "app.html"),
-    join8(here, "..", "dist", "app.html")
+    join9(here, "app.html"),
+    join9(here, "..", "dist", "app.html")
   ];
   for (const path of candidates2) {
     try {
-      return readFileSync7(path, "utf8");
+      return readFileSync8(path, "utf8");
     } catch {
       continue;
     }
@@ -50429,7 +50691,7 @@ function createHillClimbServer(repo, runtime) {
     return projects[0]?.id ?? repo.resolveProjectId();
   };
   const server = new McpServer(
-    { name: "hillclimb", version: "0.5.5" },
+    { name: "hillclimb", version: "0.6.0" },
     {
       capabilities: {
         tools: {},
@@ -50828,18 +51090,18 @@ function createHillClimbServer(repo, runtime) {
   server.registerTool(
     "hillclimb_outcome",
     {
-      title: "Inspect one outcome",
-      description: "One outcome in full: its contract and version, goal chain, derived signal, live claim, latest plan, and paged evidence & comments.",
+      title: "Outcome",
+      description: "Read one outcome: contract, goal chain, signal, claim, plan, evidence, comments, and flows.",
       inputSchema: {
         projectId: external_exports.string().optional(),
         directory: external_exports.string().optional(),
         key: keySchema,
         track: external_exports.string().optional(),
-        evidenceLimit: external_exports.number().int().min(1).max(MAX_LIMIT).default(10),
-        evidenceOffset: external_exports.number().int().min(0).default(0),
-        commentLimit: external_exports.number().int().min(1).max(MAX_LIMIT).default(10),
-        commentOffset: external_exports.number().int().min(0).default(0),
-        planChars: external_exports.number().int().min(1).max(MAX_TEXT).default(MAX_TEXT)
+        evidenceLimit: external_exports.number().default(10),
+        evidenceOffset: external_exports.number().default(0),
+        commentLimit: external_exports.number().default(10),
+        commentOffset: external_exports.number().default(0),
+        planChars: external_exports.number().default(MAX_TEXT)
       }
     },
     async (input2) => {
@@ -50931,13 +51193,13 @@ function createHillClimbServer(repo, runtime) {
   server.registerTool(
     "hillclimb_act",
     {
-      title: "Tree action",
-      description: "Apply one or batched tree action(s) (`op` JSON). Human decisions (`approve_change`, `reject_change`, `accept_flow_change`, `reject_flow_change`, `promote_track`) require UI confirmation.",
+      title: "Act",
+      description: "Apply tree action(s) (`op` JSON). Decisions require human UI confirmation.",
       inputSchema: {
         projectId: external_exports.string().optional(),
         directory: external_exports.string().optional(),
         action: external_exports.union([external_exports.string(), external_exports.record(external_exports.string(), external_exports.unknown())]).optional(),
-        actions: external_exports.array(external_exports.union([external_exports.string(), external_exports.record(external_exports.string(), external_exports.unknown())])).min(1).max(50).optional()
+        actions: external_exports.array(external_exports.union([external_exports.string(), external_exports.record(external_exports.string(), external_exports.unknown())])).optional()
       }
     },
     async ({ projectId, directory, action, actions }) => {
@@ -50992,12 +51254,12 @@ function createHillClimbServer(repo, runtime) {
     "hillclimb_propose_change",
     {
       title: "Propose edit",
-      description: "File a pending contract edit (or new outcome via `goalKey`) for human Yes/No approval inline in this thread and in Decisions.",
+      description: "Propose a contract edit (or new outcome via `goalKey`) inline for human approval.",
       inputSchema: {
         projectId: external_exports.string().optional(),
         directory: external_exports.string().optional(),
         key: keySchema,
-        goalKey: keySchema.optional().describe("Pass `goalKey` to propose a brand-new outcome instead of editing an existing one"),
+        goalKey: keySchema.optional(),
         contract: external_exports.record(external_exports.string(), external_exports.unknown())
       },
       _meta: INLINE_DECISION_META
@@ -51059,14 +51321,14 @@ function createHillClimbServer(repo, runtime) {
   server.registerTool(
     "hillclimb_lint_tree",
     {
-      title: "Lint contract tree (22 rules)",
-      description: "Apply the 22-rule contract writing rubric (O1-O6, C1-C9, G1-G4, P1-P3) to this project's goals and outcomes. Read-only.",
+      title: "Lint tree",
+      description: "Run 22-rule contract writing linter (read-only).",
       inputSchema: {
         projectId: external_exports.string().optional(),
         directory: external_exports.string().optional(),
         key: keySchema.optional(),
-        limit: external_exports.number().int().min(1).max(MAX_LIMIT).default(DEFAULT_LIMIT),
-        offset: external_exports.number().int().min(0).default(0)
+        limit: external_exports.number().default(DEFAULT_LIMIT),
+        offset: external_exports.number().default(0)
       }
     },
     async (input2) => {
@@ -51113,14 +51375,14 @@ function createHillClimbServer(repo, runtime) {
   server.registerTool(
     "hillclimb_claim",
     {
-      title: "Claim outcome lease",
-      description: "Take a time-boxed lease on an outcome so two agents do not climb the same one.",
+      title: "Claim lease",
+      description: "Take a time-boxed outcome lease.",
       inputSchema: {
         projectId: external_exports.string().optional(),
         directory: external_exports.string().optional(),
         key: keySchema,
-        hours: external_exports.number().positive().max(168).default(4),
-        threadId: external_exports.string().optional().describe("Lease holder ID (defaults to current conversation ID)")
+        hours: external_exports.number().default(4),
+        threadId: external_exports.string().optional()
       }
     },
     async (input2) => {
@@ -51207,17 +51469,17 @@ function createHillClimbServer(repo, runtime) {
     server,
     "hillclimb_comment",
     {
-      title: "Post comment, question, or answer",
-      description: "Post a comment or multi-option decision question inline in this thread (and synced to Decisions), or record a user's answer.",
+      title: "Comment/question",
+      description: "Post a comment or inline multiple-choice question, or record an answer.",
       inputSchema: {
         projectId: external_exports.string().optional(),
         directory: external_exports.string().optional(),
         key: keySchema.optional(),
-        text: external_exports.string().trim().min(1).optional(),
-        options: external_exports.array(external_exports.string().trim().min(1)).max(8).default([]),
-        parentId: external_exports.string().trim().min(1).nullable().default(null),
-        planVersion: external_exports.number().int().positive().nullable().optional().describe("Optional plan version this comment refers to"),
-        answer: external_exports.object({ id: external_exports.string().trim().min(1), answer: external_exports.string().trim().min(1) }).optional()
+        text: external_exports.string().optional(),
+        options: external_exports.array(external_exports.string()).default([]),
+        parentId: external_exports.string().nullable().default(null),
+        planVersion: external_exports.number().nullable().optional(),
+        answer: external_exports.object({ id: external_exports.string(), answer: external_exports.string() }).optional()
       },
       _meta: INLINE_DECISION_META
     },
@@ -51288,14 +51550,14 @@ function createHillClimbServer(repo, runtime) {
   server.registerTool(
     "hillclimb_inbox",
     {
-      title: "Read approval inbox",
-      description: "Read pending contract changes waiting for human approval and open questions waiting for answers.",
+      title: "Inbox",
+      description: "Read pending contract/flow proposals and open questions.",
       inputSchema: {
         projectId: external_exports.string().optional(),
         directory: external_exports.string().optional(),
         key: keySchema.optional(),
-        limit: external_exports.number().int().min(1).max(MAX_LIMIT).default(DEFAULT_LIMIT),
-        offset: external_exports.number().int().min(0).default(0)
+        limit: external_exports.number().default(DEFAULT_LIMIT),
+        offset: external_exports.number().default(0)
       }
     },
     async (input2) => {
@@ -51534,11 +51796,11 @@ function createHillClimbServer(repo, runtime) {
   server.registerTool(
     "hillclimb_sync",
     {
-      title: "Sync .hillclimb/ markdown mirror",
-      description: "Export a readable `.hillclimb/` projection (INDEX.md, tree.json, goals/, outcomes/, plans/) into the project workspace.",
+      title: "Sync mirror",
+      description: "Export read-only `.hillclimb/` Markdown/JSON mirror.",
       inputSchema: {
         projectId: external_exports.string().optional(),
-        directory: external_exports.string().optional().describe("Repository path where `.hillclimb/` will be written")
+        directory: external_exports.string().optional()
       }
     },
     async ({ projectId, directory }) => {
@@ -52057,11 +52319,238 @@ function createHillClimbServer(repo, runtime) {
       }
     }
   );
+  K3(
+    server,
+    "hillclimb_design",
+    {
+      title: "Design flows & kit",
+      description: "Scan repo UI components/tokens (`kit`), propose inline HTML/image mockups (`propose`), inspect flows (`inspect`), or resolve pins (`resolve_pin`).",
+      inputSchema: {
+        mode: external_exports.enum(["kit", "propose", "inspect", "resolve_pin"]).default("kit"),
+        projectId: external_exports.string().optional(),
+        directory: external_exports.string().optional(),
+        componentQuery: external_exports.string().optional(),
+        readComponent: external_exports.string().optional(),
+        flowName: external_exports.string().optional(),
+        folder: external_exports.string().optional(),
+        designKit: external_exports.string().optional(),
+        kind: external_exports.enum(["new_flow", "new_step", "change"]).optional(),
+        frameIndex: external_exports.number().optional(),
+        basedOnVersion: external_exports.number().optional(),
+        frame: external_exports.record(external_exports.string(), external_exports.unknown()).optional(),
+        frames: external_exports.array(external_exports.record(external_exports.string(), external_exports.unknown())).optional(),
+        componentRefs: external_exports.array(external_exports.string()).optional(),
+        selfGrade: external_exports.string().optional(),
+        ref: external_exports.string().optional(),
+        note: external_exports.string().optional(),
+        pinId: external_exports.string().optional(),
+        pinIndex: external_exports.number().optional(),
+        resolved: external_exports.boolean().default(true),
+        resolvedBy: external_exports.string().optional()
+      },
+      _meta: INLINE_DECISION_META
+    },
+    async (input2) => {
+      try {
+        const pid = repo.resolveProjectId(input2.projectId, input2.directory);
+        const dir = input2.directory ?? repo.getProject(pid)?.directory ?? null;
+        const actor = defaultSessionActor();
+        const hydrateFrameImage = (fr) => {
+          if (fr.imagePath && !fr.imagePath.startsWith("data:image/")) {
+            const dataUri = readWorkspaceImageDataUri(dir, fr.imagePath);
+            if (dataUri) return { ...fr, kind: "image", imagePath: dataUri };
+          }
+          return fr;
+        };
+        if (input2.mode === "kit") {
+          if (!dir) {
+            throw new HillClimbError("No workspace directory linked to this project.", {
+              code: "missing_directory",
+              hint: "Pass `directory` or link a repository in Hill Climb so we can scan its UI components and CSS tokens."
+            });
+          }
+          const scan = scanDesignKit(dir, {
+            componentQuery: input2.componentQuery,
+            readComponent: input2.readComponent
+          });
+          const savedKit2 = repo.getSetting(pid, "designKit") || scan.designDocs[0]?.path || null;
+          if (!repo.getSetting(pid, "designKit") && scan.designDocs[0]?.path) {
+            repo.setSetting(pid, "designKit", scan.designDocs[0].path);
+          }
+          return jsonResult(
+            {
+              projectId: pid,
+              savedDesignKit: savedKit2,
+              ...scan,
+              inlineDecision: {
+                kind: "design_kit",
+                projectId: pid,
+                projectDirectory: dir,
+                designKit: savedKit2,
+                tokenCount: Object.keys(scan.tokens).length,
+                tailwindDetected: scan.tailwindDetected,
+                componentCount: scan.components.length,
+                components: scan.components.slice(0, 10).map((c) => ({ name: c.name, path: c.path }))
+              }
+            },
+            `Design kit in ${dir}: ${scan.components.length} UI component(s), ${Object.keys(scan.tokens).length} CSS token(s)${scan.tailwindDetected ? ", Tailwind detected" : ""}${savedKit2 ? `, kit: ${savedKit2}` : ""}.`
+          );
+        }
+        if (input2.mode === "resolve_pin") {
+          if (!input2.flowName) throw new Error("Pass `flowName` for mode='resolve_pin'.");
+          const frameIdx2 = input2.frameIndex ?? 0;
+          repo.act(
+            pid,
+            {
+              op: "resolve_pin",
+              name: input2.flowName,
+              frame: frameIdx2,
+              ...input2.pinId ? { pinId: input2.pinId } : {},
+              ...input2.pinIndex !== void 0 ? { pinIndex: input2.pinIndex } : {},
+              resolved: input2.resolved,
+              resolvedBy: input2.resolvedBy ?? actor
+            },
+            { actor, via: "mcp" }
+          );
+          const after2 = repo.view(pid, "main");
+          const flow = after2.flows.find((f2) => f2.name === input2.flowName) ?? null;
+          return jsonResult({
+            ok: true,
+            projectId: pid,
+            flowName: input2.flowName,
+            frameIndex: frameIdx2,
+            resolved: input2.resolved,
+            ...flow ? {
+              inlineDecision: {
+                kind: "flow_inspect",
+                projectId: pid,
+                projectDirectory: dir,
+                flow: { ...flow, frames: flow.frames.map(hydrateFrameImage) },
+                note: `${input2.resolved ? "Resolved" : "Reopened"} visual pin on "${flow.name}" (frame ${frameIdx2 + 1}).`
+              }
+            } : {}
+          });
+        }
+        if (input2.mode === "inspect") {
+          const snap = repo.view(pid, "main");
+          if (!input2.flowName) {
+            const summary = snap.flows.map((f2) => ({
+              name: f2.name,
+              folder: f2.folder ?? null,
+              designKit: f2.designKit ?? null,
+              frameCount: f2.frames.length,
+              openAgentPins: f2.frames.reduce((s2, fr) => s2 + fr.pins.filter((p2) => !p2.resolved && (p2.forAgents ?? true)).length, 0),
+              pendingProposals: snap.flowProposals.filter((p2) => p2.state === "pending" && p2.flowName === f2.name).length
+            }));
+            return jsonResult({ projectId: pid, flows: summary });
+          }
+          const flow = snap.flows.find((f2) => f2.name === input2.flowName);
+          if (!flow) throw new Error(`Unknown flow "${input2.flowName}".`);
+          const openPins = flow.frames.flatMap(
+            (fr, frameIndex) => fr.pins.map((pin2, pinIndex) => ({ frameIndex, frameTitle: fr.title, pinIndex, pin: pin2 })).filter(({ pin: pin2 }) => !pin2.resolved)
+          );
+          return jsonResult({
+            projectId: pid,
+            flow: {
+              ...flow,
+              frames: flow.frames.map((fr, idx) => ({
+                frameIndex: idx,
+                title: fr.title,
+                key: fr.key,
+                criterionId: fr.criterionId,
+                kind: fr.kind ?? "html",
+                version: fr.version ?? 1,
+                componentRefs: fr.componentRefs ?? [],
+                notes: fr.notes ?? null,
+                driftDetected: Boolean(fr.driftDetected),
+                openPins: fr.pins.filter((p2) => !p2.resolved)
+              }))
+            },
+            openPinCount: openPins.length,
+            inlineDecision: {
+              kind: "flow_inspect",
+              projectId: pid,
+              projectDirectory: dir,
+              flow: { ...flow, frames: flow.frames.map(hydrateFrameImage) }
+            }
+          });
+        }
+        if (!input2.flowName?.trim()) throw new Error("Pass `flowName` for mode='propose'.");
+        const existingTree = repo.read(pid);
+        const existingFlow = existingTree.flows.find((f2) => f2.name === input2.flowName.trim()) ?? null;
+        const resolvedKind = input2.kind ?? (existingFlow ? input2.frameIndex !== void 0 ? "change" : "new_step" : "new_flow");
+        const normalizeRaw = (raw) => {
+          const rawImg = typeof raw.imagePath === "string" ? raw.imagePath.trim() : "";
+          const encodedImg = rawImg ? readWorkspaceImageDataUri(dir, rawImg) ?? rawImg : null;
+          const kindVal = raw.kind === "image" || encodedImg && !raw.html ? "image" : "html";
+          return {
+            title: String(raw.title ?? ""),
+            key: String(raw.key ?? ""),
+            criterionId: String(raw.criterionId ?? ""),
+            kind: kindVal,
+            html: kindVal === "html" ? String(raw.html ?? "") : "",
+            ...encodedImg ? { imagePath: encodedImg } : {},
+            ...raw.viewport && typeof raw.viewport === "object" ? { viewport: raw.viewport } : {},
+            ...typeof raw.notes === "string" && raw.notes.trim() ? { notes: raw.notes.trim() } : {},
+            ...Array.isArray(raw.componentRefs) ? { componentRefs: raw.componentRefs.map(String) } : input2.componentRefs && input2.componentRefs.length > 0 ? { componentRefs: input2.componentRefs } : {}
+          };
+        };
+        const frameObj = input2.frame ? normalizeRaw(input2.frame) : null;
+        const framesList = input2.frames ? input2.frames.map(normalizeRaw) : null;
+        const savedKit = input2.designKit ?? repo.getSetting(pid, "designKit") ?? void 0;
+        const frameIdx = resolvedKind === "change" ? input2.frameIndex ?? 0 : input2.frameIndex !== void 0 ? input2.frameIndex : null;
+        const curFrame = resolvedKind === "change" && existingFlow && frameIdx !== null ? existingFlow.frames[frameIdx] ?? null : null;
+        repo.act(
+          pid,
+          {
+            op: "propose_flow_change",
+            kind: resolvedKind,
+            flowName: input2.flowName.trim(),
+            ...input2.folder ? { folder: input2.folder } : {},
+            ...savedKit ? { designKit: savedKit } : {},
+            frameIndex: frameIdx,
+            basedOnVersion: input2.basedOnVersion ?? (curFrame ? curFrame.version ?? 1 : null),
+            frame: frameObj,
+            frames: framesList,
+            ...input2.componentRefs && input2.componentRefs.length > 0 ? { componentRefs: input2.componentRefs } : {},
+            selfGrade: input2.selfGrade ?? null,
+            ref: input2.ref ?? null,
+            note: input2.note ?? null,
+            threadId: actor
+          },
+          { actor, via: "mcp" }
+        );
+        const after = repo.view(pid, "main");
+        const pending = after.flowProposals.filter((p2) => p2.flowName === input2.flowName.trim() && p2.state === "pending").at(-1) ?? null;
+        return jsonResult({
+          projectId: pid,
+          proposed: pending?.id ?? null,
+          flowName: input2.flowName.trim(),
+          kind: resolvedKind,
+          state: pending?.state ?? "unknown",
+          approved: false,
+          next: "Rendered an interactive visual design review card inline in this thread (and synced to Flows & Decisions). Wait for the user to Accept or annotate & Send back.",
+          inbox: inboxOf2(after),
+          ...pending ? {
+            inlineDecision: {
+              kind: "flow_proposal",
+              projectId: pid,
+              projectDirectory: dir,
+              proposal: pending,
+              currentFrame: curFrame ? hydrateFrameImage(curFrame) : null
+            }
+          } : {}
+        });
+      } catch (error62) {
+        return errorResult(error62);
+      }
+    }
+  );
   const APP_ONLY = { ui: { visibility: ["app"] } };
   K3(
     server,
     "app_projects",
-    { description: "List projects for UI", _meta: APP_ONLY },
+    { description: "UI projects", _meta: APP_ONLY },
     async () => {
       try {
         const projects = repo.listProjects();
@@ -52079,7 +52568,7 @@ function createHillClimbServer(repo, runtime) {
     server,
     "app_register_project",
     {
-      description: "Register a workspace project from UI",
+      description: "UI register",
       inputSchema: {
         id: external_exports.string().optional(),
         name: external_exports.string().optional(),
@@ -52100,8 +52589,8 @@ function createHillClimbServer(repo, runtime) {
     server,
     "app_tree",
     {
-      description: "Read tree snapshot and scanned repo climbs for UI",
-      inputSchema: { projectId: external_exports.string().min(1), track: external_exports.string().optional(), force: external_exports.boolean().optional() },
+      description: "UI tree",
+      inputSchema: { projectId: external_exports.string(), track: external_exports.string().optional(), force: external_exports.boolean().optional() },
       _meta: APP_ONLY
     },
     async ({ projectId, track: track2, force }) => {
@@ -52130,8 +52619,8 @@ function createHillClimbServer(repo, runtime) {
     server,
     "app_repo_climbs",
     {
-      description: "Scan project repository and linked git worktrees for active/prepared climb.py runs",
-      inputSchema: { projectId: external_exports.string().min(1), force: external_exports.boolean().optional() },
+      description: "UI climbs",
+      inputSchema: { projectId: external_exports.string(), force: external_exports.boolean().optional() },
       _meta: APP_ONLY
     },
     async ({ projectId, force }) => {
@@ -52150,8 +52639,8 @@ function createHillClimbServer(repo, runtime) {
     server,
     "app_set_auto_track",
     {
-      description: "Enable or disable automatic tracking of repo climbs into Outcomes",
-      inputSchema: { projectId: external_exports.string().min(1), enabled: external_exports.boolean(), track: external_exports.string().optional() },
+      description: "UI auto-track",
+      inputSchema: { projectId: external_exports.string(), enabled: external_exports.boolean(), track: external_exports.string().optional() },
       _meta: APP_ONLY
     },
     async ({ projectId, enabled, track: track2 }) => {
@@ -52173,8 +52662,8 @@ function createHillClimbServer(repo, runtime) {
     server,
     "app_track_climb",
     {
-      description: "Track a specific repo climb (including archived worktree climbs) as an Outcome",
-      inputSchema: { projectId: external_exports.string().min(1), climbId: external_exports.string().min(1), track: external_exports.string().optional() },
+      description: "UI track climb",
+      inputSchema: { projectId: external_exports.string(), climbId: external_exports.string(), track: external_exports.string().optional() },
       _meta: APP_ONLY
     },
     async ({ projectId, climbId, track: track2 }) => {
@@ -52202,9 +52691,9 @@ function createHillClimbServer(repo, runtime) {
     server,
     "app_act",
     {
-      description: "Apply a tree action from UI (supports human-confirmed contract decisions)",
+      description: "UI act",
       inputSchema: {
-        projectId: external_exports.string().min(1),
+        projectId: external_exports.string(),
         action: external_exports.record(external_exports.string(), external_exports.unknown()),
         confirmed: external_exports.boolean().optional(),
         track: external_exports.string().optional()
@@ -52233,8 +52722,8 @@ function createHillClimbServer(repo, runtime) {
     server,
     "app_preview",
     {
-      description: "Preview track promotion from UI",
-      inputSchema: { projectId: external_exports.string().min(1), name: external_exports.string().min(1), keys: external_exports.array(external_exports.string()) },
+      description: "UI preview",
+      inputSchema: { projectId: external_exports.string(), name: external_exports.string(), keys: external_exports.array(external_exports.string()) },
       _meta: APP_ONLY
     },
     async ({ projectId, name, keys }) => {
@@ -52259,8 +52748,8 @@ function createHillClimbServer(repo, runtime) {
     server,
     "app_get_rig",
     {
-      description: "Read saved verifier rig for outcome",
-      inputSchema: { projectId: external_exports.string().min(1), key: external_exports.string().min(1), engine: external_exports.enum(["repo", "search"]) },
+      description: "UI rig",
+      inputSchema: { projectId: external_exports.string(), key: external_exports.string(), engine: external_exports.enum(["repo", "search"]) },
       _meta: APP_ONLY
     },
     async ({ projectId, key: key2, engine }) => {
@@ -52276,10 +52765,10 @@ function createHillClimbServer(repo, runtime) {
     server,
     "app_save_rig",
     {
-      description: "Save verifier rig from UI",
+      description: "UI save rig",
       inputSchema: {
-        projectId: external_exports.string().min(1),
-        key: external_exports.string().min(1),
+        projectId: external_exports.string(),
+        key: external_exports.string(),
         version: external_exports.number().int().positive(),
         rig: external_exports.record(external_exports.string(), external_exports.unknown())
       },
@@ -52299,10 +52788,10 @@ function createHillClimbServer(repo, runtime) {
     server,
     "app_dispatch",
     {
-      description: "Dispatch climb worker from UI",
+      description: "UI dispatch",
       inputSchema: {
-        projectId: external_exports.string().min(1),
-        key: external_exports.string().min(1),
+        projectId: external_exports.string(),
+        key: external_exports.string(),
         engine: external_exports.enum(["repo", "search"]),
         track: external_exports.string().default("main"),
         deferWorkerLaunch: external_exports.boolean().optional()
@@ -52322,8 +52811,8 @@ function createHillClimbServer(repo, runtime) {
     server,
     "app_attach_worker",
     {
-      description: "Bind client-launched conversation ID to a dispatched run",
-      inputSchema: { runId: external_exports.string().min(1), conversationId: external_exports.string().min(1) },
+      description: "UI attach worker",
+      inputSchema: { runId: external_exports.string(), conversationId: external_exports.string() },
       _meta: APP_ONLY
     },
     async ({ runId, conversationId }) => {
@@ -52339,8 +52828,8 @@ function createHillClimbServer(repo, runtime) {
     server,
     "app_live",
     {
-      description: "Read live climb/search state for UI",
-      inputSchema: { projectId: external_exports.string().min(1), key: external_exports.string().min(1), track: external_exports.string().default("main") },
+      description: "UI live",
+      inputSchema: { projectId: external_exports.string(), key: external_exports.string(), track: external_exports.string().default("main") },
       _meta: APP_ONLY
     },
     async ({ projectId, key: key2, track: track2 }) => {
@@ -52363,7 +52852,7 @@ function createHillClimbServer(repo, runtime) {
     server,
     "app_reconcile",
     {
-      description: "Reconcile active runs from UI",
+      description: "UI reconcile",
       inputSchema: { projectId: external_exports.string().optional() },
       _meta: APP_ONLY
     },
@@ -52383,8 +52872,8 @@ function createHillClimbServer(repo, runtime) {
     server,
     "app_sync",
     {
-      description: "Sync .hillclimb/ markdown mirror from UI",
-      inputSchema: { projectId: external_exports.string().min(1) },
+      description: "UI sync",
+      inputSchema: { projectId: external_exports.string() },
       _meta: APP_ONLY
     },
     async ({ projectId }) => {
@@ -52405,8 +52894,8 @@ function createHillClimbServer(repo, runtime) {
     server,
     "app_lint",
     {
-      description: "Run 22-rule contract linter from UI",
-      inputSchema: { projectId: external_exports.string().min(1) },
+      description: "UI lint",
+      inputSchema: { projectId: external_exports.string() },
       _meta: APP_ONLY
     },
     async ({ projectId }) => {
@@ -52425,8 +52914,8 @@ function createHillClimbServer(repo, runtime) {
     server,
     "app_search",
     {
-      description: "Search everything for UI Cmd+K palette",
-      inputSchema: { projectId: external_exports.string().optional(), query: external_exports.string(), limit: external_exports.number().int().min(1).max(50).optional() },
+      description: "UI search",
+      inputSchema: { projectId: external_exports.string().optional(), query: external_exports.string(), limit: external_exports.number().optional() },
       _meta: APP_ONLY
     },
     async ({ projectId, query, limit }) => {
@@ -52442,8 +52931,8 @@ function createHillClimbServer(repo, runtime) {
     server,
     "app_insights",
     {
-      description: "Compute project + climb insights for UI",
-      inputSchema: { projectId: external_exports.string().min(1), days: external_exports.number().int().min(1).max(365).optional(), track: external_exports.string().optional() },
+      description: "UI insights",
+      inputSchema: { projectId: external_exports.string(), days: external_exports.number().optional(), track: external_exports.string().optional() },
       _meta: APP_ONLY
     },
     async ({ projectId, days, track: track2 }) => {
@@ -52461,9 +52950,9 @@ function createHillClimbServer(repo, runtime) {
     server,
     "app_artifacts",
     {
-      description: "Manage artifacts and exports from UI",
+      description: "UI artifacts",
       inputSchema: {
-        projectId: external_exports.string().min(1),
+        projectId: external_exports.string(),
         mode: external_exports.enum(["list", "save", "generate", "export", "delete"]),
         payload: external_exports.record(external_exports.string(), external_exports.unknown()).optional()
       },
@@ -52522,9 +53011,9 @@ function createHillClimbServer(repo, runtime) {
     server,
     "app_views_scopes",
     {
-      description: "Manage saved views, focus scopes, settings, and automation hooks from UI",
+      description: "UI settings",
       inputSchema: {
-        projectId: external_exports.string().min(1),
+        projectId: external_exports.string(),
         mode: external_exports.enum(["list", "save_view", "delete_view", "save_scope", "delete_scope", "set_setting", "save_hook", "delete_hook"]),
         payload: external_exports.record(external_exports.string(), external_exports.unknown()).optional()
       },
@@ -52585,9 +53074,9 @@ function createHillClimbServer(repo, runtime) {
     server,
     "app_import",
     {
-      description: "List blueprints, preview or apply blueprint/Markdown imports from UI",
+      description: "UI import",
       inputSchema: {
-        projectId: external_exports.string().min(1),
+        projectId: external_exports.string(),
         mode: external_exports.enum(["blueprints", "preview", "apply"]),
         payload: external_exports.record(external_exports.string(), external_exports.unknown()).optional()
       },
@@ -52638,24 +53127,70 @@ function createHillClimbServer(repo, runtime) {
     server,
     "app_decision_state",
     {
-      description: "Read current state of one proposed change or question for inline chat decision cards",
+      description: "UI state",
       inputSchema: {
-        projectId: external_exports.string().min(1),
-        kind: external_exports.enum(["change", "question"]),
-        id: external_exports.string().min(1)
+        projectId: external_exports.string(),
+        kind: external_exports.enum(["change", "question", "flow_proposal", "flow_inspect"]),
+        id: external_exports.string()
       },
       _meta: APP_ONLY
     },
     async ({ projectId, kind, id }) => {
       try {
         const tree = repo.read(projectId);
+        const dir = repo.getProject(projectId)?.directory ?? null;
         if (kind === "change") {
           const change2 = tree.changes.find((c) => c.id === id) ?? null;
           const currentOutcome = change2 ? tree.outcomes.find((o) => o.key === change2.key) ?? null : null;
           return appJsonResult({ change: change2, currentOutcome }, change2 ? `Change ${id}: ${change2.state}` : `Change ${id} not found`);
         }
+        if (kind === "flow_proposal") {
+          const proposal = (tree.flowProposals ?? []).find((p2) => p2.id === id) ?? null;
+          const flow = proposal ? tree.flows.find((f2) => f2.name === proposal.flowName) : null;
+          const currentFrame = proposal && proposal.kind === "change" && proposal.frameIndex !== null ? flow?.frames[proposal.frameIndex] ?? null : null;
+          return appJsonResult(
+            { proposal, currentFrame },
+            proposal ? `Flow proposal ${id}: ${proposal.state}` : `Flow proposal ${id} not found`
+          );
+        }
+        if (kind === "flow_inspect") {
+          const flow = tree.flows.find((f2) => f2.name === id) ?? null;
+          if (!flow) return appJsonResult({ flow: null }, `Flow ${id} not found`);
+          const hydrated = {
+            ...flow,
+            frames: flow.frames.map((fr) => {
+              if (fr.imagePath && !fr.imagePath.startsWith("data:image/")) {
+                const uri = readWorkspaceImageDataUri(dir, fr.imagePath);
+                if (uri) return { ...fr, kind: "image", imagePath: uri };
+              }
+              return fr;
+            })
+          };
+          return appJsonResult({ flow: hydrated }, `Flow ${id}`);
+        }
         const comment = tree.comments.find((c) => c.id === id) ?? null;
         return appJsonResult({ comment }, comment ? `Comment ${id}` : `Comment ${id} not found`);
+      } catch (error62) {
+        return errorResult(error62);
+      }
+    }
+  );
+  K3(
+    server,
+    "app_read_image",
+    {
+      description: "UI image",
+      inputSchema: {
+        projectId: external_exports.string(),
+        path: external_exports.string()
+      },
+      _meta: APP_ONLY
+    },
+    async ({ projectId, path }) => {
+      try {
+        const dir = repo.getProject(projectId)?.directory ?? null;
+        const dataUri = readWorkspaceImageDataUri(dir, path);
+        return appJsonResult({ dataUri }, dataUri ? "Loaded image" : "Image not found or outside workspace");
       } catch (error62) {
         return errorResult(error62);
       }
@@ -52666,9 +53201,9 @@ function createHillClimbServer(repo, runtime) {
 function isMainEntrypoint(metaUrl) {
   if (!process.argv[1]) return false;
   try {
-    return realpathSync3(fileURLToPath4(metaUrl)) === realpathSync3(process.argv[1]);
+    return realpathSync4(fileURLToPath4(metaUrl)) === realpathSync4(process.argv[1]);
   } catch {
-    return resolve7(fileURLToPath4(metaUrl)) === resolve7(process.argv[1]);
+    return resolve8(fileURLToPath4(metaUrl)) === resolve8(process.argv[1]);
   }
 }
 var isEntrypoint = isMainEntrypoint(import.meta.url);

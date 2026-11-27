@@ -79,7 +79,6 @@ type Page = (typeof PAGES)[number];
 
 const SECONDARY_PAGES: ReadonlyArray<{ id: Page; label: string; desc: string }> = [
   { id: "roadmap", label: "Roadmap", desc: "Releases, timelines & track cutovers" },
-  { id: "flows", label: "Flows", desc: "Visual screen walkthroughs & pins" },
   { id: "insights", label: "Insights", desc: "Velocity & climb telemetry" },
   { id: "reports", label: "Reports", desc: "Evidence reports & HTML export" },
 ];
@@ -566,7 +565,7 @@ function HillClimbApp() {
 
   // Connect once using the MCP Apps SDK
   useEffect(() => {
-    const app = new App({ name: "Hill Climb", version: "0.5.2" }, {});
+    const app = new App({ name: "Hill Climb", version: "0.6.0" }, {});
     appRef.current = app;
 
     const applyThemeFromContext = (ctx: ReturnType<App["getHostContext"]>) => {
@@ -581,7 +580,18 @@ function HillClimbApp() {
     };
 
     app.ontoolinput = ({ arguments: args }) => {
-      if (args && typeof args === "object" && ("contract" in args || "options" in args || "answer" in args || "text" in args)) {
+      if (
+        args &&
+        typeof args === "object" &&
+        ("contract" in args ||
+          "options" in args ||
+          "answer" in args ||
+          "text" in args ||
+          "flowName" in args ||
+          "componentQuery" in args ||
+          "readComponent" in args ||
+          "mode" in args)
+      ) {
         inlineModeRef.current = true;
         setExpectInline(true);
       }
@@ -666,12 +676,33 @@ function HillClimbApp() {
 
   useEffect(() => {
     if (!connected || !project || inlineDecision !== null || expectInline || inlineModeRef.current) return;
+    let lastFocusRefresh = 0;
+    const refreshOnFocus = () => {
+      if (document.visibilityState === "hidden") return;
+      const now = Date.now();
+      if (now - lastFocusRefresh < 2_000) return;
+      lastFocusRefresh = now;
+      void loadTree(project, track);
+    };
+    window.addEventListener("focus", refreshOnFocus);
+    document.addEventListener("visibilitychange", refreshOnFocus);
+    if (page === "inbox" || page === "flows") {
+      void loadTree(project, track);
+    }
     if (page === "climbs") {
       const timer = setInterval(() => void pollRepoClimbs(project, false), 10_000);
-      return () => clearInterval(timer);
+      return () => {
+        clearInterval(timer);
+        window.removeEventListener("focus", refreshOnFocus);
+        document.removeEventListener("visibilitychange", refreshOnFocus);
+      };
     }
     const timer = setInterval(() => void loadTree(project, track), 30_000);
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", refreshOnFocus);
+      document.removeEventListener("visibilitychange", refreshOnFocus);
+    };
   }, [connected, project, track, page, inlineDecision, expectInline, loadTree, pollRepoClimbs]);
 
   // Global Cmd+K / Ctrl+K shortcut
@@ -1039,14 +1070,30 @@ function HillClimbApp() {
   );
 
   const handleInlineRefresh = useCallback(
-    async (projectId: string, kind: "change" | "question", id: string) => {
+    async (projectId: string, kind: "change" | "question" | "flow_proposal" | "flow_inspect", id: string) => {
       return callTool<{
         change?: import("./model.js").Change | null;
         currentOutcome?: Outcome | null;
         comment?: import("./model.js").Comment | null;
+        proposal?: import("./model.js").FlowProposal | null;
+        currentFrame?: import("./model.js").Frame | null;
+        flow?: import("./model.js").Flow | null;
       }>("app_decision_state", { projectId, kind, id });
     },
     [callTool],
+  );
+
+  const handleResolveImage = useCallback(
+    async (projectId: string, path: string): Promise<string | null> => {
+      const res = await callTool<{ dataUri: string | null }>("app_read_image", { projectId, path });
+      return res.dataUri ?? null;
+    },
+    [callTool],
+  );
+
+  const handleResolveActiveImage = useCallback(
+    (path: string): Promise<string | null> => handleResolveImage(project, path),
+    [handleResolveImage, project],
   );
 
   const handleNotifyThread = useCallback(async (text: string): Promise<boolean> => {
@@ -1062,6 +1109,7 @@ function HillClimbApp() {
 
   const currentProjectDirectory = projects.find((p) => p.id === project)?.directory ?? repoClimbs?.projectDirectory ?? null;
   const canAttachContext = Boolean(connected && appRef.current?.getHostCapabilities()?.updateModelContext);
+  const canSendToChat = Boolean(connected && appRef.current?.getHostCapabilities()?.message);
 
   const handleAttachContext = useCallback(
     async (id: string, label: string, markdown: string) => {
@@ -1153,6 +1201,8 @@ function HillClimbApp() {
         onAct={handleInlineAct}
         onRefreshState={handleInlineRefresh}
         onNotifyThread={handleNotifyThread}
+        onOpenFile={handleOpenFile}
+        onResolveImage={handleResolveImage}
       />
     );
   }
@@ -1315,6 +1365,14 @@ function HillClimbApp() {
           >
             Decisions
             {currentInboxCount > 0 ? <span className="hill-nav-badge">{currentInboxCount}</span> : null}
+          </button>
+          <button
+            type="button"
+            className="hill-nav-btn"
+            aria-current={page === "flows" ? "page" : undefined}
+            onClick={() => setPage("flows")}
+          >
+            Flows
           </button>
 
           <button
@@ -1504,6 +1562,11 @@ function HillClimbApp() {
                   setProject(id);
                   setSelected(null);
                 }}
+                projectDirectory={currentProjectDirectory}
+                attachedContextId={attachedContext?.id ?? null}
+                onAttachContext={canAttachContext ? handleAttachContext : undefined}
+                onOpenFile={handleOpenFile}
+                onResolveImage={handleResolveActiveImage}
               />
             )}
 
@@ -1522,6 +1585,7 @@ function HillClimbApp() {
                 attachedContextId={attachedContext?.id ?? null}
                 onAttachContext={canAttachContext ? handleAttachContext : undefined}
                 onOpenFile={handleOpenFile}
+                onSendToChat={canSendToChat ? handleNotifyThread : undefined}
               />
             ) : null}
           </>

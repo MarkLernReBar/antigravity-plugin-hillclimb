@@ -22,6 +22,7 @@ import { blueprintActions, listBlueprints, parseMarkdownImport } from "../src/te
 import { createAutomationEngine, ingestAlert } from "../src/hooks.js";
 import { startLoopbackServer } from "../src/http-server.js";
 import { buildRig, draftForKit, emptyDraft, kitById, seedDraft, validateDraft } from "../src/ui/RigEditor.js";
+import { readWorkspaceImageDataUri, scanDesignKit } from "../src/design-kit.js";
 import type { Outcome } from "../src/model.js";
 
 const PLUGIN_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -1476,6 +1477,211 @@ experiments:
     } finally {
       rmSync(workDir, { recursive: true, force: true });
       rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
+
+  it("v0.6.0 Design with Agents: UI kit scanner, safe image loading, and inline hillclimb_design loop", async () => {
+    const workDir = tempDir("hc-v06-work-");
+    const dataDir = tempDir("hc-v06-data-");
+    const outsideDir = tempDir("hc-v06-outside-");
+    try {
+      // Seed realistic frontend project with DESIGN.md, CSS tokens, React components, and a PNG screenshot
+      const { mkdirSync } = await import("node:fs");
+      mkdirSync(join(workDir, "src", "components"), { recursive: true });
+      mkdirSync(join(workDir, "screenshots"), { recursive: true });
+      writeFileSync(join(workDir, "DESIGN.md"), "# Brand System\nCalm light palette, 10px radius.\n", "utf8");
+      writeFileSync(
+        join(workDir, "src", "tokens.css"),
+        ":root {\n  --brand-primary: #2563eb;\n  --surface-bg: #ffffff;\n  --radius-md: 10px;\n}\n",
+        "utf8",
+      );
+      writeFileSync(
+        join(workDir, "src", "components", "PayButton.tsx"),
+        `import "./tokens.css";\nexport interface PayButtonProps { label: string; disabled?: boolean; }\nexport function PayButton({ label, disabled }: PayButtonProps) {\n  return <button className="btn-primary" disabled={disabled}>{label}</button>;\n}\n`,
+        "utf8",
+      );
+      // 1x1 transparent PNG
+      const tinyPng = Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+        "base64",
+      );
+      writeFileSync(join(workDir, "screenshots", "checkout.png"), tinyPng);
+      writeFileSync(join(outsideDir, "secret.png"), tinyPng);
+
+      // 1. Direct scanner & safe workspace image checks
+      const kit = scanDesignKit(workDir, { readComponent: "src/components/PayButton.tsx" });
+      assert.equal(kit.designDocs[0]?.path, "DESIGN.md");
+      assert.equal(kit.tokens["--brand-primary"], "#2563eb");
+      assert.ok(kit.tokenStyleBlock.includes("--brand-primary: #2563eb;"));
+      assert.ok(kit.components.some((c) => c.name === "PayButton" && c.path === "src/components/PayButton.tsx"));
+      assert.ok(kit.componentSnippet?.content.includes("btn-primary"));
+
+      const okUri = readWorkspaceImageDataUri(workDir, "screenshots/checkout.png");
+      assert.ok(okUri?.startsWith("data:image/png;base64,"));
+      const escaped = readWorkspaceImageDataUri(workDir, `../${outsideDir.split("/").pop()}/secret.png`);
+      assert.equal(escaped, null, "must reject path traversal outside workspace");
+
+      // 2. Seed DB project & outcome
+      const db = openDatabase(dataDir);
+      const repo = createRepository(db);
+      repo.registerProject({ id: "design-demo", name: "DesignDemo", directory: workDir });
+      repo.act("design-demo", { op: "create_goal", key: "G-UX", title: "Calm checkout", brief: "Fast one-click pay", parentGoalKey: null, rank: 1 });
+      repo.act("design-demo", {
+        op: "create_outcome",
+        key: "UX-PAY",
+        goalKey: "G-UX",
+        contract: {
+          title: "Pay button shows clear loading state",
+          story: "Buyers see immediate feedback while payment submits.",
+          criteria: [{ id: "c1", given: "buyer clicks Pay", when: "charge is submitting", then: "PayButton disables with spinner" }],
+          dependsOn: [],
+          rank: 1,
+          recheckDays: null,
+        },
+      });
+      repo.close();
+
+      // 3. End-to-end MCP hillclimb_design + app_decision_state + app_read_image
+      const transport = new StdioClientTransport({
+        command: process.execPath,
+        args: [join(PLUGIN_ROOT, "dist", "mcp-server.mjs"), "--data-dir", dataDir],
+        env: { ...process.env, HILLCLIMB_DISABLE_CONVERSATION_SERVICE: "1" },
+      });
+      const client = new Client({ name: "v06-test", version: "1.0.0" });
+      await client.connect(transport);
+      try {
+        const listed = await client.listTools();
+        const designMeta = listed.tools.find((t) => t.name === "hillclimb_design")?._meta as
+          | { ui?: { resourceUri?: string }; "com.google.antigravity/ui"?: unknown }
+          | undefined;
+        assert.equal(designMeta?.ui?.resourceUri, "ui://hillclimb/app.html");
+        assert.equal(designMeta?.["com.google.antigravity/ui"], undefined, "hillclimb_design must render inline, not steal aux_pane");
+
+        // mode="kit"
+        const kitRes = await client.callTool({
+          name: "hillclimb_design",
+          arguments: { mode: "kit", projectId: "design-demo", componentQuery: "Pay" },
+        });
+        assert.ok(!kitRes.isError);
+        const kitData = kitRes.structuredContent as {
+          inlineDecision?: { kind: string; componentCount: number; tokenCount: number };
+        };
+        assert.equal(kitData.inlineDecision?.kind, "design_kit");
+        assert.equal(kitData.inlineDecision?.componentCount, 1);
+        assert.ok((kitData.inlineDecision?.tokenCount ?? 0) >= 3);
+
+        // mode="propose" (new_flow with HTML + local PNG screenshot auto-hydration + componentRefs)
+        const propRes = await client.callTool({
+          name: "hillclimb_design",
+          arguments: {
+            mode: "propose",
+            projectId: "design-demo",
+            flowName: "Checkout Flow",
+            componentRefs: ["src/components/PayButton.tsx"],
+            note: "Uses PayButton and live CSS tokens",
+            frames: [
+              {
+                title: "Idle pay state",
+                key: "UX-PAY",
+                criterionId: "c1",
+                kind: "html",
+                html: "<main><button>Pay $49</button></main>",
+              },
+              {
+                title: "Captured checkout screenshot",
+                key: "UX-PAY",
+                criterionId: "c1",
+                kind: "image",
+                imagePath: "screenshots/checkout.png",
+              },
+            ],
+          },
+        });
+        assert.ok(!propRes.isError);
+        const propData = propRes.structuredContent as {
+          proposed: string;
+          inlineDecision?: {
+            kind: string;
+            proposal: { id: string; state: string; componentRefs?: string[]; frames?: Array<{ imagePath?: string | null }> };
+          };
+        };
+        assert.equal(propData.inlineDecision?.kind, "flow_proposal");
+        assert.equal(propData.inlineDecision?.proposal.state, "pending");
+        assert.deepEqual(propData.inlineDecision?.proposal.componentRefs, ["src/components/PayButton.tsx"]);
+        assert.ok(
+          propData.inlineDecision?.proposal.frames?.[1]?.imagePath?.startsWith("data:image/png;base64,"),
+          "workspace screenshot must be auto-hydrated to data URI for isolated iframe",
+        );
+
+        // Accept flow via app_act, then verify app_decision_state + mode="inspect" + pin + mode="resolve_pin"
+        await client.callTool({
+          name: "app_act",
+          arguments: { projectId: "design-demo", action: { op: "accept_flow_change", id: propData.proposed }, confirmed: true },
+        });
+        const syncedProp = await client.callTool({
+          name: "app_decision_state",
+          arguments: { projectId: "design-demo", kind: "flow_proposal", id: propData.proposed },
+        });
+        assert.equal((syncedProp.structuredContent as { proposal: { state: string } }).proposal.state, "accepted");
+
+        await client.callTool({
+          name: "app_act",
+          arguments: {
+            projectId: "design-demo",
+            action: {
+              op: "pin",
+              name: "Checkout Flow",
+              frame: 0,
+              x: 0.4,
+              y: 0.6,
+              kind: "rect",
+              geometry: { w: 0.25, h: 0.12 },
+              text: "Increase button padding",
+              forAgents: true,
+            },
+            confirmed: true,
+          },
+        });
+
+        const inspRes = await client.callTool({
+          name: "hillclimb_design",
+          arguments: { mode: "inspect", projectId: "design-demo", flowName: "Checkout Flow" },
+        });
+        assert.ok(!inspRes.isError);
+        const inspData = inspRes.structuredContent as { openPinCount: number; inlineDecision?: { kind: string } };
+        assert.equal(inspData.openPinCount, 1);
+        assert.equal(inspData.inlineDecision?.kind, "flow_inspect");
+
+        const resPin = await client.callTool({
+          name: "hillclimb_design",
+          arguments: { mode: "resolve_pin", projectId: "design-demo", flowName: "Checkout Flow", frameIndex: 0, pinIndex: 0, resolved: true },
+        });
+        assert.ok(!resPin.isError);
+
+        const syncedFlow = await client.callTool({
+          name: "app_decision_state",
+          arguments: { projectId: "design-demo", kind: "flow_inspect", id: "Checkout Flow" },
+        });
+        assert.equal((syncedFlow.structuredContent as { flow: { frames: Array<{ pins: Array<{ resolved?: boolean }> }> } }).flow.frames[0]?.pins[0]?.resolved, true);
+
+        // app_read_image works for valid workspace file and returns null outside workspace
+        const readOk = await client.callTool({
+          name: "app_read_image",
+          arguments: { projectId: "design-demo", path: "screenshots/checkout.png" },
+        });
+        assert.ok(String((readOk.structuredContent as { dataUri: string | null }).dataUri).startsWith("data:image/png;base64,"));
+        const readBad = await client.callTool({
+          name: "app_read_image",
+          arguments: { projectId: "design-demo", path: "../escape.png" },
+        });
+        assert.equal((readBad.structuredContent as { dataUri: string | null }).dataUri, null);
+      } finally {
+        await client.close();
+      }
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+      rmSync(dataDir, { recursive: true, force: true });
+      rmSync(outsideDir, { recursive: true, force: true });
     }
   });
 });

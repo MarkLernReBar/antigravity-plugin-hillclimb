@@ -34,6 +34,7 @@ const frameInput = z.object({
   imagePath: optionalWord.optional(),
   viewport: viewport.nullable().optional(),
   notes: optionalWord.optional(),
+  componentRefs: z.array(word).max(20).optional(),
 });
 
 export const coreActions = z.discriminatedUnion("op", [
@@ -182,6 +183,7 @@ export const planningActions = z.discriminatedUnion("op", [
     basedOnVersion: z.number().int().positive().nullable().optional(),
     frame: frameInput.nullable().optional(),
     frames: z.array(frameInput).min(1).nullable().optional(),
+    componentRefs: z.array(word).max(20).optional(),
     selfGrade: optionalWord.optional(),
     ref: optionalWord.optional(),
     spot: z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) }).nullable().optional(),

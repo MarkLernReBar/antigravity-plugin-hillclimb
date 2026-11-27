@@ -38,7 +38,8 @@ import { computeInsights } from "./insights.js";
 import { ARTIFACT_TEMPLATES, exportShareableReport, generateArtifactFromTemplate, type ArtifactTemplateId } from "./artifacts.js";
 import { blueprintActions, listBlueprints, parseMarkdownImport } from "./templates.js";
 import { createAutomationEngine, ingestAlert } from "./hooks.js";
-import { isOpenQuestion, type Contract, type Criterion, type Evidence, type Outcome, type Snapshot, type Tree } from "./model.js";
+import { readWorkspaceImageDataUri, scanDesignKit } from "./design-kit.js";
+import { isOpenQuestion, type Contract, type Criterion, type Evidence, type FlowProposalFrameInput, type Outcome, type Snapshot, type Tree } from "./model.js";
 import type { HookEvent, SearchHit } from "./repository.js";
 
 const APP_URI = "ui://hillclimb/app.html";
@@ -252,7 +253,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     return projects[0]?.id ?? repo.resolveProjectId();
   };
   const server = new McpServer(
-    { name: "hillclimb", version: "0.5.5" },
+    { name: "hillclimb", version: "0.6.0" },
     {
       capabilities: {
         tools: {},
@@ -701,19 +702,18 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
   server.registerTool(
     "hillclimb_outcome",
     {
-      title: "Inspect one outcome",
-      description:
-        "One outcome in full: its contract and version, goal chain, derived signal, live claim, latest plan, and paged evidence & comments.",
+      title: "Outcome",
+      description: "Read one outcome: contract, goal chain, signal, claim, plan, evidence, comments, and flows.",
       inputSchema: {
         projectId: z.string().optional(),
         directory: z.string().optional(),
         key: keySchema,
         track: z.string().optional(),
-        evidenceLimit: z.number().int().min(1).max(MAX_LIMIT).default(10),
-        evidenceOffset: z.number().int().min(0).default(0),
-        commentLimit: z.number().int().min(1).max(MAX_LIMIT).default(10),
-        commentOffset: z.number().int().min(0).default(0),
-        planChars: z.number().int().min(1).max(MAX_TEXT).default(MAX_TEXT),
+        evidenceLimit: z.number().default(10),
+        evidenceOffset: z.number().default(0),
+        commentLimit: z.number().default(10),
+        commentOffset: z.number().default(0),
+        planChars: z.number().default(MAX_TEXT),
       },
     },
     async (input) => {
@@ -813,13 +813,13 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
   server.registerTool(
     "hillclimb_act",
     {
-      title: "Tree action",
-      description: "Apply one or batched tree action(s) (`op` JSON). Human decisions (`approve_change`, `reject_change`, `accept_flow_change`, `reject_flow_change`, `promote_track`) require UI confirmation.",
+      title: "Act",
+      description: "Apply tree action(s) (`op` JSON). Decisions require human UI confirmation.",
       inputSchema: {
         projectId: z.string().optional(),
         directory: z.string().optional(),
         action: z.union([z.string(), z.record(z.string(), z.unknown())]).optional(),
-        actions: z.array(z.union([z.string(), z.record(z.string(), z.unknown())])).min(1).max(50).optional(),
+        actions: z.array(z.union([z.string(), z.record(z.string(), z.unknown())])).optional(),
       },
     },
     async ({ projectId, directory, action, actions }) => {
@@ -879,13 +879,12 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     "hillclimb_propose_change",
     {
       title: "Propose edit",
-      description:
-        "File a pending contract edit (or new outcome via `goalKey`) for human Yes/No approval inline in this thread and in Decisions.",
+      description: "Propose a contract edit (or new outcome via `goalKey`) inline for human approval.",
       inputSchema: {
         projectId: z.string().optional(),
         directory: z.string().optional(),
         key: keySchema,
-        goalKey: keySchema.optional().describe("Pass `goalKey` to propose a brand-new outcome instead of editing an existing one"),
+        goalKey: keySchema.optional(),
         contract: z.record(z.string(), z.unknown()),
       },
       _meta: INLINE_DECISION_META,
@@ -950,15 +949,14 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
   server.registerTool(
     "hillclimb_lint_tree",
     {
-      title: "Lint contract tree (22 rules)",
-      description:
-        "Apply the 22-rule contract writing rubric (O1-O6, C1-C9, G1-G4, P1-P3) to this project's goals and outcomes. Read-only.",
+      title: "Lint tree",
+      description: "Run 22-rule contract writing linter (read-only).",
       inputSchema: {
         projectId: z.string().optional(),
         directory: z.string().optional(),
         key: keySchema.optional(),
-        limit: z.number().int().min(1).max(MAX_LIMIT).default(DEFAULT_LIMIT),
-        offset: z.number().int().min(0).default(0),
+        limit: z.number().default(DEFAULT_LIMIT),
+        offset: z.number().default(0),
       },
     },
     async (input) => {
@@ -1006,14 +1004,14 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
   server.registerTool(
     "hillclimb_claim",
     {
-      title: "Claim outcome lease",
-      description: "Take a time-boxed lease on an outcome so two agents do not climb the same one.",
+      title: "Claim lease",
+      description: "Take a time-boxed outcome lease.",
       inputSchema: {
         projectId: z.string().optional(),
         directory: z.string().optional(),
         key: keySchema,
-        hours: z.number().positive().max(168).default(4),
-        threadId: z.string().optional().describe("Lease holder ID (defaults to current conversation ID)"),
+        hours: z.number().default(4),
+        threadId: z.string().optional(),
       },
     },
     async (input) => {
@@ -1108,18 +1106,17 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     server,
     "hillclimb_comment",
     {
-      title: "Post comment, question, or answer",
-      description:
-        "Post a comment or multi-option decision question inline in this thread (and synced to Decisions), or record a user's answer.",
+      title: "Comment/question",
+      description: "Post a comment or inline multiple-choice question, or record an answer.",
       inputSchema: {
         projectId: z.string().optional(),
         directory: z.string().optional(),
         key: keySchema.optional(),
-        text: z.string().trim().min(1).optional(),
-        options: z.array(z.string().trim().min(1)).max(8).default([]),
-        parentId: z.string().trim().min(1).nullable().default(null),
-        planVersion: z.number().int().positive().nullable().optional().describe("Optional plan version this comment refers to"),
-        answer: z.object({ id: z.string().trim().min(1), answer: z.string().trim().min(1) }).optional(),
+        text: z.string().optional(),
+        options: z.array(z.string()).default([]),
+        parentId: z.string().nullable().default(null),
+        planVersion: z.number().nullable().optional(),
+        answer: z.object({ id: z.string(), answer: z.string() }).optional(),
       },
       _meta: INLINE_DECISION_META,
     },
@@ -1195,14 +1192,14 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
   server.registerTool(
     "hillclimb_inbox",
     {
-      title: "Read approval inbox",
-      description: "Read pending contract changes waiting for human approval and open questions waiting for answers.",
+      title: "Inbox",
+      description: "Read pending contract/flow proposals and open questions.",
       inputSchema: {
         projectId: z.string().optional(),
         directory: z.string().optional(),
         key: keySchema.optional(),
-        limit: z.number().int().min(1).max(MAX_LIMIT).default(DEFAULT_LIMIT),
-        offset: z.number().int().min(0).default(0),
+        limit: z.number().default(DEFAULT_LIMIT),
+        offset: z.number().default(0),
       },
     },
     async (input) => {
@@ -1458,11 +1455,11 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
   server.registerTool(
     "hillclimb_sync",
     {
-      title: "Sync .hillclimb/ markdown mirror",
-      description: "Export a readable `.hillclimb/` projection (INDEX.md, tree.json, goals/, outcomes/, plans/) into the project workspace.",
+      title: "Sync mirror",
+      description: "Export read-only `.hillclimb/` Markdown/JSON mirror.",
       inputSchema: {
         projectId: z.string().optional(),
-        directory: z.string().optional().describe("Repository path where `.hillclimb/` will be written"),
+        directory: z.string().optional(),
       },
     },
     async ({ projectId, directory }) => {
@@ -2010,6 +2007,265 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     },
   );
 
+  registerAppTool(
+    server,
+    "hillclimb_design",
+    {
+      title: "Design flows & kit",
+      description: "Scan repo UI components/tokens (`kit`), propose inline HTML/image mockups (`propose`), inspect flows (`inspect`), or resolve pins (`resolve_pin`).",
+      inputSchema: {
+        mode: z.enum(["kit", "propose", "inspect", "resolve_pin"]).default("kit"),
+        projectId: z.string().optional(),
+        directory: z.string().optional(),
+        componentQuery: z.string().optional(),
+        readComponent: z.string().optional(),
+        flowName: z.string().optional(),
+        folder: z.string().optional(),
+        designKit: z.string().optional(),
+        kind: z.enum(["new_flow", "new_step", "change"]).optional(),
+        frameIndex: z.number().optional(),
+        basedOnVersion: z.number().optional(),
+        frame: z.record(z.string(), z.unknown()).optional(),
+        frames: z.array(z.record(z.string(), z.unknown())).optional(),
+        componentRefs: z.array(z.string()).optional(),
+        selfGrade: z.string().optional(),
+        ref: z.string().optional(),
+        note: z.string().optional(),
+        pinId: z.string().optional(),
+        pinIndex: z.number().optional(),
+        resolved: z.boolean().default(true),
+        resolvedBy: z.string().optional(),
+      },
+      _meta: INLINE_DECISION_META,
+    },
+    async (input) => {
+      try {
+        const pid = repo.resolveProjectId(input.projectId, input.directory);
+        const dir = input.directory ?? repo.getProject(pid)?.directory ?? null;
+        const actor = defaultSessionActor();
+
+        const hydrateFrameImage = <T extends { kind?: string; imagePath?: string | null }>(fr: T): T => {
+          if (fr.imagePath && !fr.imagePath.startsWith("data:image/")) {
+            const dataUri = readWorkspaceImageDataUri(dir, fr.imagePath);
+            if (dataUri) return { ...fr, kind: "image", imagePath: dataUri };
+          }
+          return fr;
+        };
+
+        if (input.mode === "kit") {
+          if (!dir) {
+            throw new HillClimbError("No workspace directory linked to this project.", {
+              code: "missing_directory",
+              hint: "Pass `directory` or link a repository in Hill Climb so we can scan its UI components and CSS tokens.",
+            });
+          }
+          const scan = scanDesignKit(dir, {
+            componentQuery: input.componentQuery,
+            readComponent: input.readComponent,
+          });
+          const savedKit = repo.getSetting(pid, "designKit") || scan.designDocs[0]?.path || null;
+          if (!repo.getSetting(pid, "designKit") && scan.designDocs[0]?.path) {
+            repo.setSetting(pid, "designKit", scan.designDocs[0].path);
+          }
+          return jsonResult(
+            {
+              projectId: pid,
+              savedDesignKit: savedKit,
+              ...scan,
+              inlineDecision: {
+                kind: "design_kit" as const,
+                projectId: pid,
+                projectDirectory: dir,
+                designKit: savedKit,
+                tokenCount: Object.keys(scan.tokens).length,
+                tailwindDetected: scan.tailwindDetected,
+                componentCount: scan.components.length,
+                components: scan.components.slice(0, 10).map((c) => ({ name: c.name, path: c.path })),
+              },
+            },
+            `Design kit in ${dir}: ${scan.components.length} UI component(s), ${Object.keys(scan.tokens).length} CSS token(s)${scan.tailwindDetected ? ", Tailwind detected" : ""}${savedKit ? `, kit: ${savedKit}` : ""}.`,
+          );
+        }
+
+        if (input.mode === "resolve_pin") {
+          if (!input.flowName) throw new Error("Pass `flowName` for mode='resolve_pin'.");
+          const frameIdx = input.frameIndex ?? 0;
+          repo.act(
+            pid,
+            {
+              op: "resolve_pin",
+              name: input.flowName,
+              frame: frameIdx,
+              ...(input.pinId ? { pinId: input.pinId } : {}),
+              ...(input.pinIndex !== undefined ? { pinIndex: input.pinIndex } : {}),
+              resolved: input.resolved,
+              resolvedBy: input.resolvedBy ?? actor,
+            },
+            { actor, via: "mcp" },
+          );
+          const after = repo.view(pid, "main");
+          const flow = after.flows.find((f) => f.name === input.flowName) ?? null;
+          return jsonResult({
+            ok: true,
+            projectId: pid,
+            flowName: input.flowName,
+            frameIndex: frameIdx,
+            resolved: input.resolved,
+            ...(flow
+              ? {
+                  inlineDecision: {
+                    kind: "flow_inspect" as const,
+                    projectId: pid,
+                    projectDirectory: dir,
+                    flow: { ...flow, frames: flow.frames.map(hydrateFrameImage) },
+                    note: `${input.resolved ? "Resolved" : "Reopened"} visual pin on "${flow.name}" (frame ${frameIdx + 1}).`,
+                  },
+                }
+              : {}),
+          });
+        }
+
+        if (input.mode === "inspect") {
+          const snap = repo.view(pid, "main");
+          if (!input.flowName) {
+            const summary = snap.flows.map((f) => ({
+              name: f.name,
+              folder: f.folder ?? null,
+              designKit: f.designKit ?? null,
+              frameCount: f.frames.length,
+              openAgentPins: f.frames.reduce((s, fr) => s + fr.pins.filter((p) => !p.resolved && (p.forAgents ?? true)).length, 0),
+              pendingProposals: snap.flowProposals.filter((p) => p.state === "pending" && p.flowName === f.name).length,
+            }));
+            return jsonResult({ projectId: pid, flows: summary });
+          }
+          const flow = snap.flows.find((f) => f.name === input.flowName);
+          if (!flow) throw new Error(`Unknown flow "${input.flowName}".`);
+          const openPins = flow.frames.flatMap((fr, frameIndex) =>
+            fr.pins
+              .map((pin, pinIndex) => ({ frameIndex, frameTitle: fr.title, pinIndex, pin }))
+              .filter(({ pin }) => !pin.resolved),
+          );
+          return jsonResult({
+            projectId: pid,
+            flow: {
+              ...flow,
+              frames: flow.frames.map((fr, idx) => ({
+                frameIndex: idx,
+                title: fr.title,
+                key: fr.key,
+                criterionId: fr.criterionId,
+                kind: fr.kind ?? "html",
+                version: fr.version ?? 1,
+                componentRefs: fr.componentRefs ?? [],
+                notes: fr.notes ?? null,
+                driftDetected: Boolean(fr.driftDetected),
+                openPins: fr.pins.filter((p) => !p.resolved),
+              })),
+            },
+            openPinCount: openPins.length,
+            inlineDecision: {
+              kind: "flow_inspect" as const,
+              projectId: pid,
+              projectDirectory: dir,
+              flow: { ...flow, frames: flow.frames.map(hydrateFrameImage) },
+            },
+          });
+        }
+
+        // mode === "propose"
+        if (!input.flowName?.trim()) throw new Error("Pass `flowName` for mode='propose'.");
+        const existingTree = repo.read(pid);
+        const existingFlow = existingTree.flows.find((f) => f.name === input.flowName!.trim()) ?? null;
+        const resolvedKind = input.kind ?? (existingFlow ? (input.frameIndex !== undefined ? "change" : "new_step") : "new_flow");
+        const normalizeRaw = (raw: Record<string, unknown>): FlowProposalFrameInput => {
+          const rawImg = typeof raw.imagePath === "string" ? raw.imagePath.trim() : "";
+          const encodedImg = rawImg ? (readWorkspaceImageDataUri(dir, rawImg) ?? rawImg) : null;
+          const kindVal = raw.kind === "image" || (encodedImg && !raw.html) ? "image" : "html";
+          return {
+            title: String(raw.title ?? ""),
+            key: String(raw.key ?? ""),
+            criterionId: String(raw.criterionId ?? ""),
+            kind: kindVal,
+            html: kindVal === "html" ? String(raw.html ?? "") : "",
+            ...(encodedImg ? { imagePath: encodedImg } : {}),
+            ...(raw.viewport && typeof raw.viewport === "object"
+              ? { viewport: raw.viewport as { width: number; height: number } }
+              : {}),
+            ...(typeof raw.notes === "string" && raw.notes.trim() ? { notes: raw.notes.trim() } : {}),
+            ...(Array.isArray(raw.componentRefs)
+              ? { componentRefs: raw.componentRefs.map(String) }
+              : input.componentRefs && input.componentRefs.length > 0
+                ? { componentRefs: input.componentRefs }
+                : {}),
+          };
+        };
+
+        const frameObj = input.frame ? normalizeRaw(input.frame) : null;
+        const framesList = input.frames ? input.frames.map(normalizeRaw) : null;
+        const savedKit = input.designKit ?? repo.getSetting(pid, "designKit") ?? undefined;
+        const frameIdx =
+          resolvedKind === "change"
+            ? (input.frameIndex ?? 0)
+            : input.frameIndex !== undefined
+              ? input.frameIndex
+              : null;
+        const curFrame =
+          resolvedKind === "change" && existingFlow && frameIdx !== null
+            ? (existingFlow.frames[frameIdx] ?? null)
+            : null;
+
+        repo.act(
+          pid,
+          {
+            op: "propose_flow_change",
+            kind: resolvedKind,
+            flowName: input.flowName.trim(),
+            ...(input.folder ? { folder: input.folder } : {}),
+            ...(savedKit ? { designKit: savedKit } : {}),
+            frameIndex: frameIdx,
+            basedOnVersion: input.basedOnVersion ?? (curFrame ? (curFrame.version ?? 1) : null),
+            frame: frameObj,
+            frames: framesList,
+            ...(input.componentRefs && input.componentRefs.length > 0 ? { componentRefs: input.componentRefs } : {}),
+            selfGrade: input.selfGrade ?? null,
+            ref: input.ref ?? null,
+            note: input.note ?? null,
+            threadId: actor,
+          },
+          { actor, via: "mcp" },
+        );
+
+        const after = repo.view(pid, "main");
+        const pending =
+          after.flowProposals.filter((p) => p.flowName === input.flowName!.trim() && p.state === "pending").at(-1) ?? null;
+
+        return jsonResult({
+          projectId: pid,
+          proposed: pending?.id ?? null,
+          flowName: input.flowName.trim(),
+          kind: resolvedKind,
+          state: pending?.state ?? "unknown",
+          approved: false,
+          next: "Rendered an interactive visual design review card inline in this thread (and synced to Flows & Decisions). Wait for the user to Accept or annotate & Send back.",
+          inbox: inboxOf(after),
+          ...(pending
+            ? {
+                inlineDecision: {
+                  kind: "flow_proposal" as const,
+                  projectId: pid,
+                  projectDirectory: dir,
+                  proposal: pending,
+                  currentFrame: curFrame ? hydrateFrameImage(curFrame) : null,
+                },
+              }
+            : {}),
+        });
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  );
+
   // -------------------------------------------------------------------------
   // App-Only UI RPC Tools (hidden from model; callable only by MCP App)
   // -------------------------------------------------------------------------
@@ -2019,7 +2275,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
   registerAppTool(
     server,
     "app_projects",
-    { description: "List projects for UI", _meta: APP_ONLY },
+    { description: "UI projects", _meta: APP_ONLY },
     async () => {
       try {
         const projects = repo.listProjects();
@@ -2038,7 +2294,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     server,
     "app_register_project",
     {
-      description: "Register a workspace project from UI",
+      description: "UI register",
       inputSchema: {
         id: z.string().optional(),
         name: z.string().optional(),
@@ -2060,8 +2316,8 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     server,
     "app_tree",
     {
-      description: "Read tree snapshot and scanned repo climbs for UI",
-      inputSchema: { projectId: z.string().min(1), track: z.string().optional(), force: z.boolean().optional() },
+      description: "UI tree",
+      inputSchema: { projectId: z.string(), track: z.string().optional(), force: z.boolean().optional() },
       _meta: APP_ONLY,
     },
     async ({ projectId, track, force }) => {
@@ -2091,8 +2347,8 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     server,
     "app_repo_climbs",
     {
-      description: "Scan project repository and linked git worktrees for active/prepared climb.py runs",
-      inputSchema: { projectId: z.string().min(1), force: z.boolean().optional() },
+      description: "UI climbs",
+      inputSchema: { projectId: z.string(), force: z.boolean().optional() },
       _meta: APP_ONLY,
     },
     async ({ projectId, force }) => {
@@ -2112,8 +2368,8 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     server,
     "app_set_auto_track",
     {
-      description: "Enable or disable automatic tracking of repo climbs into Outcomes",
-      inputSchema: { projectId: z.string().min(1), enabled: z.boolean(), track: z.string().optional() },
+      description: "UI auto-track",
+      inputSchema: { projectId: z.string(), enabled: z.boolean(), track: z.string().optional() },
       _meta: APP_ONLY,
     },
     async ({ projectId, enabled, track }) => {
@@ -2136,8 +2392,8 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     server,
     "app_track_climb",
     {
-      description: "Track a specific repo climb (including archived worktree climbs) as an Outcome",
-      inputSchema: { projectId: z.string().min(1), climbId: z.string().min(1), track: z.string().optional() },
+      description: "UI track climb",
+      inputSchema: { projectId: z.string(), climbId: z.string(), track: z.string().optional() },
       _meta: APP_ONLY,
     },
     async ({ projectId, climbId, track }) => {
@@ -2166,9 +2422,9 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     server,
     "app_act",
     {
-      description: "Apply a tree action from UI (supports human-confirmed contract decisions)",
+      description: "UI act",
       inputSchema: {
-        projectId: z.string().min(1),
+        projectId: z.string(),
         action: z.record(z.string(), z.unknown()),
         confirmed: z.boolean().optional(),
         track: z.string().optional(),
@@ -2198,8 +2454,8 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     server,
     "app_preview",
     {
-      description: "Preview track promotion from UI",
-      inputSchema: { projectId: z.string().min(1), name: z.string().min(1), keys: z.array(z.string()) },
+      description: "UI preview",
+      inputSchema: { projectId: z.string(), name: z.string(), keys: z.array(z.string()) },
       _meta: APP_ONLY,
     },
     async ({ projectId, name, keys }) => {
@@ -2225,8 +2481,8 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     server,
     "app_get_rig",
     {
-      description: "Read saved verifier rig for outcome",
-      inputSchema: { projectId: z.string().min(1), key: z.string().min(1), engine: z.enum(["repo", "search"]) },
+      description: "UI rig",
+      inputSchema: { projectId: z.string(), key: z.string(), engine: z.enum(["repo", "search"]) },
       _meta: APP_ONLY,
     },
     async ({ projectId, key, engine }) => {
@@ -2243,10 +2499,10 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     server,
     "app_save_rig",
     {
-      description: "Save verifier rig from UI",
+      description: "UI save rig",
       inputSchema: {
-        projectId: z.string().min(1),
-        key: z.string().min(1),
+        projectId: z.string(),
+        key: z.string(),
         version: z.number().int().positive(),
         rig: z.record(z.string(), z.unknown()),
       },
@@ -2267,10 +2523,10 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     server,
     "app_dispatch",
     {
-      description: "Dispatch climb worker from UI",
+      description: "UI dispatch",
       inputSchema: {
-        projectId: z.string().min(1),
-        key: z.string().min(1),
+        projectId: z.string(),
+        key: z.string(),
         engine: z.enum(["repo", "search"]),
         track: z.string().default("main"),
         deferWorkerLaunch: z.boolean().optional(),
@@ -2291,8 +2547,8 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     server,
     "app_attach_worker",
     {
-      description: "Bind client-launched conversation ID to a dispatched run",
-      inputSchema: { runId: z.string().min(1), conversationId: z.string().min(1) },
+      description: "UI attach worker",
+      inputSchema: { runId: z.string(), conversationId: z.string() },
       _meta: APP_ONLY,
     },
     async ({ runId, conversationId }) => {
@@ -2309,8 +2565,8 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     server,
     "app_live",
     {
-      description: "Read live climb/search state for UI",
-      inputSchema: { projectId: z.string().min(1), key: z.string().min(1), track: z.string().default("main") },
+      description: "UI live",
+      inputSchema: { projectId: z.string(), key: z.string(), track: z.string().default("main") },
       _meta: APP_ONLY,
     },
     async ({ projectId, key, track }) => {
@@ -2334,7 +2590,7 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     server,
     "app_reconcile",
     {
-      description: "Reconcile active runs from UI",
+      description: "UI reconcile",
       inputSchema: { projectId: z.string().optional() },
       _meta: APP_ONLY,
     },
@@ -2355,8 +2611,8 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     server,
     "app_sync",
     {
-      description: "Sync .hillclimb/ markdown mirror from UI",
-      inputSchema: { projectId: z.string().min(1) },
+      description: "UI sync",
+      inputSchema: { projectId: z.string() },
       _meta: APP_ONLY,
     },
     async ({ projectId }) => {
@@ -2378,8 +2634,8 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     server,
     "app_lint",
     {
-      description: "Run 22-rule contract linter from UI",
-      inputSchema: { projectId: z.string().min(1) },
+      description: "UI lint",
+      inputSchema: { projectId: z.string() },
       _meta: APP_ONLY,
     },
     async ({ projectId }) => {
@@ -2399,8 +2655,8 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     server,
     "app_search",
     {
-      description: "Search everything for UI Cmd+K palette",
-      inputSchema: { projectId: z.string().optional(), query: z.string(), limit: z.number().int().min(1).max(50).optional() },
+      description: "UI search",
+      inputSchema: { projectId: z.string().optional(), query: z.string(), limit: z.number().optional() },
       _meta: APP_ONLY,
     },
     async ({ projectId, query, limit }) => {
@@ -2417,8 +2673,8 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     server,
     "app_insights",
     {
-      description: "Compute project + climb insights for UI",
-      inputSchema: { projectId: z.string().min(1), days: z.number().int().min(1).max(365).optional(), track: z.string().optional() },
+      description: "UI insights",
+      inputSchema: { projectId: z.string(), days: z.number().optional(), track: z.string().optional() },
       _meta: APP_ONLY,
     },
     async ({ projectId, days, track }) => {
@@ -2437,9 +2693,9 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     server,
     "app_artifacts",
     {
-      description: "Manage artifacts and exports from UI",
+      description: "UI artifacts",
       inputSchema: {
-        projectId: z.string().min(1),
+        projectId: z.string(),
         mode: z.enum(["list", "save", "generate", "export", "delete"]),
         payload: z.record(z.string(), z.unknown()).optional(),
       },
@@ -2499,9 +2755,9 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     server,
     "app_views_scopes",
     {
-      description: "Manage saved views, focus scopes, settings, and automation hooks from UI",
+      description: "UI settings",
       inputSchema: {
-        projectId: z.string().min(1),
+        projectId: z.string(),
         mode: z.enum(["list", "save_view", "delete_view", "save_scope", "delete_scope", "set_setting", "save_hook", "delete_hook"]),
         payload: z.record(z.string(), z.unknown()).optional(),
       },
@@ -2563,9 +2819,9 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     server,
     "app_import",
     {
-      description: "List blueprints, preview or apply blueprint/Markdown imports from UI",
+      description: "UI import",
       inputSchema: {
-        projectId: z.string().min(1),
+        projectId: z.string(),
         mode: z.enum(["blueprints", "preview", "apply"]),
         payload: z.record(z.string(), z.unknown()).optional(),
       },
@@ -2620,24 +2876,74 @@ export function createHillClimbServer(repo: Repository, runtime: Runtime): McpSe
     server,
     "app_decision_state",
     {
-      description: "Read current state of one proposed change or question for inline chat decision cards",
+      description: "UI state",
       inputSchema: {
-        projectId: z.string().min(1),
-        kind: z.enum(["change", "question"]),
-        id: z.string().min(1),
+        projectId: z.string(),
+        kind: z.enum(["change", "question", "flow_proposal", "flow_inspect"]),
+        id: z.string(),
       },
       _meta: APP_ONLY,
     },
     async ({ projectId, kind, id }) => {
       try {
         const tree = repo.read(projectId);
+        const dir = repo.getProject(projectId)?.directory ?? null;
         if (kind === "change") {
           const change = tree.changes.find((c) => c.id === id) ?? null;
           const currentOutcome = change ? (tree.outcomes.find((o) => o.key === change.key) ?? null) : null;
           return appJsonResult({ change, currentOutcome }, change ? `Change ${id}: ${change.state}` : `Change ${id} not found`);
         }
+        if (kind === "flow_proposal") {
+          const proposal = (tree.flowProposals ?? []).find((p) => p.id === id) ?? null;
+          const flow = proposal ? tree.flows.find((f) => f.name === proposal.flowName) : null;
+          const currentFrame =
+            proposal && proposal.kind === "change" && proposal.frameIndex !== null
+              ? (flow?.frames[proposal.frameIndex] ?? null)
+              : null;
+          return appJsonResult(
+            { proposal, currentFrame },
+            proposal ? `Flow proposal ${id}: ${proposal.state}` : `Flow proposal ${id} not found`,
+          );
+        }
+        if (kind === "flow_inspect") {
+          const flow = tree.flows.find((f) => f.name === id) ?? null;
+          if (!flow) return appJsonResult({ flow: null }, `Flow ${id} not found`);
+          const hydrated = {
+            ...flow,
+            frames: flow.frames.map((fr) => {
+              if (fr.imagePath && !fr.imagePath.startsWith("data:image/")) {
+                const uri = readWorkspaceImageDataUri(dir, fr.imagePath);
+                if (uri) return { ...fr, kind: "image" as const, imagePath: uri };
+              }
+              return fr;
+            }),
+          };
+          return appJsonResult({ flow: hydrated }, `Flow ${id}`);
+        }
         const comment = tree.comments.find((c) => c.id === id) ?? null;
         return appJsonResult({ comment }, comment ? `Comment ${id}` : `Comment ${id} not found`);
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  );
+
+  registerAppTool(
+    server,
+    "app_read_image",
+    {
+      description: "UI image",
+      inputSchema: {
+        projectId: z.string(),
+        path: z.string(),
+      },
+      _meta: APP_ONLY,
+    },
+    async ({ projectId, path }) => {
+      try {
+        const dir = repo.getProject(projectId)?.directory ?? null;
+        const dataUri = readWorkspaceImageDataUri(dir, path);
+        return appJsonResult({ dataUri }, dataUri ? "Loaded image" : "Image not found or outside workspace");
       } catch (error) {
         return errorResult(error);
       }

@@ -5,7 +5,7 @@
 // promotion and release policy lives on the server, which validates versions
 // and evidence at the moment it writes.
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
 import type { Action } from "../actions.js";
 import {
   isOpenQuestion,
@@ -22,6 +22,7 @@ import {
   type Signal,
   type Snapshot,
 } from "../model.js";
+import { FrameAnnotator, type DrawnAnnotation } from "./FrameAnnotator.js";
 
 export interface PromotionPreviewRow {
   key: string;
@@ -42,6 +43,11 @@ export interface PortfolioProps {
   onFocusScopeFromRelease?: (release: Release) => Promise<void>;
   otherPendingProjects?: Array<{ id: string; name: string; count: number }>;
   onSelectProject?: (projectId: string) => void;
+  projectDirectory?: string | null;
+  attachedContextId?: string | null;
+  onAttachContext?: (id: string, label: string, markdown: string) => Promise<void>;
+  onOpenFile?: (filePath: string, baseDir?: string | null) => Promise<void>;
+  onResolveImage?: (imagePath: string) => Promise<string | null>;
 }
 
 type Run = (label: string, action: () => Promise<void>, done?: string) => Promise<boolean>;
@@ -793,12 +799,18 @@ function FlowProposalCard({
   act,
   run,
   busy,
+  projectDirectory,
+  onOpenFile,
+  onResolveImage,
 }: {
   proposal: FlowProposal;
   currentFlow: Flow | undefined;
   act: PortfolioProps["act"];
   run: Run;
   busy: string | null;
+  projectDirectory?: string | null;
+  onOpenFile?: (filePath: string, baseDir?: string | null) => Promise<void>;
+  onResolveImage?: (imagePath: string) => Promise<string | null>;
 }): ReactNode {
   const [reviewNote, setReviewNote] = useState("");
   const currentFrame =
@@ -807,6 +819,12 @@ function FlowProposalCard({
       : null;
   const proposedFrames = proposal.kind === "new_flow" ? (proposal.frames ?? []) : proposal.frame ? [proposal.frame] : [];
   const decided = proposal.state !== "pending";
+  const componentsUsed = [
+    ...new Set([
+      ...(proposal.componentRefs ?? []),
+      ...proposedFrames.flatMap((fr) => fr.componentRefs ?? []),
+    ]),
+  ];
 
   return (
     <article className="pf-card">
@@ -832,39 +850,56 @@ function FlowProposalCard({
 
       {proposal.note ? <p className="pf-small">{proposal.note}</p> : null}
 
+      {componentsUsed.length > 0 ? (
+        <div className="pf-actions" aria-label="Components used">
+          <span className="pf-muted pf-small">Components:</span>
+          {componentsUsed.map((comp) =>
+            onOpenFile && projectDirectory ? (
+              <button
+                key={comp}
+                type="button"
+                className="hc-chip hc-file-chip"
+                title={`Open ${comp}`}
+                onClick={() => void onOpenFile(comp, projectDirectory)}
+              >
+                <code>{comp.split("/").pop()}</code> ↗
+              </button>
+            ) : (
+              <code key={comp} className="hc-chip">
+                {comp.split("/").pop()}
+              </code>
+            ),
+          )}
+        </div>
+      ) : null}
+
       {currentFrame && proposedFrames[0] ? (
         <div className="pf-compare-frames">
           <div>
             <p className="pf-label">Current approved (v{currentFrame.version ?? 1})</p>
-            <div className="pf-frame-canvas pf-frame-canvas-sm">
-              {currentFrame.kind === "image" && currentFrame.imagePath ? (
-                <img src={currentFrame.imagePath} alt={currentFrame.title} className="pf-frame-img" />
-              ) : (
-                <iframe
-                  title={`Current ${currentFrame.title}`}
-                  sandbox={FRAME_SANDBOX}
-                  referrerPolicy="no-referrer"
-                  loading="lazy"
-                  srcDoc={isolateHtml(currentFrame.html)}
-                />
-              )}
-            </div>
+            <FrameAnnotator
+              title={`Current ${currentFrame.title}`}
+              kind={currentFrame.kind}
+              html={currentFrame.html}
+              imagePath={currentFrame.imagePath}
+              pins={currentFrame.pins}
+              drawTool={null}
+              compact
+              resolveImage={onResolveImage}
+            />
           </div>
           <div>
             <p className="pf-label">Proposed update</p>
-            <div className="pf-frame-canvas pf-frame-canvas-sm">
-              {proposedFrames[0].kind === "image" && proposedFrames[0].imagePath ? (
-                <img src={proposedFrames[0].imagePath} alt={proposedFrames[0].title} className="pf-frame-img" />
-              ) : (
-                <iframe
-                  title={`Proposed ${proposedFrames[0].title}`}
-                  sandbox={FRAME_SANDBOX}
-                  referrerPolicy="no-referrer"
-                  loading="lazy"
-                  srcDoc={isolateHtml(proposedFrames[0].html)}
-                />
-              )}
-            </div>
+            <FrameAnnotator
+              title={`Proposed ${proposedFrames[0].title}`}
+              kind={proposedFrames[0].kind}
+              html={proposedFrames[0].html}
+              imagePath={proposedFrames[0].imagePath}
+              pins={[]}
+              drawTool={null}
+              compact
+              resolveImage={onResolveImage}
+            />
           </div>
         </div>
       ) : proposedFrames[0] ? (
@@ -872,19 +907,16 @@ function FlowProposalCard({
           <p className="pf-label">
             Proposed preview ({proposedFrames.length} frame{proposedFrames.length === 1 ? "" : "s"} — {proposedFrames[0].title})
           </p>
-          <div className="pf-frame-canvas pf-frame-canvas-sm">
-            {proposedFrames[0].kind === "image" && proposedFrames[0].imagePath ? (
-              <img src={proposedFrames[0].imagePath} alt={proposedFrames[0].title} className="pf-frame-img" />
-            ) : (
-              <iframe
-                title={`Proposed ${proposedFrames[0].title}`}
-                sandbox={FRAME_SANDBOX}
-                referrerPolicy="no-referrer"
-                loading="lazy"
-                srcDoc={isolateHtml(proposedFrames[0].html)}
-              />
-            )}
-          </div>
+          <FrameAnnotator
+            title={`Proposed ${proposedFrames[0].title}`}
+            kind={proposedFrames[0].kind}
+            html={proposedFrames[0].html}
+            imagePath={proposedFrames[0].imagePath}
+            pins={[]}
+            drawTool={null}
+            compact
+            resolveImage={onResolveImage}
+          />
         </div>
       ) : null}
 
@@ -955,6 +987,9 @@ function Inbox({
   select,
   otherPendingProjects,
   onSelectProject,
+  projectDirectory,
+  onOpenFile,
+  onResolveImage,
 }: {
   data: Snapshot;
   act: PortfolioProps["act"];
@@ -963,6 +998,9 @@ function Inbox({
   select: (key: string | null) => void;
   otherPendingProjects?: Array<{ id: string; name: string; count: number }>;
   onSelectProject?: (projectId: string) => void;
+  projectDirectory?: string | null;
+  onOpenFile?: (filePath: string, baseDir?: string | null) => Promise<void>;
+  onResolveImage?: (imagePath: string) => Promise<string | null>;
 }): ReactNode {
   const changes = useMemo(
     () => data.changes.filter((change) => change.state === "pending").sort((a, b) => b.created.localeCompare(a.created)),
@@ -1090,6 +1128,9 @@ function Inbox({
                     act={act}
                     run={run}
                     busy={busy}
+                    projectDirectory={projectDirectory}
+                    onOpenFile={onOpenFile}
+                    onResolveImage={onResolveImage}
                   />
                 ))}
               </div>
@@ -1852,6 +1893,9 @@ function FrameCard({
   run,
   busy,
   select,
+  projectDirectory,
+  onOpenFile,
+  onResolveImage,
 }: {
   frame: Flow["frames"][number];
   index: number;
@@ -1863,12 +1907,13 @@ function FrameCard({
   run: Run;
   busy: string | null;
   select: (key: string | null) => void;
+  projectDirectory?: string | null;
+  onOpenFile?: (filePath: string, baseDir?: string | null) => Promise<void>;
+  onResolveImage?: (imagePath: string) => Promise<string | null>;
 }): ReactNode {
-  const overlay = useRef<HTMLDivElement | null>(null);
-  const [pinning, setPinning] = useState(false);
-  const [point, setPoint] = useState<{ x: number; y: number } | null>(null);
+  const [drawTool, setDrawTool] = useState<PinKind | null>(null);
+  const [pendingDraw, setPendingDraw] = useState<DrawnAnnotation | null>(null);
   const [text, setText] = useState("");
-  const [pinKind, setPinKind] = useState<PinKind>("point");
   const [forAgents, setForAgents] = useState(true);
   const [selector, setSelector] = useState("");
   const [openPin, setOpenPin] = useState<string | null>(null);
@@ -1879,7 +1924,6 @@ function FrameCard({
     data,
   )[0];
   const hue = criterionHue(frame.criterionId);
-  const isolatedHtml = useMemo(() => isolateHtml(frame.html), [frame.html]);
   const canvasStyle =
     viewportPreset === "mobile"
       ? { maxWidth: 390, height: 480, margin: "0 auto" }
@@ -1888,13 +1932,6 @@ function FrameCard({
         : viewportPreset === "desktop"
           ? { maxWidth: 1200, height: 460, margin: "0 auto" }
           : undefined;
-
-  const capture = (event: ReactMouseEvent<HTMLDivElement>): void => {
-    if (!pinning) return;
-    const box = overlay.current?.getBoundingClientRect();
-    if (box === undefined) return;
-    setPoint(normalizePoint(box, event.clientX, event.clientY));
-  };
 
   const openPinsCount = frame.pins.filter((p) => !p.resolved).length;
   const agentPinsCount = frame.pins.filter((p) => !p.resolved && p.forAgents).length;
@@ -1951,6 +1988,28 @@ function FrameCard({
         </p>
       )}
       {frame.notes ? <p className="pf-muted pf-small">Notes: {frame.notes}</p> : null}
+      {frame.componentRefs && frame.componentRefs.length > 0 ? (
+        <div className="pf-actions" aria-label="Pulled UI components">
+          <span className="pf-muted pf-small">Components:</span>
+          {frame.componentRefs.map((comp) =>
+            onOpenFile && projectDirectory ? (
+              <button
+                key={comp}
+                type="button"
+                className="hc-chip hc-file-chip"
+                title={`Open ${comp}`}
+                onClick={() => void onOpenFile(comp, projectDirectory)}
+              >
+                <code>{comp.split("/").pop()}</code> ↗
+              </button>
+            ) : (
+              <code key={comp} className="hc-chip">
+                {comp.split("/").pop()}
+              </code>
+            ),
+          )}
+        </div>
+      ) : null}
       {frame.driftDetected ? (
         <div className="pf-drift-banner" role="status">
           <span>
@@ -1975,118 +2034,72 @@ function FrameCard({
         </div>
       ) : null}
 
-      <div className="pf-frame-canvas" style={canvasStyle}>
-        {frame.kind === "image" && frame.imagePath ? (
-          <img src={frame.imagePath} alt={`${frame.title} (${frame.key})`} className="pf-frame-img" />
-        ) : (
-          /* sandbox="" is the isolation: no scripts, no same-origin, no forms, no top navigation. */
-          <iframe
-            title={`${frame.title} (${frame.key} / ${frame.criterionId})`}
-            sandbox={FRAME_SANDBOX}
-            referrerPolicy="no-referrer"
-            loading="lazy"
-            srcDoc={isolatedHtml}
-          />
-        )}
-        <div
-          ref={overlay}
-          className={`pf-pin-layer${pinning ? " is-capturing" : ""}`}
-          onClick={capture}
-        >
-          <svg className="pf-pin-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-            {frame.pins.map((pin, pinIndex) => {
-              if (pin.resolved) return null;
-              const cx = Math.min(1, Math.max(0, pin.x)) * 100;
-              const cy = Math.min(1, Math.max(0, pin.y)) * 100;
-              if (pin.kind === "rect") {
-                const w = Number(pin.geometry?.w ?? 0.16) * 100;
-                const h = Number(pin.geometry?.h ?? 0.12) * 100;
-                return (
-                  <rect
-                    key={`svg:${index}:${pinIndex}`}
-                    x={Math.max(0, cx - w / 2)}
-                    y={Math.max(0, cy - h / 2)}
-                    width={w}
-                    height={h}
-                    rx={1.5}
-                    className={pin.forAgents ? "pf-ann-shape is-agent" : "pf-ann-shape"}
-                  />
-                );
-              }
-              if (pin.kind === "arrow") {
-                const x2 = Number(pin.geometry?.x2 ?? Math.min(1, pin.x + 0.1)) * 100;
-                const y2 = Number(pin.geometry?.y2 ?? Math.max(0, pin.y - 0.08)) * 100;
-                return (
-                  <line
-                    key={`svg:${index}:${pinIndex}`}
-                    x1={x2}
-                    y1={y2}
-                    x2={cx}
-                    y2={cy}
-                    className={pin.forAgents ? "pf-ann-arrow is-agent" : "pf-ann-arrow"}
-                  />
-                );
-              }
-              return null;
-            })}
-          </svg>
-          {frame.pins.map((pin, pinIndex) => {
-            const id = `${index}:${pinIndex}`;
-            const position = pinPosition(pin);
-            return (
-              <button
-                key={id}
-                type="button"
-                className={`pf-pin${pin.resolved ? " is-resolved" : ""}${pin.forAgents ? " is-agent" : ""}`}
-                style={{ ...position, borderColor: pin.resolved ? undefined : `hsl(${criterionHue(frame.criterionId)} 65% 45%)` }}
-                title={`${pin.forAgents ? "[for agents] " : ""}${pin.resolved ? "[resolved] " : ""}${pin.text}`}
-                aria-label={`Pin ${pinIndex + 1}: ${pin.text}`}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setOpenPin((current) => (current === id ? null : id));
-                }}
-              >
-                {pin.kind === "step" ? `S${pinIndex + 1}` : pinIndex + 1}
-              </button>
-            );
-          })}
-          {point !== null && (
-            <span
-              className="pf-pin pf-pin-new"
-              style={{ left: `${(point.x * 100).toFixed(2)}%`, top: `${(point.y * 100).toFixed(2)}%` }}
-              aria-hidden="true"
-            >
-              +
-            </span>
-          )}
-        </div>
-      </div>
+      <FrameAnnotator
+        title={`${frame.title} (${frame.key} / ${frame.criterionId})`}
+        kind={frame.kind}
+        html={frame.html}
+        imagePath={frame.imagePath}
+        pins={frame.pins}
+        draftPins={
+          pendingDraw
+            ? [{ kind: pendingDraw.kind, x: pendingDraw.x, y: pendingDraw.y, geometry: pendingDraw.geometry, text: "New annotation" }]
+            : []
+        }
+        drawTool={drawTool}
+        accentHue={hue}
+        canvasStyle={canvasStyle}
+        onSelectPin={(pinIndex) => {
+          const id = `${index}:${pinIndex}`;
+          setOpenPin((current) => (current === id ? null : id));
+        }}
+        onDrawComplete={(drawn) => setPendingDraw(drawn)}
+        resolveImage={onResolveImage}
+      />
 
       <div className="pf-frame-tools">
-        <button
-          type="button"
-          className={`pf-btn pf-btn-ghost${pinning ? " is-active" : ""}`}
-          aria-pressed={pinning}
-          onClick={() => {
-            setPinning((current) => !current);
-            setPoint(null);
-          }}
-        >
-          {pinning ? "Click the frame to place an annotation" : "Annotate / Pin"}
-        </button>
+        <div className="cl-seg" role="group" aria-label="Annotation drawing tools">
+          <button
+            type="button"
+            className={drawTool === null ? "is-active" : ""}
+            onClick={() => {
+              setDrawTool(null);
+              setPendingDraw(null);
+            }}
+          >
+            View
+          </button>
+          <button type="button" className={drawTool === "point" ? "is-active" : ""} onClick={() => setDrawTool("point")}>
+            Pin
+          </button>
+          <button type="button" className={drawTool === "rect" ? "is-active" : ""} onClick={() => setDrawTool("rect")}>
+            Box
+          </button>
+          <button type="button" className={drawTool === "arrow" ? "is-active" : ""} onClick={() => setDrawTool("arrow")}>
+            Arrow
+          </button>
+          <button type="button" className={drawTool === "path" ? "is-active" : ""} onClick={() => setDrawTool("path")}>
+            Draw
+          </button>
+          <button type="button" className={drawTool === "step" ? "is-active" : ""} onClick={() => setDrawTool("step")}>
+            Step
+          </button>
+        </div>
         <span className="pf-muted pf-small">
-          {openPinsCount} open ({frame.pins.length} total)
-          {agentPinsCount > 0 ? ` · ${agentPinsCount} for agents` : ""}
+          {drawTool
+            ? drawTool === "point" || drawTool === "step"
+              ? "Click on the screen to place."
+              : "Click and drag on the screen to draw."
+            : `${openPinsCount} open (${frame.pins.length} total)${agentPinsCount > 0 ? ` · ${agentPinsCount} for agents` : ""}`}
         </span>
       </div>
 
-      {point !== null && (
+      {pendingDraw !== null && (
         <form
           className="pf-pin-form"
           onSubmit={(event) => {
             event.preventDefault();
             const trimmed = text.trim();
-            if (trimmed === "" || point === null) return;
+            if (trimmed === "" || pendingDraw === null) return;
             void run(
               `pin:${index}`,
               async () => {
@@ -2094,13 +2107,13 @@ function FrameCard({
                   op: "pin",
                   name: flowName,
                   frame: index,
-                  x: point.x,
-                  y: point.y,
+                  x: pendingDraw.x,
+                  y: pendingDraw.y,
                   text: trimmed,
-                  kind: pinKind,
+                  kind: pendingDraw.kind,
                   forAgents,
                   ...(selector.trim() ? { selector: selector.trim() } : {}),
-                  ...(pinKind === "rect" ? { geometry: { w: 0.16, h: 0.12 } } : {}),
+                  ...(pendingDraw.geometry ? { geometry: pendingDraw.geometry } : {}),
                 });
               },
               "Annotation added.",
@@ -2108,28 +2121,16 @@ function FrameCard({
               if (ok) {
                 setText("");
                 setSelector("");
-                setPoint(null);
-                setPinning(false);
+                setPendingDraw(null);
+                setDrawTool(null);
               }
             });
           }}
         >
           <p className="pf-muted pf-small">
-            Annotation at {(point.x * 100).toFixed(0)}% × {(point.y * 100).toFixed(0)}% on frame {index + 1}.
+            <strong>{pendingDraw.kind}</strong> at {(pendingDraw.x * 100).toFixed(0)}% × {(pendingDraw.y * 100).toFixed(0)}% on frame {index + 1}.
           </p>
           <div className="pf-row">
-            <select
-              aria-label="Annotation kind"
-              className="pf-select"
-              style={{ width: "auto" }}
-              value={pinKind}
-              onChange={(e) => setPinKind(e.target.value as PinKind)}
-            >
-              <option value="point">Pin</option>
-              <option value="rect">Highlight box</option>
-              <option value="arrow">Callout arrow</option>
-              <option value="step">Step badge</option>
-            </select>
             <label className="pf-small" style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
               <input type="checkbox" checked={forAgents} onChange={(e) => setForAgents(e.target.checked)} />
               <span>For agents</span>
@@ -2152,12 +2153,13 @@ function FrameCard({
               className="pf-input"
               value={text}
               placeholder="What should change or be noted here?"
+              autoFocus
               onChange={(event) => setText(event.target.value)}
             />
             <button type="submit" className="pf-btn pf-btn-primary" disabled={busy !== null || text.trim() === ""}>
               Save pin
             </button>
-            <button type="button" className="pf-btn pf-btn-ghost" onClick={() => setPoint(null)}>
+            <button type="button" className="pf-btn pf-btn-ghost" onClick={() => setPendingDraw(null)}>
               Cancel
             </button>
           </div>
@@ -2250,7 +2252,30 @@ function FrameEditor({
   onMove: (direction: -1 | 1) => void;
 }): ReactNode {
   const base = useId();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [uploadErr, setUploadErr] = useState<string | null>(null);
   const outcome = outcomes.find((candidate) => candidate.key === draft.key);
+
+  const loadImageFile = (file: File | null | undefined) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setUploadErr("Please choose a PNG, JPG, WebP, GIF, or SVG image.");
+      return;
+    }
+    if (file.size > 3 * 1024 * 1024) {
+      setUploadErr("Image exceeds 3 MiB limit.");
+      return;
+    }
+    setUploadErr(null);
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        onChange({ ...draft, kind: "image", imagePath: reader.result });
+      }
+    };
+    reader.readAsDataURL(file);
+  };
   return (
     <fieldset className="pf-editor-frame">
       <legend>
@@ -2327,13 +2352,57 @@ function FrameEditor({
       {draft.kind === "image" ? (
         <div className="pf-field">
           <label className="pf-label" htmlFor={`${base}-img`}>
-            Image path or data URI
+            Screenshot / Image
           </label>
+          <div
+            className={`pf-dropzone${dragOver ? " is-over" : ""}`}
+            tabIndex={0}
+            role="button"
+            aria-label="Drop, paste, or browse screenshot image"
+            onClick={() => fileInputRef.current?.click()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                fileInputRef.current?.click();
+              }
+            }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragOver(true);
+            }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragOver(false);
+              loadImageFile(e.dataTransfer.files?.[0]);
+            }}
+            onPaste={(e) => {
+              const imgItem = [...(e.clipboardData?.items ?? [])].find((it) => it.type.startsWith("image/"));
+              if (imgItem) {
+                e.preventDefault();
+                loadImageFile(imgItem.getAsFile());
+              }
+            }}
+          >
+            <span>
+              {draft.imagePath.startsWith("data:image/")
+                ? "Screenshot attached — drop, paste (⌘V), or click to replace"
+                : "Drop a PNG/JPG/WebP screenshot, paste (⌘V), or click to browse"}
+            </span>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+              style={{ display: "none" }}
+              onChange={(e) => loadImageFile(e.target.files?.[0])}
+            />
+          </div>
+          {uploadErr ? <p className="pf-error">{uploadErr}</p> : null}
           <input
             id={`${base}-img`}
             className="pf-input"
             value={draft.imagePath}
-            placeholder="data:image/png;base64,… or screenshots/checkout.png"
+            placeholder="Or enter workspace path (e.g. screenshots/checkout.png) or data URI…"
             onChange={(event) => onChange({ ...draft, imagePath: event.target.value })}
           />
         </div>
@@ -2380,6 +2449,36 @@ function FrameEditor({
   );
 }
 
+function buildFlowContextMarkdown(flow: Flow): string {
+  const lines: string[] = [
+    `# Hill Climb Visual Flow: ${flow.name}`,
+    flow.designKit ? `Design kit: ${flow.designKit}` : null,
+    flow.folder ? `Folder: ${flow.folder}` : null,
+    `Frames: ${flow.frames.length}`,
+  ].filter((x): x is string => Boolean(x));
+
+  flow.frames.forEach((fr, idx) => {
+    lines.push("", `## Frame ${idx + 1}: ${fr.title} (v${fr.version ?? 1} · ${fr.key} / ${fr.criterionId})`);
+    if (fr.componentRefs && fr.componentRefs.length > 0) {
+      lines.push(`Components: ${fr.componentRefs.join(", ")}`);
+    }
+    if (fr.notes) lines.push(`Notes: ${fr.notes}`);
+    const openPins = fr.pins.filter((p) => !p.resolved);
+    if (openPins.length > 0) {
+      lines.push("Open visual annotations:");
+      for (const pin of openPins) {
+        const coords = `${Math.round(pin.x * 100)}%,${Math.round(pin.y * 100)}%`;
+        const shape =
+          pin.kind === "rect" && pin.geometry?.w && pin.geometry?.h
+            ? `box ${Math.round(Number(pin.geometry.w) * 100)}%×${Math.round(Number(pin.geometry.h) * 100)}% @ ${coords}`
+            : `${pin.kind ?? "pin"} @ ${coords}`;
+        lines.push(`- [${shape}${pin.forAgents ? " · for agents" : ""}${pin.selector ? ` · ${pin.selector}` : ""}] ${pin.text}`);
+      }
+    }
+  });
+  return lines.join("\n");
+}
+
 function Flows({
   data,
   act,
@@ -2387,6 +2486,11 @@ function Flows({
   busy,
   select,
   initialFlow,
+  projectDirectory,
+  attachedContextId,
+  onAttachContext,
+  onOpenFile,
+  onResolveImage,
 }: {
   data: Snapshot;
   act: PortfolioProps["act"];
@@ -2394,6 +2498,11 @@ function Flows({
   busy: string | null;
   select: (key: string | null) => void;
   initialFlow?: string | null;
+  projectDirectory?: string | null;
+  attachedContextId?: string | null;
+  onAttachContext?: (id: string, label: string, markdown: string) => Promise<void>;
+  onOpenFile?: (filePath: string, baseDir?: string | null) => Promise<void>;
+  onResolveImage?: (imagePath: string) => Promise<string | null>;
 }): ReactNode {
   const [activeName, setActiveName] = useState<string | null>(initialFlow ?? null);
   const [folderFilter, setFolderFilter] = useState<string>("all");
@@ -2556,6 +2665,9 @@ function Flows({
                   act={act}
                   run={run}
                   busy={busy}
+                  projectDirectory={projectDirectory}
+                  onOpenFile={onOpenFile}
+                  onResolveImage={onResolveImage}
                 />
               ))}
             </div>
@@ -2583,6 +2695,17 @@ function Flows({
                 </p>
               </div>
               <div className="pf-actions">
+                {onAttachContext ? (
+                  <button
+                    type="button"
+                    className={`pf-btn hc-attach-btn${attachedContextId === `flow:${flow.name}` ? " is-attached" : ""}`}
+                    aria-pressed={attachedContextId === `flow:${flow.name}`}
+                    title="Attach this flow, its components, and open annotations to your next chat message"
+                    onClick={() => void onAttachContext(`flow:${flow.name}`, `Flow: ${flow.name}`, buildFlowContextMarkdown(flow))}
+                  >
+                    {attachedContextId === `flow:${flow.name}` ? "Attached ✓" : "Attach to chat"}
+                  </button>
+                ) : null}
                 <div className="cl-seg" role="group" aria-label="Flow display mode">
                   <button
                     type="button"
@@ -2660,6 +2783,9 @@ function Flows({
                       run={run}
                       busy={busy}
                       select={select}
+                      projectDirectory={projectDirectory}
+                      onOpenFile={onOpenFile}
+                      onResolveImage={onResolveImage}
                     />
                   ) : null}
                 </ol>
@@ -2679,6 +2805,9 @@ function Flows({
                     run={run}
                     busy={busy}
                     select={select}
+                    projectDirectory={projectDirectory}
+                    onOpenFile={onOpenFile}
+                    onResolveImage={onResolveImage}
                   />
                 ))}
               </ol>
@@ -2873,6 +3002,11 @@ export function Portfolio({
   onFocusScopeFromRelease,
   otherPendingProjects,
   onSelectProject,
+  projectDirectory,
+  attachedContextId,
+  onAttachContext,
+  onOpenFile,
+  onResolveImage,
 }: PortfolioProps): ReactNode {
   const { busy, error, notice, run } = useAction(act);
   const counts = inboxCounts(data);
@@ -2916,6 +3050,9 @@ export function Portfolio({
           select={select}
           otherPendingProjects={otherPendingProjects}
           onSelectProject={onSelectProject}
+          projectDirectory={projectDirectory}
+          onOpenFile={onOpenFile}
+          onResolveImage={onResolveImage}
         />
       )}
       {page === "roadmap" && (
@@ -2932,7 +3069,19 @@ export function Portfolio({
         />
       )}
       {page === "flows" && (
-        <Flows data={data} act={act} run={run} busy={busy} select={select} initialFlow={initialFlow} />
+        <Flows
+          data={data}
+          act={act}
+          run={run}
+          busy={busy}
+          select={select}
+          initialFlow={initialFlow}
+          projectDirectory={projectDirectory}
+          attachedContextId={attachedContextId}
+          onAttachContext={onAttachContext}
+          onOpenFile={onOpenFile}
+          onResolveImage={onResolveImage}
+        />
       )}
     </section>
   );

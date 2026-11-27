@@ -221,4 +221,5 @@ export interface ViewProps {
   attachedContextId?: string | null
   onAttachContext?: (id: string, label: string, markdown: string) => Promise<void>
   onOpenFile?: (filePath: string, baseDir?: string | null) => Promise<void>
+  onSendToChat?: (text: string) => Promise<boolean>
 }

@@ -1527,9 +1527,24 @@ export function OutcomeDrawer(props: ViewProps): JSX.Element | null {
                 <section className="hc-section" aria-label="Acceptance checks">
                   <header className="hc-section-head">
                     <h3>Acceptance checks</h3>
-                    <button type="button" className="hc-btn" onClick={() => setEditing(!editing)} aria-expanded={editing}>
-                      {editing ? 'Cancel edit' : 'Propose edit'}
-                    </button>
+                    <div className="hc-inline-group">
+                      {props.onSendToChat ? (
+                        <button
+                          type="button"
+                          className="hc-btn"
+                          title="Ask the agent in chat to pull repo UI components and propose a visual mockup inline"
+                          onClick={() => {
+                            const prompt = `Design a visual screen flow for Hill Climb outcome ${outcome.key} (${outcome.title}). First call hillclimb_design(mode="kit") to inspect our repo's UI components and CSS tokens, then propose an interactive mockup inline with hillclimb_design(mode="propose") so I can draw visual feedback and accept or revise it right in this thread.`
+                            void props.onSendToChat?.(prompt)
+                          }}
+                        >
+                          Design screen
+                        </button>
+                      ) : null}
+                      <button type="button" className="hc-btn" onClick={() => setEditing(!editing)} aria-expanded={editing}>
+                        {editing ? 'Cancel edit' : 'Propose edit'}
+                      </button>
+                    </div>
                   </header>
                   <p className="hc-story">{outcome.story}</p>
                   <ol className="hc-criteria-clean">
