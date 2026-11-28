@@ -580,7 +580,7 @@ function HillClimbApp() {
 
   // Connect once using the MCP Apps SDK
   useEffect(() => {
-    const app = new App({ name: "Hill Climb", version: "0.10.1" }, {});
+    const app = new App({ name: "Hill Climb", version: "0.10.2" }, {});
     appRef.current = app;
 
     const applyThemeFromContext = (ctx: ReturnType<App["getHostContext"]>) => {

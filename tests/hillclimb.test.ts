@@ -2956,4 +2956,135 @@ experiments:
       rmSync(dataDir, { recursive: true, force: true });
     }
   });
+
+  it("v0.10.2 generalization & hygiene guardrails: LOW TRANSFER WARNING, always-on mega-bundled diff warning, slow-check probe tip, and mid-climb budget --probe / --holdout-every", () => {
+    const repoDir = tempDir("hc-v0102-repo-");
+    try {
+      initGitRepo(repoDir);
+      installEngine(repoDir);
+      const climbPy = join(repoDir, ".hill-climb", "engine", "climb.py");
+
+      writeFileSync(join(repoDir, "model.py"), "DEV = 0.50\nHOLDOUT = 0.50\n", "utf8");
+      writeFileSync(join(repoDir, "check_dev.py"), "import model\nprint(f'{model.DEV:.4f}')\n", "utf8");
+      writeFileSync(join(repoDir, "check_holdout.py"), "import model\nprint(f'{model.HOLDOUT:.4f}')\n", "utf8");
+      writeFileSync(join(repoDir, "fast_probe.py"), "print('ok')\n", "utf8");
+      execFileSync("git", ["add", "model.py", "check_dev.py", "check_holdout.py", "fast_probe.py"], { cwd: repoDir });
+      execFileSync("git", ["commit", "-q", "-m", "seed v0102 climb"], { cwd: repoDir });
+
+      execFileSync(
+        "python3",
+        [
+          climbPy, "init", "transfer-guard",
+          "--goal", "Reach 0.90 with strong holdout transfer",
+          "--check", "python3 -B check_dev.py",
+          "--holdout", "python3 -B check_holdout.py",
+          "--direction", "max",
+          "--target", "0.90",
+          "--min-gain", "0.01",
+          "--lock", "check_dev.py",
+          "--lock", "check_holdout.py",
+        ],
+        { cwd: repoDir, encoding: "utf8" },
+      );
+
+      // 1. Always-on mega-bundled diff warning on a KEPT step (>=250 changed lines, not in a stall!)
+      const filler = Array.from({ length: 260 }, (_, i) => `RULE_${i} = ${i}`).join("\n");
+      writeFileSync(join(repoDir, "model.py"), `DEV = 0.70\nHOLDOUT = 0.53\n${filler}\n`, "utf8");
+      const tryOut = execFileSync("python3", [climbPy, "try", "mega-bundled narrow heuristic pack"], {
+        cwd: repoDir,
+        encoding: "utf8",
+      });
+      assert.match(tryOut, /kept/);
+      assert.match(tryOut, /BUNDLED DIFF WARNING: kept step touched \d+ lines/);
+
+      // 2. Low-transfer warning (<30% transfer on material visible gain: +0.03 holdout vs +0.20 visible => 15%)
+      const holdoutOut = execFileSync("python3", [climbPy, "holdout", "--why", "mid-check"], {
+        cwd: repoDir,
+        encoding: "utf8",
+      });
+      assert.match(holdoutOut, /LOW TRANSFER WARNING: only 15% of visible gain/);
+
+      // 3. Inject slow check runtimes (>=120s average across baseline + step 1) to verify Probe tip across CLI, audit, TS status/card/scan
+      const logPath = join(repoDir, ".hill-climb", "transfer-guard", "log.jsonl");
+      const patchedLog = readFileSync(logPath, "utf8")
+        .trim()
+        .split("\n")
+        .map((line) => {
+          const row = JSON.parse(line) as Record<string, unknown>;
+          if (row.kind === "baseline" || row.kind === "step") row.seconds = 180;
+          return JSON.stringify(row);
+        });
+      writeFileSync(logPath, `${patchedLog.join("\n")}\n`, "utf8");
+
+      const pyStatus = execFileSync("python3", [climbPy, "status"], { cwd: repoDir, encoding: "utf8" });
+      assert.match(pyStatus, /LOW TRANSFER WARNING: only 15%/);
+      assert.match(pyStatus, /Probe tip: checks average ~3\.0 min with no --probe configured/);
+
+      const auditJson = JSON.parse(
+        execFileSync("python3", [climbPy, "audit", "--json"], { cwd: repoDir, encoding: "utf8" }),
+      ) as {
+        low_transfer_warning: string | null;
+        probe_warning: string | null;
+        bundled_kept_steps: number;
+        median_kept_diff_lines: number | null;
+        findings: string[];
+        clean: boolean;
+      };
+      assert.match(auditJson.low_transfer_warning ?? "", /LOW TRANSFER WARNING: only 15%/);
+      assert.match(auditJson.probe_warning ?? "", /Probe tip:/);
+      assert.equal(auditJson.bundled_kept_steps, 1);
+      assert.ok((auditJson.median_kept_diff_lines ?? 0) >= 250);
+      assert.equal(auditJson.clean, false);
+      assert.ok(auditJson.findings.some((f) => f.includes("LOW TRANSFER WARNING")));
+      assert.ok(auditJson.findings.some((f) => f.includes("Bundled diffs:")));
+      assert.ok(auditJson.findings.some((f) => f.includes("Probe tip:")));
+
+      // TS status, card, and scanProjectClimbs mirror Python warnings identically
+      clearScanCache();
+      const tsStatus = getClimbStatus(repoDir, "transfer-guard");
+      assert.equal(tsStatus.summary.holdoutWarning, null, "positive holdout must not trigger OVERFIT WARNING");
+      assert.match(tsStatus.summary.lowTransferWarning ?? "", /LOW TRANSFER WARNING: only 15%/);
+      assert.match(tsStatus.summary.probeWarning ?? "", /Probe tip:/);
+      assert.equal(tsStatus.summary.bundledKeptSteps, 1);
+      assert.match(tsStatus.text, /LOW TRANSFER WARNING/);
+      assert.match(tsStatus.text, /Probe tip:/);
+
+      const tsCard = getClimbCard(repoDir, "transfer-guard");
+      assert.match(tsCard.data.lowTransferWarning ?? "", /LOW TRANSFER WARNING/);
+      assert.match(tsCard.data.probeWarning ?? "", /Probe tip:/);
+
+      const scanned = scanProjectClimbs(repoDir, { force: true });
+      assert.match(scanned.climbs[0]?.health?.lowTransferWarning ?? "", /LOW TRANSFER WARNING/);
+      assert.match(scanned.climbs[0]?.health?.probeWarning ?? "", /Probe tip:/);
+
+      // 4. Mid-climb `climb.py budget --probe ... --holdout-every 2` updates card without relocking & clears Probe tip
+      const budgetOut = execFileSync(
+        "python3",
+        [climbPy, "budget", "--probe", "python3 -B fast_probe.py", "--holdout-every", "2"],
+        { cwd: repoDir, encoding: "utf8" },
+      );
+      assert.match(budgetOut, /probe=python3 -B fast_probe\.py/);
+      assert.match(budgetOut, /holdout_every=2/);
+      clearScanCache();
+      const afterBudget = getClimbStatus(repoDir, "transfer-guard");
+      assert.equal(afterBudget.summary.probeWarning, null, "setting --probe mid-climb must clear Probe tip");
+      assert.equal(afterBudget.summary.holdoutEvery, 2);
+
+      // 5. Two kept steps after mid-climb `budget --holdout-every 2` auto-trigger holdout checkpoint & healthy transfer clears LOW TRANSFER WARNING
+      writeFileSync(join(repoDir, "model.py"), `DEV = 0.72\nHOLDOUT = 0.65\n${filler}\n`, "utf8");
+      execFileSync("python3", [climbPy, "try", "generalizable cross-category fix 1"], { cwd: repoDir, encoding: "utf8" });
+      writeFileSync(join(repoDir, "model.py"), `DEV = 0.74\nHOLDOUT = 0.70\n${filler}\n`, "utf8");
+      const autoCpOut = execFileSync("python3", [climbPy, "try", "generalizable cross-category fix 2"], {
+        cwd: repoDir,
+        encoding: "utf8",
+      });
+      assert.match(autoCpOut, /Holdout checkpoint:/, "mid-climb budget --holdout-every 2 must auto-run checkpoint");
+      assert.doesNotMatch(autoCpOut, /LOW TRANSFER WARNING/);
+      clearScanCache();
+      const healthy = getClimbStatus(repoDir, "transfer-guard");
+      assert.equal(healthy.summary.lowTransferWarning, null, "strong holdout transfer (83%) must clear LOW TRANSFER WARNING");
+    } finally {
+      rmSync(repoDir, { recursive: true, force: true });
+    }
+  });
 });

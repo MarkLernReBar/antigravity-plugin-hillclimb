@@ -48,7 +48,7 @@ export const ENGINE_COMMANDS = [
   "audit [name] [--strict] [--json]",
   'raise <bar> --why "..."',
   'review "<what you found>"',
-  "budget [name] [--hours N] [--steps N] [--off]",
+  'budget [name] [--hours N] [--steps N] [--probe "..."] [--holdout-every N] [--off]',
   "drop [name]",
   "list",
   "save [name]",
@@ -397,10 +397,13 @@ export function getClimbCard(repoPath: string, name?: string) {
   const summary = summarize(state, 0);
   const extras: string[] = [];
   if (summary.notes) extras.push(`Notes:\n${summary.notes}`);
+  if (summary.holdoutWarning) extras.push(summary.holdoutWarning);
+  else if (summary.lowTransferWarning) extras.push(summary.lowTransferWarning);
   if (summary.holdoutCheckpointWarning) extras.push(summary.holdoutCheckpointWarning);
   if (summary.thrashWarning) extras.push(summary.thrashWarning);
   else if (summary.stallWarning) extras.push(summary.stallWarning);
   if (summary.notesWarning) extras.push(summary.notesWarning);
+  if (summary.probeWarning) extras.push(summary.probeWarning);
   const baseText = formatRig(card);
   const text = extras.length > 0 ? `${baseText}\n\n${extras.join("\n")}` : baseText;
   return {
@@ -427,7 +430,10 @@ export function getClimbCard(repoPath: string, name?: string) {
       holdout: card.holdout ? redactSecrets(card.holdout) : null,
       holdoutEvery: summary.holdoutEvery,
       keptSinceHoldout: summary.keptSinceHoldout,
+      holdoutWarning: summary.holdoutWarning,
+      lowTransferWarning: summary.lowTransferWarning,
       holdoutCheckpointWarning: summary.holdoutCheckpointWarning,
+      probeWarning: summary.probeWarning,
       relockCount: summary.relockCount,
       locked: card.lock ?? [],
       fingerprint: card.fingerprint ?? null,
@@ -530,10 +536,12 @@ export interface ScannedClimbRunning {
 
 export interface ScannedClimbHealth {
   overfitWarning: string | null;
+  lowTransferWarning: string | null;
   holdoutCheckpointWarning: string | null;
   thrashWarning: string | null;
   stallWarning: string | null;
   notesWarning: string | null;
+  probeWarning: string | null;
   branchWarning: string | null;
 }
 
@@ -1205,10 +1213,12 @@ export function scanProjectClimbs(repoPath: string | null, opts?: ScanProjectCli
         transferRatio: summary.transferRatio,
         health: {
           overfitWarning: summary.holdoutWarning,
+          lowTransferWarning: summary.lowTransferWarning,
           holdoutCheckpointWarning: summary.holdoutCheckpointWarning,
           thrashWarning: summary.thrashWarning,
           stallWarning: summary.stallWarning,
           notesWarning: summary.notesWarning,
+          probeWarning: summary.probeWarning,
           branchWarning,
         },
         breakdown,

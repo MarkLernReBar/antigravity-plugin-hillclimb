@@ -21541,6 +21541,9 @@ function applyPlanning(tree, a, now, meta3) {
 // src/state.ts
 var STALL = 3;
 var PLATEAU = 5;
+var MEGA_DIFF_LINES = 250;
+var LOW_TRANSFER_RATIO = 0.3;
+var SLOW_CHECK_PROBE_SECONDS = 120;
 var NOTES_STALE_STEPS = 3;
 var HOLDOUT_CHECKPOINT_KEPT = 3;
 var BARS = "\u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588";
@@ -22885,24 +22888,48 @@ function summarize(files, recentLimit = 15, now = Date.now()) {
     why: redactSecrets(row.why ?? ""),
     visible: typeof row.visible === "number" && Number.isFinite(row.visible) ? row.visible : null
   }));
+  const parseMinGain = (raw, baseVal) => {
+    if (raw === void 0 || raw === null) return 0;
+    if (typeof raw === "number") return Number.isFinite(raw) ? Math.max(0, raw) : 0;
+    const s2 = raw.trim();
+    if (!s2) return 0;
+    if (s2.endsWith("%")) {
+      const pct = Number(s2.slice(0, -1));
+      return Number.isFinite(pct) ? Math.max(0, Math.abs(baseVal) * (pct / 100)) : 0;
+    }
+    const n2 = Number(s2);
+    return Number.isFinite(n2) ? Math.max(0, n2) : 0;
+  };
+  const signedFmt = (v) => `${v >= 0 ? "+" : "-"}${number4(Math.abs(v))}`;
   const devGain = card.direction === "max" ? card.best.score - card.baseline : card.baseline - card.best.score;
   let holdoutGain = null;
   let transferRatio = null;
   let holdoutWarning = null;
+  let lowTransferWarning = null;
   if (holdouts.length >= 2) {
     const h0 = holdouts[0].score;
     const h1 = holdouts[holdouts.length - 1].score;
     holdoutGain = card.direction === "max" ? h1 - h0 : h0 - h1;
     const v0 = holdouts[0].visible;
     const v1 = holdouts[holdouts.length - 1].visible;
-    const winDevGain = v0 !== null && v1 !== null && Math.abs(v1 - v0) > 1e-9 ? card.direction === "max" ? v1 - v0 : v0 - v1 : devGain;
+    const hasWindowVis = v0 !== null && v1 !== null && Math.abs(v1 - v0) > 1e-9;
+    const winDevGain = hasWindowVis ? card.direction === "max" ? v1 - v0 : v0 - v1 : devGain;
+    const visDelta = hasWindowVis ? signedFmt(v1 - v0) : signedFmt(card.best.score - card.baseline);
     if (winDevGain > 1e-9) {
       transferRatio = Math.round(holdoutGain / winDevGain * 1e3) / 1e3;
     }
     if (devGain > 1e-9 && holdoutGain <= 1e-9) {
-      const signed = (v) => `${v >= 0 ? "+" : "-"}${number4(Math.abs(v))}`;
       const status = holdoutGain < -1e-9 ? "regressed" : "stayed flat (zero transfer)";
-      holdoutWarning = `OVERFIT WARNING: visible improved ${number4(card.baseline)} -> ${number4(card.best.score)} (${signed(card.best.score - card.baseline)}) while holdout ${status} ${number4(h0)} -> ${number4(h1)} (${signed(h1 - h0)}). Investigate why gains did not transfer before confirming holdout criteria or merging.`;
+      holdoutWarning = `OVERFIT WARNING: visible improved ${number4(card.baseline)} -> ${number4(card.best.score)} (${signedFmt(card.best.score - card.baseline)}) while holdout ${status} ${number4(h0)} -> ${number4(h1)} (${signedFmt(h1 - h0)}). Investigate why gains did not transfer before confirming holdout criteria or merging.`;
+    } else if (holdoutGain > 1e-9 && winDevGain > 1e-9) {
+      const minG = parseMinGain(card.min_gain, card.baseline);
+      const targetSpan = typeof card.target === "number" ? Math.abs(card.target - card.baseline) : 0;
+      const floor = minG > 0 || targetSpan > 0 ? Math.max(minG * 2, targetSpan * 0.15) : Math.max(0.02, Math.abs(card.baseline) * 0.03);
+      const rawRatio = holdoutGain / winDevGain;
+      if (winDevGain >= floor && rawRatio < LOW_TRANSFER_RATIO) {
+        const pct = Math.round(rawRatio * 100);
+        lowTransferWarning = `LOW TRANSFER WARNING: only ${pct}% of visible gain (${visDelta}) transferred to blind holdout (${signedFmt(h1 - h0)}) \u2014 check for domain/category-specific overfitting or mega-bundled edits before claiming victory.`;
+      }
     }
   }
   const hasHoldout = typeof card.holdout === "string" && card.holdout !== "";
@@ -22921,6 +22948,13 @@ function summarize(files, recentLimit = 15, now = Date.now()) {
   const stallWarning = !reached && !thrashWarning && sinceGain >= STALL && sinceGain < PLATEAU ? `STALL: ${sinceGain} steps without gain. Update notes.md Pareto table, pivot to the largest untouched failure bucket (or check for pending contract relock), or fan out 2-3 parallel orthogonal subagents.` : null;
   const notesStaleSteps = notesStaleness(notes, files.notesMtimeMs, steps);
   const notesWarning = notesStaleSteps >= NOTES_STALE_STEPS ? `Notes warning: notes.md has not been updated in ${notesStaleSteps} step(s) \u2014 refresh Remaining Misses (Pareto) and Dead Ends so context compaction never resets progress.` : null;
+  const timedCheckRuns = rows.filter((r) => (r.kind === "baseline" || r.kind === "step") && typeof r.seconds === "number" && Number.isFinite(r.seconds)).map((r) => r.seconds);
+  const avgCheckRun = timedCheckRuns.length > 0 ? timedCheckRuns.reduce((total, value) => total + value, 0) / timedCheckRuns.length : null;
+  const hasProbe = typeof card.probe === "string" && card.probe.trim() !== "";
+  const probeWarning = !hasProbe && !reached && timedCheckRuns.length >= 2 && avgCheckRun !== null && avgCheckRun >= SLOW_CHECK_PROBE_SECONDS ? `Probe tip: checks average ~${(avgCheckRun / 60).toFixed(1)} min with no --probe configured \u2014 add a fast (<15s) slice probe via \`climb.py budget ${card.name} --probe '<fast cmd>'\` so broken or non-triggering edits fail fast.` : null;
+  const keptDiffs = kept.map((r) => r.diff_lines).filter((d) => typeof d === "number" && Number.isFinite(d) && d > 0).sort((a, b2) => a - b2);
+  const bundledKeptSteps = keptDiffs.filter((d) => d >= MEGA_DIFF_LINES).length;
+  const medianKeptDiffLines = keptDiffs.length === 0 ? null : keptDiffs.length % 2 === 1 ? keptDiffs[Math.floor(keptDiffs.length / 2)] : Math.round((keptDiffs[keptDiffs.length / 2 - 1] + keptDiffs[keptDiffs.length / 2]) / 2);
   return {
     name: card.name,
     goal: redactSecrets(card.goal),
@@ -22952,7 +22986,11 @@ function summarize(files, recentLimit = 15, now = Date.now()) {
     holdoutGain,
     transferRatio,
     holdoutWarning,
+    lowTransferWarning,
     holdoutCheckpointWarning,
+    probeWarning,
+    bundledKeptSteps,
+    medianKeptDiffLines,
     relockCount,
     thrashWarning,
     stallWarning,
@@ -23096,6 +23134,7 @@ function formatSummary(summary) {
   if (summary.holdouts.length > 0) {
     lines.push(`Holdout ${summary.holdouts.map((row) => `${number4(row.score)} (${row.why})`).join(", ")}`);
     if (summary.holdoutWarning) lines.push(summary.holdoutWarning);
+    else if (summary.lowTransferWarning) lines.push(summary.lowTransferWarning);
     if (summary.holdoutCheckpointWarning) lines.push(summary.holdoutCheckpointWarning);
   } else if (summary.hasHoldout && !summary.holdoutOnce) {
     lines.push(
@@ -23122,6 +23161,7 @@ ${summary.notes}`);
   if (summary.thrashWarning) lines.push(summary.thrashWarning);
   else if (summary.stallWarning) lines.push(summary.stallWarning);
   if (summary.notesWarning) lines.push(summary.notesWarning);
+  if (summary.probeWarning) lines.push(summary.probeWarning);
   const line = verdictLine(summary);
   if (line !== "") lines.push(line);
   return lines.join("\n");
@@ -24327,7 +24367,7 @@ var ENGINE_COMMANDS = [
   "audit [name] [--strict] [--json]",
   'raise <bar> --why "..."',
   'review "<what you found>"',
-  "budget [name] [--hours N] [--steps N] [--off]",
+  'budget [name] [--hours N] [--steps N] [--probe "..."] [--holdout-every N] [--off]',
   "drop [name]",
   "list",
   "save [name]",
@@ -24627,10 +24667,13 @@ function getClimbCard(repoPath, name) {
   const extras = [];
   if (summary.notes) extras.push(`Notes:
 ${summary.notes}`);
+  if (summary.holdoutWarning) extras.push(summary.holdoutWarning);
+  else if (summary.lowTransferWarning) extras.push(summary.lowTransferWarning);
   if (summary.holdoutCheckpointWarning) extras.push(summary.holdoutCheckpointWarning);
   if (summary.thrashWarning) extras.push(summary.thrashWarning);
   else if (summary.stallWarning) extras.push(summary.stallWarning);
   if (summary.notesWarning) extras.push(summary.notesWarning);
+  if (summary.probeWarning) extras.push(summary.probeWarning);
   const baseText = formatRig(card);
   const text3 = extras.length > 0 ? `${baseText}
 
@@ -24659,7 +24702,10 @@ ${extras.join("\n")}` : baseText;
       holdout: card.holdout ? redactSecrets(card.holdout) : null,
       holdoutEvery: summary.holdoutEvery,
       keptSinceHoldout: summary.keptSinceHoldout,
+      holdoutWarning: summary.holdoutWarning,
+      lowTransferWarning: summary.lowTransferWarning,
       holdoutCheckpointWarning: summary.holdoutCheckpointWarning,
+      probeWarning: summary.probeWarning,
       relockCount: summary.relockCount,
       locked: card.lock ?? [],
       fingerprint: card.fingerprint ?? null,
@@ -25225,10 +25271,12 @@ function scanProjectClimbs(repoPath, opts) {
         transferRatio: summary.transferRatio,
         health: {
           overfitWarning: summary.holdoutWarning,
+          lowTransferWarning: summary.lowTransferWarning,
           holdoutCheckpointWarning: summary.holdoutCheckpointWarning,
           thrashWarning: summary.thrashWarning,
           stallWarning: summary.stallWarning,
           notesWarning: summary.notesWarning,
+          probeWarning: summary.probeWarning,
           branchWarning
         },
         breakdown,

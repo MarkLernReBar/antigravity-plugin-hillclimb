@@ -34,6 +34,9 @@ BARS = "▁▂▃▄▅▆▇█"
 STALL = 3
 PLATEAU = 5
 BUNDLED_DIFF_LINES = 150
+MEGA_DIFF_LINES = 250
+LOW_TRANSFER_RATIO = 0.30
+SLOW_CHECK_PROBE_SECONDS = 120
 NOTES_STALE_STEPS = 3
 HOLDOUT_CHECKPOINT_KEPT = 3
 FILE_LIMIT = 512_000
@@ -1039,8 +1042,16 @@ def cmd_try(args):
                     f"BUNDLED DIFF WARNING: undone step touched {diff_lines} lines across {len(files_changed)} file(s). "
                     "During a stall, isolate 1 causal edit and verify it flips >=1 missed case in a fast --probe before running full eval."
                 )
+            elif diff_lines >= MEGA_DIFF_LINES:
+                print(
+                    f"BUNDLED DIFF WARNING: undone step touched {diff_lines} lines across {len(files_changed)} file(s). "
+                    f"Split unrelated hypotheses into atomic tries (<={MEGA_DIFF_LINES} lines) so regressions and holdout transfer stay attributable."
+                )
             for warning in stall_and_notes_warnings(folder, card, steps + [logged]):
                 print(warning)
+            p_warn = probe_warning(card, log_before + [logged])
+            if p_warn:
+                print(p_warn)
             return
         if not guards_passed_pre:
             _set_running(folder, "try", phase="guards", step=step, idea=args.idea, started_at=started_at)
@@ -1075,6 +1086,11 @@ def cmd_try(args):
     save(folder, card)
     append(folder, {**row, "result": "kept", "gain": better(card, score, best)})
     print(f"step {step} kept    {number(score)} (was {number(best)}, start {number(card['baseline'])})  {args.idea}")
+    if diff_lines >= MEGA_DIFF_LINES:
+        print(
+            f"BUNDLED DIFF WARNING: kept step touched {diff_lines} lines across {len(files_changed)} file(s) — "
+            f"prefer smaller atomic tries (<={MEGA_DIFF_LINES} lines) so each hypothesis's holdout transfer stays attributable."
+        )
     if reached(card, score):
         if card.get("holdout") and not card.get("holdout_once"):
             _set_running(folder, "holdout", phase="holdout", step=step, idea="bar reached holdout check")
@@ -1085,7 +1101,8 @@ def cmd_try(args):
         print(f"BAR REACHED: {number(score)} meets {number(card['target'])}. The card says: {card['after']}.")
         if holdout is not None:
             print(f"Holdout now {number(holdout)}. Compare it with the holdout baseline before you claim a win.")
-            warn = holdout_transfer_warning(card, [r for r in rows(folder) if r["kind"] == "holdout"])
+            holdouts_bar = [r for r in rows(folder) if r["kind"] == "holdout"]
+            warn = holdout_transfer_warning(card, holdouts_bar) or low_transfer_warning(card, holdouts_bar)
             if warn:
                 print(warn)
         print(f"Pre-ship audit: run `climb.py audit {card['name']}` and a fresh-context Adversarial Win Audit before confirming criteria or merging.")
@@ -1104,7 +1121,7 @@ def cmd_try(args):
                         f"Holdout checkpoint: {number(h0)} -> {number(h_score)} ({_signed_delta(h_score - h0)}), "
                         f"visible {number(card['baseline'])} -> {number(score)} ({_signed_delta(score - card['baseline'])})."
                     )
-                    warn = holdout_transfer_warning(card, holdouts_now)
+                    warn = holdout_transfer_warning(card, holdouts_now) or low_transfer_warning(card, holdouts_now)
                     if warn:
                         print(warn)
                 else:
@@ -1117,6 +1134,10 @@ def cmd_try(args):
             cp_warn = holdout_checkpoint_warning(card, log_now)
             if cp_warn:
                 print(cp_warn)
+    if not reached(card, score):
+        p_warn = probe_warning(card, rows(folder))
+        if p_warn:
+            print(p_warn)
 
 
 _EXCUSE_CLAIM_RE = re.compile(
@@ -1277,6 +1298,67 @@ def holdout_transfer_warning(card, holdouts):
         f"OVERFIT WARNING: visible improved {number(baseline)} -> {number(best)} ({dev_delta}) "
         f"while holdout {status} {number(h0)} -> {number(h1)} ({h_delta}). "
         f"Investigate why gains did not transfer before confirming holdout criteria or merging."
+    )
+
+
+def low_transfer_warning(card, holdouts):
+    """Warn when holdout improved only weakly (<30% transfer) relative to a material visible gain."""
+    if len(holdouts) < 2 or holdout_transfer_warning(card, holdouts):
+        return None
+    baseline = card["baseline"]
+    best = card["best"]["score"]
+    direction = card["direction"]
+    dev_gain = (best - baseline) if direction == "max" else (baseline - best)
+    h0 = holdouts[0]["score"]
+    h1 = holdouts[-1]["score"]
+    h_gain = (h1 - h0) if direction == "max" else (h0 - h1)
+    if h_gain <= 1e-9:
+        return None
+    v0 = holdouts[0].get("visible")
+    v1 = holdouts[-1].get("visible")
+    if isinstance(v0, (int, float)) and isinstance(v1, (int, float)) and abs(v1 - v0) > 1e-9:
+        win_dev_gain = (v1 - v0) if direction == "max" else (v0 - v1)
+        vis_delta = _signed_delta(v1 - v0)
+    else:
+        win_dev_gain = dev_gain
+        vis_delta = _signed_delta(best - baseline)
+    if win_dev_gain <= 1e-9:
+        return None
+    min_g = threshold(card.get("min_gain", 0), baseline)
+    target = card.get("target")
+    target_span = abs(target - baseline) if isinstance(target, (int, float)) else 0.0
+    floor = max(min_g * 2.0, target_span * 0.15) if (min_g > 0 or target_span > 0) else max(0.02, abs(baseline) * 0.03)
+    if win_dev_gain < floor:
+        return None
+    ratio = h_gain / win_dev_gain
+    if ratio >= LOW_TRANSFER_RATIO:
+        return None
+    pct = round(ratio * 100)
+    return (
+        f"LOW TRANSFER WARNING: only {pct}% of visible gain ({vis_delta}) transferred to blind holdout "
+        f"({_signed_delta(h1 - h0)}) — check for domain/category-specific overfitting or mega-bundled edits before claiming victory."
+    )
+
+
+def probe_warning(card, log):
+    """Nudge the agent to set a fast --probe when full checks average >= SLOW_CHECK_PROBE_SECONDS."""
+    if card.get("probe"):
+        return None
+    if card.get("target") is not None and reached(card, card["best"]["score"]):
+        return None
+    timed = [
+        row["seconds"]
+        for row in log
+        if isinstance(row.get("seconds"), (int, float)) and row.get("kind") in ("baseline", "step")
+    ]
+    if len(timed) < 2:
+        return None
+    avg = sum(timed) / len(timed)
+    if avg < SLOW_CHECK_PROBE_SECONDS:
+        return None
+    return (
+        f"Probe tip: checks average ~{avg / 60:.1f} min with no --probe configured — add a fast (<15s) slice probe via "
+        f"`climb.py budget {card['name']} --probe '<fast cmd>'` so broken or non-triggering edits fail fast."
     )
 
 
@@ -1566,7 +1648,7 @@ def cmd_status(args):
     holdouts = [row for row in log if row["kind"] == "holdout"]
     if holdouts:
         print("Holdout " + ", ".join(f"{number(row['score'])} ({row['why']})" for row in holdouts))
-        warn = holdout_transfer_warning(card, holdouts)
+        warn = holdout_transfer_warning(card, holdouts) or low_transfer_warning(card, holdouts)
         if warn:
             print(warn)
         cp_warn = holdout_checkpoint_warning(card, log)
@@ -1587,6 +1669,9 @@ def cmd_status(args):
         print("Notes:\n" + tail((folder / "notes.md").read_text(), 40))
     for warning in stall_and_notes_warnings(folder, card, steps):
         print(warning)
+    p_warn = probe_warning(card, log)
+    if p_warn:
+        print(p_warn)
     size = folder_size(climbs_dir())
     if size > STATE_WARN:
         print(f"STORAGE: .hill-climb holds {size // 1_000_000} MB. Shrink or delete .hill-climb/{card['name']}/data/.")
@@ -1617,7 +1702,7 @@ def cmd_holdout(args):
             f"Holdout {number(h0)} -> {number(score)} ({_signed_delta(score - h0)}), "
             f"visible {number(card['baseline'])} -> {number(card['best']['score'])} ({_signed_delta(card['best']['score'] - card['baseline'])})."
         )
-        warn = holdout_transfer_warning(card, holdouts)
+        warn = holdout_transfer_warning(card, holdouts) or low_transfer_warning(card, holdouts)
         if warn:
             print(warn)
     else:
@@ -1755,10 +1840,15 @@ def cmd_audit(args):
     stale_notes = notes_staleness(folder, steps)
     since_h = kept_since_holdout(log)
     overfit_warn = holdout_transfer_warning(card, holdouts)
+    low_tr_warn = low_transfer_warning(card, holdouts)
     cp_warn = holdout_checkpoint_warning(card, log)
+    p_warn = probe_warning(card, log)
     thrash = detect_thrash(steps, card["best"]["step"])
     cancel_outs = sum(1 for r in steps if str(r.get("delta_summary") or "").startswith("cancel-out:"))
     zero_changes = sum(1 for r in steps if r.get("delta_summary") == "zero-case-change")
+    kept_diffs = [r["diff_lines"] for r in kept if isinstance(r.get("diff_lines"), int) and r["diff_lines"] > 0]
+    bundled_kept = sum(1 for d in kept_diffs if d >= MEGA_DIFF_LINES)
+    median_kept_diff = int(statistics.median(kept_diffs)) if kept_diffs else None
     start_commit = card.get("start_commit")
     diff_stat = git("diff", "--stat", f"{start_commit}..HEAD", check=False) if start_commit else ""
 
@@ -1779,6 +1869,8 @@ def cmd_audit(args):
         findings.append(f"CASE-ID LEAK WARNING: {len(leaks)} benchmark identifier(s) found in added production string literals.")
     if overfit_warn:
         findings.append(overfit_warn)
+    elif low_tr_warn:
+        findings.append(low_tr_warn)
     if cp_warn:
         findings.append(cp_warn)
     if card.get("holdout") and not holdouts and not card.get("holdout_once"):
@@ -1788,6 +1880,13 @@ def cmd_audit(args):
             f"Relock audit needed: locked check files were modified {len(relocks)} time(s) — verify every contract qualifier "
             "and primary-vs-fallback reporting is enforced."
         )
+    if bundled_kept >= 3 or (median_kept_diff is not None and median_kept_diff >= MEGA_DIFF_LINES):
+        findings.append(
+            f"Bundled diffs: {bundled_kept}/{len(kept)} kept step(s) exceeded {MEGA_DIFF_LINES} lines "
+            f"(median {median_kept_diff}) — audit each hypothesis separately for narrow overfitting."
+        )
+    if p_warn:
+        findings.append(p_warn)
     if behind > 0:
         findings.append(f"Branch warning: {card['branch']} is {behind} commit(s) behind {card['base']}.")
     if stale_notes >= NOTES_STALE_STEPS:
@@ -1820,9 +1919,13 @@ def cmd_audit(args):
         "holdouts": [{"score": h.get("score"), "why": h.get("why")} for h in holdouts],
         "kept_since_holdout": since_h,
         "transfer_ratio": transfer_ratio,
+        "low_transfer_warning": low_tr_warn,
+        "probe_warning": p_warn,
         "case_id_leaks": leaks,
         "cancel_out_steps": cancel_outs,
         "zero_case_change_steps": zero_changes,
+        "bundled_kept_steps": bundled_kept,
+        "median_kept_diff_lines": median_kept_diff,
         "behind_base": behind,
         "notes_stale_steps": stale_notes,
         "findings": findings,
@@ -1863,18 +1966,31 @@ def cmd_audit(args):
 def cmd_budget(args):
     folder = resolve(args.name)
     card = load(folder)
+    changes = []
     if args.off:
         card["max_hours"] = card["max_steps"] = None
     if args.hours:
         card["max_hours"] = round(hours(card) + args.hours, 2)
     if args.steps:
         card["max_steps"] = len([row for row in rows(folder) if row["kind"] == "step"]) + args.steps
+    if getattr(args, "probe", None) is not None:
+        probe_val = args.probe.strip() or None
+        card["probe"] = probe_val
+        changes.append(f"probe={'none' if probe_val is None else probe_val}")
+    if getattr(args, "holdout_every", None) is not None:
+        if args.holdout_every < 0:
+            raise Fail("--holdout-every must be >= 0 (0 disables automatic checkpoints)")
+        card["holdout_every"] = args.holdout_every if args.holdout_every >= 1 else None
+        changes.append(f"holdout_every={card['holdout_every'] or 'manual'}")
     save(folder, card)
     limits = [f"{number(card['max_hours'])} hours" if card.get("max_hours") else "",
               f"{card['max_steps']} steps" if card["max_steps"] else ""]
-    text = " and ".join(item for item in limits if item) or "no limit"
+    limit_text = " and ".join(item for item in limits if item) or "no limit"
+    if args.off or args.hours or args.steps or not changes:
+        changes.insert(0, limit_text)
+    text = "; ".join(changes)
     append(folder, {"kind": "budget", "why": text})
-    print(f"Budget now {text}.")
+    print(f"Budget/rig updated: {text}.")
 
 
 def cmd_review(args):
@@ -2064,9 +2180,11 @@ def parse(argv):
     relock.add_argument("--why", required=True)
     relock.add_argument("--name")
 
-    budget = sub.add_parser("budget", help="give more hours or steps, or remove the limits")
+    budget = sub.add_parser("budget", help="adjust hours/steps, fast --probe, or --holdout-every mid-climb")
     budget.add_argument("--hours", type=float, help="hours from now")
     budget.add_argument("--steps", type=int, help="steps from now")
+    budget.add_argument("--probe", help="set or update fast (<15s) pre-check probe command (pass '' to clear)")
+    budget.add_argument("--holdout-every", type=int, help="set automatic blind holdout cadence in kept steps (0 to disable)")
     budget.add_argument("name", nargs="?", default=argparse.SUPPRESS)
     budget.add_argument("--off", action="store_true", help="remove both limits")
     budget.add_argument("--name")

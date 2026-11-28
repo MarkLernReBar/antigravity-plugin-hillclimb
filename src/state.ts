@@ -10,6 +10,9 @@ export type Direction = "min" | "max";
 
 export const STALL = 3;
 export const PLATEAU = 5;
+export const MEGA_DIFF_LINES = 250;
+export const LOW_TRANSFER_RATIO = 0.3;
+export const SLOW_CHECK_PROBE_SECONDS = 120;
 export const NOTES_STALE_STEPS = 3;
 export const HOLDOUT_CHECKPOINT_KEPT = 3;
 const BARS = "▁▂▃▄▅▆▇█";
@@ -1501,7 +1504,11 @@ export interface ClimbSummary {
   holdoutGain: number | null;
   transferRatio: number | null;
   holdoutWarning: string | null;
+  lowTransferWarning: string | null;
   holdoutCheckpointWarning: string | null;
+  probeWarning: string | null;
+  bundledKeptSteps: number;
+  medianKeptDiffLines: number | null;
   relockCount: number;
   thrashWarning: string | null;
   stallWarning: string | null;
@@ -1726,32 +1733,61 @@ export function summarize(files: ClimbFiles, recentLimit = 15, now = Date.now())
       why: redactSecrets(row.why ?? ""),
       visible: typeof row.visible === "number" && Number.isFinite(row.visible) ? row.visible : null,
     }));
+  const parseMinGain = (raw: number | string | undefined, baseVal: number): number => {
+    if (raw === undefined || raw === null) return 0;
+    if (typeof raw === "number") return Number.isFinite(raw) ? Math.max(0, raw) : 0;
+    const s = raw.trim();
+    if (!s) return 0;
+    if (s.endsWith("%")) {
+      const pct = Number(s.slice(0, -1));
+      return Number.isFinite(pct) ? Math.max(0, Math.abs(baseVal) * (pct / 100)) : 0;
+    }
+    const n = Number(s);
+    return Number.isFinite(n) ? Math.max(0, n) : 0;
+  };
+  const signedFmt = (v: number) => `${v >= 0 ? "+" : "-"}${number(Math.abs(v))}`;
+
   const devGain = card.direction === "max" ? card.best.score - card.baseline : card.baseline - card.best.score;
   let holdoutGain: number | null = null;
   let transferRatio: number | null = null;
   let holdoutWarning: string | null = null;
+  let lowTransferWarning: string | null = null;
   if (holdouts.length >= 2) {
     const h0 = holdouts[0]!.score;
     const h1 = holdouts[holdouts.length - 1]!.score;
     holdoutGain = card.direction === "max" ? h1 - h0 : h0 - h1;
     const v0 = holdouts[0]!.visible;
     const v1 = holdouts[holdouts.length - 1]!.visible;
-    const winDevGain =
-      v0 !== null && v1 !== null && Math.abs(v1 - v0) > 1e-9
-        ? card.direction === "max"
-          ? v1 - v0
-          : v0 - v1
-        : devGain;
+    const hasWindowVis = v0 !== null && v1 !== null && Math.abs(v1 - v0) > 1e-9;
+    const winDevGain = hasWindowVis
+      ? card.direction === "max"
+        ? v1 - v0
+        : v0 - v1
+      : devGain;
+    const visDelta = hasWindowVis ? signedFmt(v1 - v0) : signedFmt(card.best.score - card.baseline);
     if (winDevGain > 1e-9) {
       transferRatio = Math.round((holdoutGain / winDevGain) * 1000) / 1000;
     }
     if (devGain > 1e-9 && holdoutGain <= 1e-9) {
-      const signed = (v: number) => `${v >= 0 ? "+" : "-"}${number(Math.abs(v))}`;
       const status = holdoutGain < -1e-9 ? "regressed" : "stayed flat (zero transfer)";
       holdoutWarning =
-        `OVERFIT WARNING: visible improved ${number(card.baseline)} -> ${number(card.best.score)} (${signed(card.best.score - card.baseline)}) ` +
-        `while holdout ${status} ${number(h0)} -> ${number(h1)} (${signed(h1 - h0)}). ` +
+        `OVERFIT WARNING: visible improved ${number(card.baseline)} -> ${number(card.best.score)} (${signedFmt(card.best.score - card.baseline)}) ` +
+        `while holdout ${status} ${number(h0)} -> ${number(h1)} (${signedFmt(h1 - h0)}). ` +
         "Investigate why gains did not transfer before confirming holdout criteria or merging.";
+    } else if (holdoutGain > 1e-9 && winDevGain > 1e-9) {
+      const minG = parseMinGain(card.min_gain, card.baseline);
+      const targetSpan = typeof card.target === "number" ? Math.abs(card.target - card.baseline) : 0;
+      const floor =
+        minG > 0 || targetSpan > 0
+          ? Math.max(minG * 2, targetSpan * 0.15)
+          : Math.max(0.02, Math.abs(card.baseline) * 0.03);
+      const rawRatio = holdoutGain / winDevGain;
+      if (winDevGain >= floor && rawRatio < LOW_TRANSFER_RATIO) {
+        const pct = Math.round(rawRatio * 100);
+        lowTransferWarning =
+          `LOW TRANSFER WARNING: only ${pct}% of visible gain (${visDelta}) transferred to blind holdout ` +
+          `(${signedFmt(h1 - h0)}) — check for domain/category-specific overfitting or mega-bundled edits before claiming victory.`;
+      }
     }
   }
 
@@ -1788,6 +1824,29 @@ export function summarize(files: ClimbFiles, recentLimit = 15, now = Date.now())
         "(Pareto) and Dead Ends so context compaction never resets progress."
       : null;
 
+  const timedCheckRuns = rows
+    .filter((r) => (r.kind === "baseline" || r.kind === "step") && typeof r.seconds === "number" && Number.isFinite(r.seconds))
+    .map((r) => r.seconds as number);
+  const avgCheckRun =
+    timedCheckRuns.length > 0 ? timedCheckRuns.reduce((total, value) => total + value, 0) / timedCheckRuns.length : null;
+  const hasProbe = typeof card.probe === "string" && card.probe.trim() !== "";
+  const probeWarning =
+    !hasProbe && !reached && timedCheckRuns.length >= 2 && avgCheckRun !== null && avgCheckRun >= SLOW_CHECK_PROBE_SECONDS
+      ? `Probe tip: checks average ~${(avgCheckRun / 60).toFixed(1)} min with no --probe configured — add a fast (<15s) slice probe via \`climb.py budget ${card.name} --probe '<fast cmd>'\` so broken or non-triggering edits fail fast.`
+      : null;
+
+  const keptDiffs = kept
+    .map((r) => r.diff_lines)
+    .filter((d): d is number => typeof d === "number" && Number.isFinite(d) && d > 0)
+    .sort((a, b) => a - b);
+  const bundledKeptSteps = keptDiffs.filter((d) => d >= MEGA_DIFF_LINES).length;
+  const medianKeptDiffLines =
+    keptDiffs.length === 0
+      ? null
+      : keptDiffs.length % 2 === 1
+        ? keptDiffs[Math.floor(keptDiffs.length / 2)]!
+        : Math.round((keptDiffs[keptDiffs.length / 2 - 1]! + keptDiffs[keptDiffs.length / 2]!) / 2);
+
   return {
     name: card.name,
     goal: redactSecrets(card.goal),
@@ -1819,7 +1878,11 @@ export function summarize(files: ClimbFiles, recentLimit = 15, now = Date.now())
     holdoutGain,
     transferRatio,
     holdoutWarning,
+    lowTransferWarning,
     holdoutCheckpointWarning,
+    probeWarning,
+    bundledKeptSteps,
+    medianKeptDiffLines,
     relockCount,
     thrashWarning,
     stallWarning,
@@ -1953,6 +2016,7 @@ export function formatSummary(summary: ClimbSummary): string {
   if (summary.holdouts.length > 0) {
     lines.push(`Holdout ${summary.holdouts.map((row) => `${number(row.score)} (${row.why})`).join(", ")}`);
     if (summary.holdoutWarning) lines.push(summary.holdoutWarning);
+    else if (summary.lowTransferWarning) lines.push(summary.lowTransferWarning);
     if (summary.holdoutCheckpointWarning) lines.push(summary.holdoutCheckpointWarning);
   } else if (summary.hasHoldout && !summary.holdoutOnce) {
     lines.push(
@@ -1978,6 +2042,7 @@ export function formatSummary(summary: ClimbSummary): string {
   if (summary.thrashWarning) lines.push(summary.thrashWarning);
   else if (summary.stallWarning) lines.push(summary.stallWarning);
   if (summary.notesWarning) lines.push(summary.notesWarning);
+  if (summary.probeWarning) lines.push(summary.probeWarning);
   const line = verdictLine(summary);
   if (line !== "") lines.push(line);
   return lines.join("\n");

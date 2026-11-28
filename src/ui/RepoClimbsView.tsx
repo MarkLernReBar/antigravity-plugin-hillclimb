@@ -29,10 +29,12 @@ export interface ScannedClimbRunning {
 
 export interface ScannedClimbHealth {
   overfitWarning: string | null;
+  lowTransferWarning?: string | null;
   holdoutCheckpointWarning: string | null;
   thrashWarning: string | null;
   stallWarning: string | null;
   notesWarning: string | null;
+  probeWarning?: string | null;
   branchWarning: string | null;
 }
 
@@ -313,6 +315,7 @@ function HealthStrip({ climb }: { climb: ScannedClimb }) {
   const hygieneIssues: string[] = [];
   if ((climb.behindBase ?? 0) > 0) hygieneIssues.push(`${climb.behindBase} behind ${climb.base ?? "base"}`);
   if (h?.notesWarning) hygieneIssues.push(`Notes ${climb.notesStaleSteps ?? 0} steps stale`);
+  if (h?.probeWarning) hygieneIssues.push("No fast probe");
   const hygiene: HealthItem =
     hygieneIssues.length === 0
       ? { label: "Hygiene", value: "Clean", tone: "ok" }
@@ -322,6 +325,7 @@ function HealthStrip({ climb }: { climb: ScannedClimb }) {
 
   const alerts: Array<{ tone: "bad" | "warn"; tag: string; text: string }> = [];
   if (h?.overfitWarning) alerts.push({ tone: "bad", tag: "Overfit", text: h.overfitWarning });
+  else if (h?.lowTransferWarning) alerts.push({ tone: "warn", tag: "Transfer", text: h.lowTransferWarning });
   else if (
     typeof climb.holdoutGain === "number" &&
     climb.holdoutGain > 1e-9 &&
@@ -340,6 +344,7 @@ function HealthStrip({ climb }: { climb: ScannedClimb }) {
   if (h?.thrashWarning) alerts.push({ tone: "bad", tag: "Thrash", text: h.thrashWarning });
   else if (h?.stallWarning) alerts.push({ tone: "warn", tag: "Stall", text: h.stallWarning });
   if (h?.holdoutCheckpointWarning) alerts.push({ tone: "warn", tag: "Holdout", text: h.holdoutCheckpointWarning });
+  if (h?.probeWarning) alerts.push({ tone: "warn", tag: "Probe", text: h.probeWarning });
   if (h?.branchWarning) alerts.push({ tone: "warn", tag: "Branch", text: h.branchWarning });
   if (h?.notesWarning) alerts.push({ tone: "warn", tag: "Notes", text: h.notesWarning });
 
@@ -974,9 +979,11 @@ function buildClimbContextMarkdown(climb: ScannedClimb): string {
   const h = climb.health;
   const warnings = [
     h?.overfitWarning,
+    h?.lowTransferWarning,
     h?.thrashWarning,
     h?.stallWarning,
     h?.holdoutCheckpointWarning,
+    h?.probeWarning,
     h?.branchWarning,
     h?.notesWarning,
   ].filter(Boolean);
