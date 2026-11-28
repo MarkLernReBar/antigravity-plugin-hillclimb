@@ -42749,7 +42749,7 @@ function scanProjectClimbs(repoPath, opts) {
   }
   const normalizedMain = resolve2(repoPath);
   const bypassCache = Boolean(opts?.bypassCache || opts?.force);
-  const rowLimit = opts?.rowLimit === void 0 ? 50 : Math.max(0, Math.floor(opts.rowLimit));
+  const rowLimit = opts?.rowLimit === void 0 ? 120 : Math.max(0, Math.floor(opts.rowLimit));
   const includeNotes = opts?.includeNotes ?? true;
   const cacheKey = `${normalizedMain}|${rowLimit}|${includeNotes ? 1 : 0}`;
   const nowMs = Date.now();
@@ -51298,7 +51298,7 @@ function createHillClimbServer(repo, runtime) {
     return projects[0]?.id ?? repo.resolveProjectId();
   };
   const server = new McpServer(
-    { name: "hillclimb", version: "0.10.0" },
+    { name: "hillclimb", version: "0.10.1" },
     {
       capabilities: {
         tools: {},
@@ -51354,7 +51354,7 @@ function createHillClimbServer(repo, runtime) {
         const projects = repo.listProjects();
         const chosen = args.projectId ? repo.resolveProjectId(args.projectId) : pickDefaultProject(projects);
         const track2 = args.track ?? "main";
-        const repoClimbs = scanAndSync(chosen, { rowLimit: 40, includeNotes: args.page === "climbs" });
+        const repoClimbs = scanAndSync(chosen, { rowLimit: 120, includeNotes: args.page === "climbs" });
         const tree = repo.view(chosen, track2);
         const inboxCount = repo.inboxCountTotal();
         const defaultPage = args.page ?? (tree.outcomes.length === 0 && repoClimbs.climbs.length > 0 ? "climbs" : "tree");

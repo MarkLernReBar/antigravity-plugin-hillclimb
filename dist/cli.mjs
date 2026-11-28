@@ -25001,7 +25001,7 @@ function scanProjectClimbs(repoPath, opts) {
   }
   const normalizedMain = resolve2(repoPath);
   const bypassCache = Boolean(opts?.bypassCache || opts?.force);
-  const rowLimit = opts?.rowLimit === void 0 ? 50 : Math.max(0, Math.floor(opts.rowLimit));
+  const rowLimit = opts?.rowLimit === void 0 ? 120 : Math.max(0, Math.floor(opts.rowLimit));
   const includeNotes = opts?.includeNotes ?? true;
   const cacheKey = `${normalizedMain}|${rowLimit}|${includeNotes ? 1 : 0}`;
   const nowMs = Date.now();

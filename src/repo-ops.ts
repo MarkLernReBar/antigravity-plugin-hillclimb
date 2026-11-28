@@ -928,7 +928,7 @@ export function scanProjectClimbs(repoPath: string | null, opts?: ScanProjectCli
   }
   const normalizedMain = resolve(repoPath);
   const bypassCache = Boolean(opts?.bypassCache || opts?.force);
-  const rowLimit = opts?.rowLimit === undefined ? 50 : Math.max(0, Math.floor(opts.rowLimit));
+  const rowLimit = opts?.rowLimit === undefined ? 120 : Math.max(0, Math.floor(opts.rowLimit));
   const includeNotes = opts?.includeNotes ?? true;
   const cacheKey = `${normalizedMain}|${rowLimit}|${includeNotes ? 1 : 0}`;
   const nowMs = Date.now();

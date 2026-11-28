@@ -286,8 +286,15 @@ function HealthStrip({ climb }: { climb: ScannedClimb }) {
   } else if (h?.overfitWarning) {
     generalization = { label: "Generalization", value: "Overfit risk", tone: "bad" };
   } else if (typeof climb.holdoutGain === "number" && climb.holdoutGain > 1e-9) {
-    const pct = typeof climb.transferRatio === "number" ? ` · ${Math.round(climb.transferRatio * 100)}%` : "";
-    generalization = { label: "Generalization", value: `Transfers (${fmtSigned(climb.holdoutGain)}${pct})`, tone: "ok" };
+    const ratio = typeof climb.transferRatio === "number" ? climb.transferRatio : null;
+    const pct = ratio !== null ? ` · ${Math.round(ratio * 100)}%` : "";
+    if (ratio !== null && ratio < 0.2) {
+      generalization = { label: "Generalization", value: `Low transfer (${fmtSigned(climb.holdoutGain)}${pct})`, tone: "warn" };
+    } else if (ratio !== null && ratio < 0.5) {
+      generalization = { label: "Generalization", value: `Partial transfer (${fmtSigned(climb.holdoutGain)}${pct})`, tone: "warn" };
+    } else {
+      generalization = { label: "Generalization", value: `Transfers (${fmtSigned(climb.holdoutGain)}${pct})`, tone: "ok" };
+    }
   } else if (h?.holdoutCheckpointWarning) {
     generalization = { label: "Generalization", value: `Checkpoint due (${climb.keptSinceHoldout ?? 0} kept)`, tone: "warn" };
   } else if (holdouts.length === 1) {
@@ -315,6 +322,21 @@ function HealthStrip({ climb }: { climb: ScannedClimb }) {
 
   const alerts: Array<{ tone: "bad" | "warn"; tag: string; text: string }> = [];
   if (h?.overfitWarning) alerts.push({ tone: "bad", tag: "Overfit", text: h.overfitWarning });
+  else if (
+    typeof climb.holdoutGain === "number" &&
+    climb.holdoutGain > 1e-9 &&
+    typeof climb.transferRatio === "number" &&
+    climb.transferRatio < 0.5
+  ) {
+    const pct = Math.round(climb.transferRatio * 100);
+    alerts.push({
+      tone: "warn",
+      tag: "Transfer",
+      text: `Only ${pct}% of visible dev gain transferred to blind holdout${
+        relocks > 0 ? ` across ${relocks} relock${relocks === 1 ? "" : "s"}` : ""
+      } — review relock and holdout steps before treating the visible score as real gain.`,
+    });
+  }
   if (h?.thrashWarning) alerts.push({ tone: "bad", tag: "Thrash", text: h.thrashWarning });
   else if (h?.stallWarning) alerts.push({ tone: "warn", tag: "Stall", text: h.stallWarning });
   if (h?.holdoutCheckpointWarning) alerts.push({ tone: "warn", tag: "Holdout", text: h.holdoutCheckpointWarning });
@@ -401,10 +423,10 @@ function ScoreChart({ climb }: { climb: ScannedClimb }) {
 
   const hasDiscardedPoint = points.some((p) => !p.kept);
   const w = 520;
-  const h = 166;
+  const h = 172;
   const l = 54;
   const r = 18;
-  const t = 20;
+  const t = 24;
   const b = 26;
   const innerW = w - l - r;
   const innerH = h - t - b;
@@ -480,18 +502,54 @@ function ScoreChart({ climb }: { climb: ScannedClimb }) {
         <rect className="cl-chart-bg" x={l} y={t} width={innerW} height={innerH} rx={6} />
         <line className="cl-chart-grid" x1={l} x2={w - r} y1={t + innerH / 2} y2={t + innerH / 2} />
 
-        {relockPos.map((rk, i) => {
-          const rx = x(rk.pos);
-          return (
-            <g key={`rk-${i}`} className="cl-rule-relock">
-              <line x1={rx} x2={rx} y1={t} y2={t + innerH} />
-              <text x={rx} y={t - 5} textAnchor="middle">
-                relock
-              </text>
-              <title>{`Check relocked: ${rk.why}${rk.score !== null ? ` (re-measured ${fmtNum(rk.score)})` : ""}`}</title>
-            </g>
-          );
-        })}
+        {(() => {
+          // Group relocks that happened at the same step so lines/labels never collide.
+          const groups: Array<{ pos: number; indices: number[]; items: typeof relockPos }> = [];
+          for (let i = 0; i < relockPos.length; i += 1) {
+            const rk = relockPos[i]!;
+            const last = groups[groups.length - 1];
+            if (last && last.pos === rk.pos) {
+              last.indices.push(i + 1);
+              last.items.push(rk);
+            } else {
+              groups.push({ pos: rk.pos, indices: [i + 1], items: [rk] });
+            }
+          }
+          const compact = groups.length > 1 || relockPos.length > 1;
+          let prevLabelX = -Infinity;
+          let tier = 0;
+          return groups.map((g, gi) => {
+            const rx = x(g.pos);
+            const label = !compact
+              ? "relock"
+              : g.indices.length === 1
+                ? `R${g.indices[0]}`
+                : `R${g.indices[0]}–${g.indices[g.indices.length - 1]}`;
+            const labelX = Math.max(l + 12, Math.min(w - r - 12, rx));
+            if (labelX - prevLabelX < 20) {
+              tier = tier === 0 ? 1 : 0;
+            } else {
+              tier = 0;
+            }
+            prevLabelX = labelX;
+            const labelY = tier === 0 ? t - 5 : t - 14;
+            const tooltip = g.items
+              .map(
+                (rk, idx) =>
+                  `Relock #${g.indices[idx]}: ${rk.why}${rk.score !== null ? ` (re-measured ${fmtNum(rk.score)})` : ""}`,
+              )
+              .join("\n");
+            return (
+              <g key={`rk-${gi}`} className="cl-rule-relock">
+                <line x1={rx} x2={rx} y1={t} y2={t + innerH} />
+                <text x={labelX} y={labelY} textAnchor="middle">
+                  {label}
+                </text>
+                <title>{tooltip}</title>
+              </g>
+            );
+          });
+        })()}
 
         {climb.target !== null && targetY !== null ? (
           <g className="cl-rule-target">
@@ -517,34 +575,48 @@ function ScoreChart({ climb }: { climb: ScannedClimb }) {
         {linePath ? <path className="cl-chart-line" d={linePath} /> : null}
         {holdoutPath ? <path className="cl-chart-holdout-line" d={holdoutPath} /> : null}
 
-        {points.map((p, i) => {
-          const cx = x(i);
-          const cy = y(p.score);
-          const extra = [
-            p.why && !p.kept ? `why: ${p.why}` : "",
-            p.deltaSummary ? `diff: ${p.deltaSummary}` : "",
-            p.seconds ? fmtDuration(p.seconds) : "",
-          ]
-            .filter(Boolean)
-            .join(" · ");
-          return (
-            <g key={i}>
-              <circle
-                className={p.isBaseline ? "cl-pt cl-pt-base" : p.kept ? "cl-pt cl-pt-kept" : "cl-pt cl-pt-undone"}
-                cx={cx}
-                cy={cy}
-                r={p.kept ? 4.5 : 3.5}
-              >
-                <title>{`${p.label} — score ${fmtNum(p.score)}${p.isBaseline ? "" : p.kept ? " (kept)" : " (discarded)"}${extra ? `\n${extra}` : ""}`}</title>
-              </circle>
-              {points.length <= 8 ? (
-                <text className="cl-axis" x={cx} y={h - 6} textAnchor="middle">
-                  {p.isBaseline ? "Start" : `#${p.idx}`}
-                </text>
-              ) : null}
-            </g>
-          );
-        })}
+        {(() => {
+          const maxTicks = 7;
+          const stride = points.length <= maxTicks ? 1 : Math.ceil((points.length - 1) / (maxTicks - 1));
+          return points.map((p, i) => {
+            const cx = x(i);
+            const cy = y(p.score);
+            const extra = [
+              p.why && !p.kept ? `why: ${p.why}` : "",
+              p.deltaSummary ? `diff: ${p.deltaSummary}` : "",
+              p.seconds ? fmtDuration(p.seconds) : "",
+            ]
+              .filter(Boolean)
+              .join(" · ");
+            const showTick =
+              i === 0 ||
+              i === points.length - 1 ||
+              (i % stride === 0 && points.length - 1 - i >= Math.ceil(stride * 0.55));
+            const anchor =
+              points.length > maxTicks && i === 0
+                ? "start"
+                : points.length > maxTicks && i === points.length - 1
+                  ? "end"
+                  : "middle";
+            return (
+              <g key={i}>
+                <circle
+                  className={p.isBaseline ? "cl-pt cl-pt-base" : p.kept ? "cl-pt cl-pt-kept" : "cl-pt cl-pt-undone"}
+                  cx={cx}
+                  cy={cy}
+                  r={p.kept ? 4.5 : 3.5}
+                >
+                  <title>{`${p.label} — score ${fmtNum(p.score)}${p.isBaseline ? "" : p.kept ? " (kept)" : " (discarded)"}${extra ? `\n${extra}` : ""}`}</title>
+                </circle>
+                {showTick ? (
+                  <text className="cl-axis" x={cx} y={h - 6} textAnchor={anchor}>
+                    {p.isBaseline ? "Start" : `#${p.idx}`}
+                  </text>
+                ) : null}
+              </g>
+            );
+          });
+        })()}
 
         {holdoutPoints.map((hp, i) => {
           const cx = x(hp.pos);
@@ -1138,7 +1210,7 @@ export function RepoClimbsView({
                             <span className="cl-muted">target {climb.targetText ?? fmtNum(climb.target)}</span>
                           ) : null}
                           <span className="cl-muted">
-                            · {climb.kept}/{climb.steps} kept
+                            {climb.kept}/{climb.steps} kept
                           </span>
                         </div>
                         {pct !== null ? (
